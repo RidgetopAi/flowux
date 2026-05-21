@@ -137,19 +137,28 @@ export function App() {
           <p className="hud-label">Spatial Thread</p>
           <h1>Flowux</h1>
         </div>
-        <div className="telemetry">
-          <span>{snapshot?.mrps.length ?? 0} MRPs</span>
-          <span>{selectedCount} checked</span>
-          <span>{snapshot?.canvas.status ?? "loading"}</span>
+        <div className="topbar-actions">
+          <div className="telemetry">
+            <span>{snapshot?.mrps.length ?? 0} MRPs</span>
+            <span>{selectedCount} checked</span>
+            <span>{snapshot?.canvas.status ?? "loading"}</span>
+          </div>
+          <button
+            className="hud-button"
+            onClick={() => {
+              resetView();
+              void createNewCanvas();
+            }}
+            title="Start a new blank canvas thread"
+          >
+            <Plus size={15} />
+            New canvas
+          </button>
+          <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
+            <RotateCcw size={15} />
+            Snap back
+          </button>
         </div>
-        <button className="hud-button" onClick={() => void createNewCanvas()} title="Start a new blank canvas thread">
-          <Plus size={15} />
-          New canvas
-        </button>
-        <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
-          <RotateCcw size={15} />
-          Snap back
-        </button>
       </header>
 
       <section
