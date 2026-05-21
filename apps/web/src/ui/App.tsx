@@ -99,6 +99,12 @@ export function App() {
     const rowHeight = getVisibleCardRowHeight(workspaceRef.current, viewport.zoom);
     void snapBack(workspaceWidth / viewport.zoom, rowHeight);
   };
+  const sendPrompt = () => {
+    const value = prompt.trim();
+    if (!value) return;
+    setPrompt("");
+    void submitPrompt(value);
+  };
 
   return (
     <main className="flowux-app">
@@ -184,10 +190,7 @@ export function App() {
           onWheel={(event) => event.stopPropagation()}
           onSubmit={(event) => {
             event.preventDefault();
-            const value = prompt.trim();
-            if (!value) return;
-            setPrompt("");
-            void submitPrompt(value);
+            sendPrompt();
           }}
         >
           <button type="button" className="icon-button" title="New prompt">
@@ -196,6 +199,12 @@ export function App() {
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                event.preventDefault();
+                sendPrompt();
+              }
+            }}
             placeholder="Prompt this canvas thread..."
             rows={2}
           />
