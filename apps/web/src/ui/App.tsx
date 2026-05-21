@@ -1,5 +1,19 @@
-import { Check, ChevronsDown, ChevronsUp, Circle, GitBranch, Loader2, Move, Plus, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  ChevronsDown,
+  ChevronsUp,
+  Circle,
+  GitBranch,
+  Loader2,
+  Maximize2,
+  Move,
+  Plus,
+  RotateCcw,
+  Scan,
+  ZoomIn,
+  ZoomOut
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { Tldraw } from "tldraw";
 import type { CanvasPlacement, Mrp } from "@flowux/shared";
 import { findPlacement, useFlowuxStore } from "../store.js";
@@ -7,6 +21,9 @@ import { findPlacement, useFlowuxStore } from "../store.js";
 export function App() {
   const { snapshot, loading, error, loadInitial, submitPrompt, patchPlacement, snapBack } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
+  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
+  const workspaceRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     void loadInitial();
@@ -16,6 +33,67 @@ export function App() {
     () => snapshot?.placements.filter((placement) => placement.selectedForContext).length ?? 0,
     [snapshot?.placements]
   );
+
+  const zoomBy = (factor: number) => {
+    setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
+  };
+
+  const resetView = () => {
+    setViewport({ x: 0, y: 0, zoom: 1 });
+  };
+
+  const fitThread = () => {
+    if (!snapshot?.placements.length) {
+      resetView();
+      return;
+    }
+
+    const bounds = getPlacementBounds(snapshot.placements);
+    const workspace = workspaceRef.current;
+    const width = workspace?.clientWidth ?? 1200;
+    const height = workspace?.clientHeight ?? 760;
+    const padding = 120;
+    const zoom = clampZoom(Math.min((width - padding) / bounds.width, (height - padding) / bounds.height, 1));
+
+    setViewport({
+      zoom,
+      x: (width - bounds.width * zoom) / 2 - bounds.left * zoom,
+      y: (height - bounds.height * zoom) / 2 - bounds.top * zoom
+    });
+  };
+
+  const handleWheel = (event: WheelEvent<HTMLElement>) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const nextZoom = clampZoom(viewport.zoom * (event.deltaY > 0 ? 0.92 : 1.08));
+    const cursorX = event.clientX - rect.left;
+    const cursorY = event.clientY - rect.top;
+    const worldX = (cursorX - viewport.x) / viewport.zoom;
+    const worldY = (cursorY - viewport.y) / viewport.zoom;
+
+    setViewport({
+      zoom: nextZoom,
+      x: cursorX - worldX * nextZoom,
+      y: cursorY - worldY * nextZoom
+    });
+  };
+
+  const handlePanStart = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || event.target !== event.currentTarget) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPan({ startX: event.clientX, startY: event.clientY, x: viewport.x, y: viewport.y });
+  };
+
+  const handlePanMove = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!pan) return;
+    setViewport((current) => ({
+      ...current,
+      x: pan.x + event.clientX - pan.startX,
+      y: pan.y + event.clientY - pan.startY
+    }));
+  };
+
+  const finishPan = () => setPan(undefined);
 
   return (
     <main className="flowux-app">
@@ -35,12 +113,41 @@ export function App() {
         </button>
       </header>
 
-      <section className="workspace hud-shell">
+      <section
+        ref={workspaceRef}
+        className={`workspace hud-shell ${pan ? "is-panning" : ""}`}
+        onWheel={handleWheel}
+        onPointerDown={handlePanStart}
+        onPointerMove={handlePanMove}
+        onPointerUp={finishPan}
+        onPointerCancel={finishPan}
+      >
         <div className="tldraw-layer" aria-hidden="true">
           <Tldraw persistenceKey="flowux-underlay" hideUi />
         </div>
 
-        <div className="mrp-layer">
+        <div className="canvas-controls hud-panel" onWheel={(event) => event.stopPropagation()}>
+          <button className="icon-button" onClick={() => zoomBy(1.14)} title="Zoom in">
+            <ZoomIn size={16} />
+          </button>
+          <button className="icon-button" onClick={() => zoomBy(0.86)} title="Zoom out">
+            <ZoomOut size={16} />
+          </button>
+          <button className="icon-button" onClick={resetView} title="Reset view">
+            <Scan size={16} />
+          </button>
+          <button className="icon-button" onClick={fitThread} title="Fit thread">
+            <Maximize2 size={16} />
+          </button>
+          <span>{Math.round(viewport.zoom * 100)}%</span>
+        </div>
+
+        <div
+          className="mrp-layer"
+          style={{
+            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`
+          }}
+        >
           {loading && (
             <div className="empty-state hud-panel">
               <Loader2 className="spin" size={18} />
@@ -53,7 +160,7 @@ export function App() {
           {snapshot?.mrps.map((mrp) => {
             const placement = findPlacement(snapshot, mrp);
             if (!placement) return null;
-            return <MrpCard key={mrp.id} mrp={mrp} placement={placement} onPatch={patchPlacement} />;
+            return <MrpCard key={mrp.id} mrp={mrp} placement={placement} zoom={viewport.zoom} onPatch={patchPlacement} />;
           })}
 
           {snapshot &&
@@ -69,6 +176,7 @@ export function App() {
 
         <form
           className="prompt-dock hud-panel"
+          onWheel={(event) => event.stopPropagation()}
           onSubmit={(event) => {
             event.preventDefault();
             const value = prompt.trim();
@@ -98,10 +206,12 @@ export function App() {
 function MrpCard({
   mrp,
   placement,
+  zoom,
   onPatch
 }: {
   mrp: Mrp;
   placement: CanvasPlacement;
+  zoom: number;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
   const [position, setPosition] = useState({ x: placement.x, y: placement.y });
@@ -146,8 +256,8 @@ function MrpCard({
         onPointerMove={(event) => {
           if (!drag) return;
           const nextPosition = {
-            x: drag.x + event.clientX - drag.startX,
-            y: drag.y + event.clientY - drag.startY
+            x: drag.x + (event.clientX - drag.startX) / zoom,
+            y: drag.y + (event.clientY - drag.startY) / zoom
           };
           positionRef.current = nextPosition;
           setPosition(nextPosition);
@@ -197,6 +307,23 @@ function MrpCard({
       </footer>
     </article>
   );
+}
+
+function clampZoom(value: number) {
+  return Math.min(1.8, Math.max(0.35, value));
+}
+
+function getPlacementBounds(placements: CanvasPlacement[]) {
+  const left = Math.min(...placements.map((placement) => placement.x));
+  const top = Math.min(...placements.map((placement) => placement.y));
+  const right = Math.max(...placements.map((placement) => placement.x + placement.width));
+  const bottom = Math.max(...placements.map((placement) => placement.y + placement.height));
+  return {
+    left,
+    top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top)
+  };
 }
 
 function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }) {

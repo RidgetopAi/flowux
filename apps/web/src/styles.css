@@ -126,6 +126,12 @@ button, textarea { font: inherit; }
 .workspace {
   position: relative;
   height: calc(100vh - 122px);
+  cursor: grab;
+  touch-action: none;
+}
+
+.workspace.is-panning {
+  cursor: grabbing;
 }
 
 .tldraw-layer, .mrp-layer {
@@ -136,10 +142,32 @@ button, textarea { font: inherit; }
 .tldraw-layer {
   opacity: .24;
   filter: saturate(.55);
+  pointer-events: none;
 }
 
 .mrp-layer {
   pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.canvas-controls {
+  position: absolute;
+  z-index: 4;
+  right: 18px;
+  top: 18px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.canvas-controls span {
+  min-width: 42px;
+  color: var(--hud-soft);
+  font: 11px/1 var(--hud-mono);
+  text-align: center;
 }
 
 .mrp-card {
