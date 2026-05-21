@@ -39,6 +39,7 @@ export async function snapBack(canvasId: string, layoutWidth?: number, rowHeight
 export async function streamPrompt(
   canvasId: string,
   prompt: string,
+  layout: { layoutWidth?: number; rowHeight?: number },
   handlers: {
     onCreated: (payload: CreatePromptResponse) => void;
     onToken: (payload: { mrpId: string; token: string }) => void;
@@ -49,7 +50,7 @@ export async function streamPrompt(
   const response = await fetch(`/api/canvases/${canvasId}/prompts/stream`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt })
+    body: JSON.stringify({ prompt, ...layout })
   });
 
   if (!response.ok || !response.body) {

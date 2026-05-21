@@ -57,7 +57,7 @@ app.post<{ Params: { canvasId: string }; Body: { layoutWidth?: number; rowHeight
   }
 );
 
-app.post<{ Params: { canvasId: string }; Body: { prompt: string } }>(
+app.post<{ Params: { canvasId: string }; Body: { prompt: string; layoutWidth?: number; rowHeight?: number } }>(
   "/api/canvases/:canvasId/prompts/stream",
   async (request, reply) => {
     const prompt = request.body?.prompt?.trim();
@@ -76,7 +76,10 @@ app.post<{ Params: { canvasId: string }; Body: { prompt: string } }>(
 
     try {
       const messages = await buildMessagesForPrompt(request.params.canvasId, prompt);
-      const created = await createPromptMrp(request.params.canvasId, prompt);
+      const created = await createPromptMrp(request.params.canvasId, prompt, {
+        layoutWidth: request.body?.layoutWidth,
+        rowHeight: request.body?.rowHeight
+      });
       send("created", created);
 
       const adapter = createModelAdapter();

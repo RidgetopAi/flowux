@@ -8,7 +8,7 @@ interface FlowuxState {
   error?: string;
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
-  submitPrompt: (prompt: string) => Promise<void>;
+  submitPrompt: (prompt: string, layout?: { layoutWidth?: number; rowHeight?: number }) => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
   snapBack: (layoutWidth?: number, rowHeight?: number) => Promise<void>;
 }
@@ -40,11 +40,11 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
-  async submitPrompt(prompt: string) {
+  async submitPrompt(prompt, layout = {}) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
 
-    await api.streamPrompt(canvasId, prompt, {
+    await api.streamPrompt(canvasId, prompt, layout, {
       onCreated(payload) {
         set((state) => ({
           snapshot:

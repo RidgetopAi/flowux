@@ -102,8 +102,10 @@ export function App() {
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
+    const workspaceWidth = workspaceRef.current?.clientWidth ?? 1260;
+    const rowHeight = getVisibleCardRowHeight(workspaceRef.current, viewport.zoom);
     setPrompt("");
-    void submitPrompt(value);
+    void submitPrompt(value, { layoutWidth: workspaceWidth / viewport.zoom, rowHeight });
   };
 
   return (

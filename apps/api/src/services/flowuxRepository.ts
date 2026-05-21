@@ -71,24 +71,22 @@ export async function updatePlacement(
   return placement ? toPlacement(placement) : undefined;
 }
 
+interface LayoutMetrics {
+  layoutWidth?: number;
+  rowHeight?: number;
+}
+
 export async function snapBack(canvasId: string, layoutWidth = 1260, rowHeight = 600): Promise<CanvasPlacement[]> {
   const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
   const timestamp = now();
-  const cardWidth = 360;
-  const gapX = 60;
-  const gapY = 28;
-  const margin = 120;
-  const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
-  const usableWidth = Math.max(cardWidth, layoutWidth - margin);
-  const columns = Math.max(1, Math.floor((usableWidth + gapX) / (cardWidth + gapX)));
 
   for (const mrp of canvasMrps) {
-    const index = mrp.sequence - 1;
+    const position = getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight });
     await db
       .update(canvasPlacements)
       .set({
-        x: margin + (index % columns) * (cardWidth + gapX),
-        y: margin + Math.floor(index / columns) * (safeRowHeight + gapY),
+        x: position.x,
+        y: position.y,
         updatedAt: timestamp
       })
       .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrp.id)));
@@ -98,7 +96,11 @@ export async function snapBack(canvasId: string, layoutWidth = 1260, rowHeight =
   return rows.map(toPlacement);
 }
 
-export async function createPromptMrp(canvasId: string, prompt: string): Promise<CreatePromptResponse> {
+export async function createPromptMrp(
+  canvasId: string,
+  prompt: string,
+  layout: LayoutMetrics = {}
+): Promise<CreatePromptResponse> {
   const timestamp = now();
   const [sequenceRow] = await db
     .select({ value: max(mrps.sequence) })
@@ -120,14 +122,15 @@ export async function createPromptMrp(canvasId: string, prompt: string): Promise
     updatedAt: timestamp
   };
 
+  const position = getChronologicalPosition(sequence, layout);
   const placement: CanvasPlacement = {
     id: id(),
     canvasId,
     mrpId: mrp.id,
     originCanvasId: undefined,
     isExternalReference: false,
-    x: 120 + ((sequence - 1) % 3) * 420,
-    y: 120 + Math.floor((sequence - 1) / 3) * 300,
+    x: position.x,
+    y: position.y,
     width: 360,
     height: 240,
     collapsed: false,
@@ -162,6 +165,24 @@ export async function createPromptMrp(canvasId: string, prompt: string): Promise
   await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
 
   return { mrp, placement, modelRun };
+}
+
+function getChronologicalPosition(sequence: number, layout: LayoutMetrics) {
+  const cardWidth = 360;
+  const gapX = 60;
+  const gapY = 28;
+  const margin = 120;
+  const rowHeight = layout.rowHeight ?? 600;
+  const layoutWidth = layout.layoutWidth ?? 1260;
+  const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
+  const usableWidth = Math.max(cardWidth, layoutWidth - margin);
+  const columns = Math.max(1, Math.floor((usableWidth + gapX) / (cardWidth + gapX)));
+  const index = sequence - 1;
+
+  return {
+    x: margin + (index % columns) * (cardWidth + gapX),
+    y: margin + Math.floor(index / columns) * (safeRowHeight + gapY)
+  };
 }
 
 export async function completePromptMrp(canvasId: string, mrpId: string, response: string): Promise<Mrp> {
