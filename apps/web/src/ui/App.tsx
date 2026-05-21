@@ -10,12 +10,13 @@ import {
   Plus,
   RotateCcw,
   Scan,
+  Sparkles,
   ZoomIn,
   ZoomOut
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { Tldraw } from "tldraw";
-import type { CanvasPlacement, Mrp } from "@flowux/shared";
+import type { CanvasPlacement, Mrp, MrpBlock, MrpSection, MrpSectionKind } from "@flowux/shared";
 import { findPlacement, useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -173,7 +174,17 @@ export function App() {
           {snapshot?.mrps.map((mrp) => {
             const placement = findPlacement(snapshot, mrp);
             if (!placement) return null;
-            return <MrpCard key={mrp.id} mrp={mrp} placement={placement} zoom={viewport.zoom} onPatch={patchPlacement} />;
+            return (
+              <MrpCard
+                key={mrp.id}
+                mrp={mrp}
+                placement={placement}
+                sections={snapshot.sections.filter((section) => section.mrpId === mrp.id)}
+                blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
+                zoom={viewport.zoom}
+                onPatch={patchPlacement}
+              />
+            );
           })}
 
           {snapshot &&
@@ -222,11 +233,15 @@ export function App() {
 function MrpCard({
   mrp,
   placement,
+  sections,
+  blocks,
   zoom,
   onPatch
 }: {
   mrp: Mrp;
   placement: CanvasPlacement;
+  sections: MrpSection[];
+  blocks: MrpBlock[];
   zoom: number;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
@@ -266,6 +281,12 @@ function MrpCard({
     positionRef.current = nextPosition;
     setPosition(nextPosition);
   };
+
+  const promptText = getSectionText(sections, blocks, "prompt") || mrp.userPrompt;
+  const responseText = getSectionText(sections, blocks, "response") || mrp.assistantResponse || "Waiting for model output...";
+  const detailSections = sections
+    .filter((section) => !["prompt", "response"].includes(section.kind))
+    .sort((a, b) => a.sequence - b.sequence);
 
   return (
     <article
@@ -313,12 +334,26 @@ function MrpCard({
         <div className="mrp-body">
           <section>
             <p className="hud-label">Prompt</p>
-            <p>{mrp.userPrompt}</p>
+            <p>{promptText}</p>
           </section>
           <section>
             <p className="hud-label">Response</p>
-            <p>{mrp.assistantResponse || "Waiting for model output..."}</p>
+            <p>{responseText}</p>
           </section>
+          {detailSections.length > 0 && (
+            <section className="mrp-internals">
+              <p className="hud-label">Internals</p>
+              <div className="mrp-section-list">
+                {detailSections.map((section) => (
+                  <MrpSectionDrawer
+                    key={section.id}
+                    section={section}
+                    blocks={blocks.filter((block) => block.sectionId === section.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -328,6 +363,52 @@ function MrpCard({
       </footer>
     </article>
   );
+}
+
+function MrpSectionDrawer({ section, blocks }: { section: MrpSection; blocks: MrpBlock[] }) {
+  const body = formatSectionBody(section, blocks);
+  return (
+    <details className={`mrp-section-drawer section-${section.kind}`} data-no-card-drag open={!section.collapsedByDefault}>
+      <summary>
+        <span className="section-title">
+          {section.kind === "thinking" && <Sparkles size={13} />}
+          {section.title}
+        </span>
+        <span>{section.summary || summarizeSection(section, blocks)}</span>
+      </summary>
+      <pre>{body}</pre>
+    </details>
+  );
+}
+
+function getSectionText(sections: MrpSection[], blocks: MrpBlock[], kind: MrpSectionKind) {
+  const section = sections.find((item) => item.kind === kind);
+  if (!section) return "";
+  return blocks
+    .filter((block) => block.sectionId === section.id)
+    .map((block) => (typeof block.content.text === "string" ? block.content.text : ""))
+    .join("\n")
+    .trim();
+}
+
+function formatSectionBody(section: MrpSection, blocks: MrpBlock[]) {
+  if (!blocks.length) return section.summary || "No captured content.";
+  return blocks
+    .map((block) => {
+      if (typeof block.content.text === "string") return block.content.text;
+      return JSON.stringify(block.content, null, 2);
+    })
+    .join("\n\n");
+}
+
+function summarizeSection(section: MrpSection, blocks: MrpBlock[]) {
+  const firstBlock = blocks[0];
+  if (!firstBlock) return "empty";
+  if (typeof firstBlock.content.text === "string") {
+    return `${firstBlock.content.text.length} chars`;
+  }
+  if (section.kind === "usage" && typeof firstBlock.content.usage === "object") return "tokens";
+  return `${blocks.length} block${blocks.length === 1 ? "" : "s"}`;
 }
 
 function isCardControl(target: EventTarget) {

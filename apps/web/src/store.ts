@@ -91,6 +91,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
                 }
               : state.snapshot
         }));
+        void get().reloadCanvas(canvasId);
       },
       onError(message) {
         set({ error: message });

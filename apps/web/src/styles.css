@@ -239,11 +239,84 @@ button, textarea { font: inherit; }
   padding-top: 10px;
 }
 
+.mrp-body .mrp-internals {
+  padding-top: 9px;
+}
+
 .mrp-body p {
   margin: 0;
   font-size: 13px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.mrp-section-list {
+  display: grid;
+  gap: 7px;
+}
+
+.mrp-section-drawer {
+  border: 1px solid rgba(233, 237, 232, .12);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .16);
+}
+
+.mrp-section-drawer summary {
+  min-height: 30px;
+  padding: 0 9px;
+  display: grid;
+  grid-template-columns: minmax(90px, auto) 1fr;
+  align-items: center;
+  gap: 8px;
+  color: var(--hud-muted);
+  cursor: pointer;
+  font: 10px/1.2 var(--hud-mono);
+  list-style: none;
+}
+
+.mrp-section-drawer summary::-webkit-details-marker {
+  display: none;
+}
+
+.mrp-section-drawer summary::after {
+  content: "+";
+  justify-self: end;
+  color: var(--hud-soft);
+}
+
+.mrp-section-drawer[open] summary::after {
+  content: "-";
+}
+
+.mrp-section-drawer summary > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--hud-soft);
+  text-transform: uppercase;
+}
+
+.section-thinking .section-title {
+  color: var(--hud-violet);
+}
+
+.mrp-section-drawer pre {
+  max-height: 190px;
+  margin: 0;
+  padding: 8px 9px 10px;
+  overflow: auto;
+  border-top: 1px solid rgba(233, 237, 232, .1);
+  color: var(--hud-soft);
+  font: 11px/1.45 var(--hud-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .mrp-card footer {
