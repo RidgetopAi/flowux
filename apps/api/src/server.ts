@@ -50,10 +50,10 @@ app.patch<{
   return placement;
 });
 
-app.post<{ Params: { canvasId: string }; Body: { layoutWidth?: number } }>(
+app.post<{ Params: { canvasId: string }; Body: { layoutWidth?: number; rowHeight?: number } }>(
   "/api/canvases/:canvasId/snap-back",
   async (request) => {
-    return snapBack(request.params.canvasId, request.body?.layoutWidth);
+    return snapBack(request.params.canvasId, request.body?.layoutWidth, request.body?.rowHeight);
   }
 );
 

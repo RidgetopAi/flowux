@@ -26,7 +26,7 @@ done
 curl -sS \
   -X POST "http://127.0.0.1:5174/api/canvases/$canvas_id/snap-back" \
   -H "content-type: application/json" \
-  --data-binary '{"layoutWidth":1800}' |
+  --data-binary '{"layoutWidth":1260,"rowHeight":720}' |
   node -e '
     let input = "";
     process.stdin.on("data", (chunk) => input += chunk);
@@ -38,4 +38,3 @@ curl -sS \
       }))));
     });
   '
-

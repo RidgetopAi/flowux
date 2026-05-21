@@ -96,7 +96,8 @@ export function App() {
   const finishPan = () => setPan(undefined);
   const snapBackToVisibleWidth = () => {
     const workspaceWidth = workspaceRef.current?.clientWidth ?? 1260;
-    void snapBack(workspaceWidth / viewport.zoom);
+    const rowHeight = getVisibleCardRowHeight(workspaceRef.current, viewport.zoom);
+    void snapBack(workspaceWidth / viewport.zoom, rowHeight);
   };
 
   return (
@@ -339,6 +340,15 @@ function getPlacementBounds(placements: CanvasPlacement[]) {
     width: Math.max(1, right - left),
     height: Math.max(1, bottom - top)
   };
+}
+
+function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
+  if (!workspace) return 600;
+  const heights = Array.from(workspace.querySelectorAll<HTMLElement>(".mrp-card")).map((card) => {
+    return card.getBoundingClientRect().height / zoom;
+  });
+  const maxHeight = heights.length ? Math.max(...heights) : 520;
+  return Math.ceil(maxHeight + 110);
 }
 
 function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }) {

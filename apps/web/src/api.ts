@@ -28,11 +28,11 @@ export async function updatePlacement(
   });
 }
 
-export async function snapBack(canvasId: string, layoutWidth?: number): Promise<CanvasPlacement[]> {
+export async function snapBack(canvasId: string, layoutWidth?: number, rowHeight?: number): Promise<CanvasPlacement[]> {
   return fetchJson(`/api/canvases/${canvasId}/snap-back`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ layoutWidth })
+    body: JSON.stringify({ layoutWidth, rowHeight })
   });
 }
 
