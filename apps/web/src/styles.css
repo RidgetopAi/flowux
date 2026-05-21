@@ -219,6 +219,13 @@ button, textarea { font: inherit; }
   padding: 12px;
 }
 
+.mrp-head .check-circle,
+.mrp-head .icon-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .mrp-head h2 {
   min-width: 0;
   flex: 1;

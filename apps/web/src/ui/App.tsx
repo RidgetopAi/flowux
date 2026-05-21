@@ -416,7 +416,7 @@ function summarizeSection(section: MrpSection, blocks: MrpBlock[]) {
 }
 
 function isCardControl(target: EventTarget) {
-  return target instanceof HTMLElement
+  return target instanceof Element
     ? Boolean(target.closest("button, a, input, textarea, select, [data-no-card-drag]"))
     : false;
 }
