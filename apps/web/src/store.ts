@@ -2,6 +2,8 @@ import type { CanvasPlacement, CanvasSnapshot, Mrp } from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
 
+const activeCanvasStorageKey = "flowux.activeCanvasId";
+
 interface FlowuxState {
   snapshot?: CanvasSnapshot;
   loading: boolean;
@@ -20,8 +22,11 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const canvases = await api.listCanvases();
-      const canvas = canvases[0] ?? (await api.createCanvas("Flowux MVP Canvas"));
+      const storedCanvasId = window.localStorage.getItem(activeCanvasStorageKey);
+      const canvas =
+        canvases.find((item) => item.id === storedCanvasId) ?? canvases[0] ?? (await api.createCanvas("Flowux MVP Canvas"));
       const snapshot = await api.getCanvas(canvas.id);
+      window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
       set({ snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to load Flowux", loading: false });
@@ -33,6 +38,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       const snapshot = await api.getCanvas(canvasId);
       set((state) => {
         if (state.snapshot?.canvas.id !== canvasId) return state;
+        window.localStorage.setItem(activeCanvasStorageKey, canvasId);
         return { snapshot, error: undefined };
       });
     } catch (error) {
