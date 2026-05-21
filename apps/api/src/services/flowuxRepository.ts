@@ -92,15 +92,23 @@ export async function updatePlacement(
 
 interface LayoutMetrics {
   layoutWidth?: number;
+  layoutLeft?: number;
+  layoutTop?: number;
   rowHeight?: number;
 }
 
-export async function snapBack(canvasId: string, layoutWidth = 1260, rowHeight = 600): Promise<CanvasPlacement[]> {
+export async function snapBack(
+  canvasId: string,
+  layoutWidth = 1260,
+  rowHeight = 600,
+  layoutLeft = 0,
+  layoutTop = 0
+): Promise<CanvasPlacement[]> {
   const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
   const timestamp = now();
 
   for (const mrp of canvasMrps) {
-    const position = getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight });
+    const position = getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight, layoutLeft, layoutTop });
     await db
       .update(canvasPlacements)
       .set({
@@ -217,14 +225,16 @@ function getChronologicalPosition(sequence: number, layout: LayoutMetrics) {
   const margin = 120;
   const rowHeight = layout.rowHeight ?? 600;
   const layoutWidth = layout.layoutWidth ?? 1260;
+  const layoutLeft = layout.layoutLeft ?? 0;
+  const layoutTop = layout.layoutTop ?? 0;
   const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
-  const usableWidth = Math.max(cardWidth, layoutWidth - margin);
+  const usableWidth = Math.max(cardWidth, layoutWidth - margin * 2);
   const columns = Math.max(1, Math.floor((usableWidth + gapX) / (cardWidth + gapX)));
   const index = sequence - 1;
 
   return {
-    x: margin + (index % columns) * (cardWidth + gapX),
-    y: margin + Math.floor(index / columns) * (safeRowHeight + gapY)
+    x: layoutLeft + margin + (index % columns) * (cardWidth + gapX),
+    y: layoutTop + margin + Math.floor(index / columns) * (safeRowHeight + gapY)
   };
 }
 

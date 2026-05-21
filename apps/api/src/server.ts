@@ -52,14 +52,26 @@ app.patch<{
   return placement;
 });
 
-app.post<{ Params: { canvasId: string }; Body: { layoutWidth?: number; rowHeight?: number } }>(
+app.post<{
+  Params: { canvasId: string };
+  Body: { layoutWidth?: number; layoutLeft?: number; layoutTop?: number; rowHeight?: number };
+}>(
   "/api/canvases/:canvasId/snap-back",
   async (request) => {
-    return snapBack(request.params.canvasId, request.body?.layoutWidth, request.body?.rowHeight);
+    return snapBack(
+      request.params.canvasId,
+      request.body?.layoutWidth,
+      request.body?.rowHeight,
+      request.body?.layoutLeft,
+      request.body?.layoutTop
+    );
   }
 );
 
-app.post<{ Params: { canvasId: string }; Body: { prompt: string; layoutWidth?: number; rowHeight?: number } }>(
+app.post<{
+  Params: { canvasId: string };
+  Body: { prompt: string; layoutWidth?: number; layoutLeft?: number; layoutTop?: number; rowHeight?: number };
+}>(
   "/api/canvases/:canvasId/prompts/stream",
   async (request, reply) => {
     const prompt = request.body?.prompt?.trim();
@@ -80,6 +92,8 @@ app.post<{ Params: { canvasId: string }; Body: { prompt: string; layoutWidth?: n
       const messages = await buildMessagesForPrompt(request.params.canvasId, prompt);
       const created = await createPromptMrp(request.params.canvasId, prompt, {
         layoutWidth: request.body?.layoutWidth,
+        layoutLeft: request.body?.layoutLeft,
+        layoutTop: request.body?.layoutTop,
         rowHeight: request.body?.rowHeight
       });
       send("created", created);

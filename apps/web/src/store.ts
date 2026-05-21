@@ -1,4 +1,4 @@
-import type { CanvasPlacement, CanvasSnapshot, Mrp } from "@flowux/shared";
+import type { CanvasPlacement, CanvasSnapshot, CreatePromptResponse, Mrp } from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
 
@@ -11,9 +11,13 @@ interface FlowuxState {
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: () => Promise<void>;
-  submitPrompt: (prompt: string, layout?: { layoutWidth?: number; rowHeight?: number }) => Promise<void>;
+  submitPrompt: (
+    prompt: string,
+    layout?: api.LayoutRequest,
+    onCreated?: (payload: CreatePromptResponse) => void
+  ) => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
-  snapBack: (layoutWidth?: number, rowHeight?: number) => Promise<void>;
+  snapBack: (layout?: api.LayoutRequest) => Promise<void>;
 }
 
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
@@ -59,12 +63,13 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
-  async submitPrompt(prompt, layout = {}) {
+  async submitPrompt(prompt, layout = {}, onCreated) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
 
     await api.streamPrompt(canvasId, prompt, layout, {
       onCreated(payload) {
+        onCreated?.(payload);
         set((state) => ({
           snapshot:
             state.snapshot?.canvas.id === payload.mrp.canvasId
@@ -134,10 +139,10 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }));
   },
 
-  async snapBack(layoutWidth, rowHeight) {
+  async snapBack(layout) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
-    const placements = await api.snapBack(canvasId, layoutWidth, rowHeight);
+    const placements = await api.snapBack(canvasId, layout);
     set((state) => ({
       snapshot: state.snapshot && { ...state.snapshot, placements }
     }));

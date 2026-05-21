@@ -28,18 +28,25 @@ export async function updatePlacement(
   });
 }
 
-export async function snapBack(canvasId: string, layoutWidth?: number, rowHeight?: number): Promise<CanvasPlacement[]> {
+export interface LayoutRequest {
+  layoutWidth?: number;
+  layoutLeft?: number;
+  layoutTop?: number;
+  rowHeight?: number;
+}
+
+export async function snapBack(canvasId: string, layout?: LayoutRequest): Promise<CanvasPlacement[]> {
   return fetchJson(`/api/canvases/${canvasId}/snap-back`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ layoutWidth, rowHeight })
+    body: JSON.stringify(layout ?? {})
   });
 }
 
 export async function streamPrompt(
   canvasId: string,
   prompt: string,
-  layout: { layoutWidth?: number; rowHeight?: number },
+  layout: LayoutRequest,
   handlers: {
     onCreated: (payload: CreatePromptResponse) => void;
     onToken: (payload: { mrpId: string; token: string }) => void;

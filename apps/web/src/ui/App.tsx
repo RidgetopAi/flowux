@@ -95,18 +95,39 @@ export function App() {
   };
 
   const finishPan = () => setPan(undefined);
+  const getVisibleLayout = () => {
+    const workspace = workspaceRef.current;
+    const workspaceWidth = workspace?.clientWidth ?? 1260;
+    const workspaceHeight = workspace?.clientHeight ?? 760;
+    return {
+      layoutWidth: workspaceWidth / viewport.zoom,
+      layoutLeft: -viewport.x / viewport.zoom,
+      layoutTop: -viewport.y / viewport.zoom,
+      rowHeight: getVisibleCardRowHeight(workspace, viewport.zoom),
+      workspaceWidth,
+      workspaceHeight
+    };
+  };
   const snapBackToVisibleWidth = () => {
-    const workspaceWidth = workspaceRef.current?.clientWidth ?? 1260;
-    const rowHeight = getVisibleCardRowHeight(workspaceRef.current, viewport.zoom);
-    void snapBack(workspaceWidth / viewport.zoom, rowHeight);
+    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
+    void snapBack({ layoutWidth, layoutLeft, layoutTop, rowHeight });
   };
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
-    const workspaceWidth = workspaceRef.current?.clientWidth ?? 1260;
-    const rowHeight = getVisibleCardRowHeight(workspaceRef.current, viewport.zoom);
+    const { layoutWidth, layoutLeft, layoutTop, rowHeight, workspaceWidth, workspaceHeight } = getVisibleLayout();
     setPrompt("");
-    void submitPrompt(value, { layoutWidth: workspaceWidth / viewport.zoom, rowHeight });
+    void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, ({ placement }) => {
+      centerViewportOnPlacement(placement, workspaceWidth, workspaceHeight);
+    });
+  };
+
+  const centerViewportOnPlacement = (placement: CanvasPlacement, workspaceWidth: number, workspaceHeight: number) => {
+    setViewport((current) => ({
+      ...current,
+      x: workspaceWidth / 2 - (placement.x + placement.width / 2) * current.zoom,
+      y: workspaceHeight / 2 - (placement.y + Math.min(placement.height, 300) / 2) * current.zoom
+    }));
   };
 
   return (
