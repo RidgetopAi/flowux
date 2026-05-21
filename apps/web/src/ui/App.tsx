@@ -20,7 +20,7 @@ import type { CanvasPlacement, Mrp, MrpBlock, MrpSection, MrpSectionKind } from 
 import { findPlacement, useFlowuxStore } from "../store.js";
 
 export function App() {
-  const { snapshot, loading, error, loadInitial, submitPrompt, patchPlacement, snapBack } = useFlowuxStore();
+  const { snapshot, loading, error, loadInitial, createNewCanvas, submitPrompt, patchPlacement, snapBack } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
@@ -121,6 +121,10 @@ export function App() {
           <span>{selectedCount} checked</span>
           <span>{snapshot?.canvas.status ?? "loading"}</span>
         </div>
+        <button className="hud-button" onClick={() => void createNewCanvas()} title="Start a new blank canvas thread">
+          <Plus size={15} />
+          New canvas
+        </button>
         <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
           <RotateCcw size={15} />
           Snap back

@@ -10,6 +10,7 @@ interface FlowuxState {
   error?: string;
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
+  createNewCanvas: () => Promise<void>;
   submitPrompt: (prompt: string, layout?: { layoutWidth?: number; rowHeight?: number }) => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
   snapBack: (layoutWidth?: number, rowHeight?: number) => Promise<void>;
@@ -43,6 +44,18 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to reload canvas" });
+    }
+  },
+
+  async createNewCanvas() {
+    set({ loading: true, error: undefined });
+    try {
+      const canvas = await api.createCanvas("Flowux Canvas");
+      const snapshot = await api.getCanvas(canvas.id);
+      window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
+      set({ snapshot, loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to create canvas", loading: false });
     }
   },
 
