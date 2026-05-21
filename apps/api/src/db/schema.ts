@@ -74,6 +74,72 @@ export const artifacts = sqliteTable("artifacts", {
   createdAt: text("created_at").notNull()
 });
 
+export const mrpSections = sqliteTable("mrp_sections", {
+  id: text("id").primaryKey(),
+  mrpId: text("mrp_id").notNull(),
+  kind: text("kind", {
+    enum: [
+      "prompt",
+      "response",
+      "context_sent",
+      "thinking",
+      "tool_calls",
+      "tool_results",
+      "files",
+      "artifacts",
+      "usage",
+      "timeline",
+      "errors",
+      "raw_events"
+    ]
+  }).notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  sequence: integer("sequence").notNull(),
+  collapsedByDefault: integer("collapsed_by_default", { mode: "boolean" }).notNull(),
+  selectable: integer("selectable", { mode: "boolean" }).notNull(),
+  contextDefault: text("context_default", { enum: ["include", "exclude", "summarize"] }).notNull(),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const mrpBlocks = sqliteTable("mrp_blocks", {
+  id: text("id").primaryKey(),
+  mrpId: text("mrp_id").notNull(),
+  sectionId: text("section_id").notNull(),
+  kind: text("kind", {
+    enum: [
+      "text",
+      "thinking",
+      "tool_call",
+      "tool_result",
+      "file_reference",
+      "artifact",
+      "usage",
+      "error",
+      "event"
+    ]
+  }).notNull(),
+  sequence: integer("sequence").notNull(),
+  content: text("content", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  selectable: integer("selectable", { mode: "boolean" }).notNull(),
+  tokenEstimate: integer("token_estimate"),
+  sourceEventIds: text("source_event_ids", { mode: "json" }).$type<string[]>().notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
+export const mrpEvents = sqliteTable("mrp_events", {
+  id: text("id").primaryKey(),
+  mrpId: text("mrp_id").notNull(),
+  modelRunId: text("model_run_id"),
+  type: text("type").notNull(),
+  sequence: integer("sequence").notNull(),
+  payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  createdAt: text("created_at").notNull()
+});
+
 export const modelRuns = sqliteTable("model_runs", {
   id: text("id").primaryKey(),
   canvasId: text("canvas_id").notNull(),
@@ -83,8 +149,11 @@ export const modelRuns = sqliteTable("model_runs", {
   inputMrpIds: text("input_mrp_ids", { mode: "json" }).$type<string[]>().notNull(),
   promptTokens: integer("prompt_tokens"),
   completionTokens: integer("completion_tokens"),
+  totalTokens: integer("total_tokens"),
+  timingMs: integer("timing_ms"),
+  finishReason: text("finish_reason"),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
   error: text("error")
 });
-

@@ -69,6 +69,42 @@ const statements = [
     metadata TEXT,
     created_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS mrp_sections (
+    id TEXT PRIMARY KEY,
+    mrp_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT,
+    sequence INTEGER NOT NULL,
+    collapsed_by_default INTEGER NOT NULL,
+    selectable INTEGER NOT NULL,
+    context_default TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS mrp_blocks (
+    id TEXT PRIMARY KEY,
+    mrp_id TEXT NOT NULL,
+    section_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    selectable INTEGER NOT NULL,
+    token_estimate INTEGER,
+    source_event_ids TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS mrp_events (
+    id TEXT PRIMARY KEY,
+    mrp_id TEXT NOT NULL,
+    model_run_id TEXT,
+    type TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )`,
   `CREATE TABLE IF NOT EXISTS model_runs (
     id TEXT PRIMARY KEY,
     canvas_id TEXT NOT NULL,
@@ -78,6 +114,10 @@ const statements = [
     input_mrp_ids TEXT NOT NULL,
     prompt_tokens INTEGER,
     completion_tokens INTEGER,
+    total_tokens INTEGER,
+    timing_ms INTEGER,
+    finish_reason TEXT,
+    metadata TEXT,
     started_at TEXT NOT NULL,
     completed_at TEXT,
     error TEXT
@@ -88,5 +128,12 @@ for (const statement of statements) {
   sqlite.exec(statement);
 }
 
-console.log("Flowux database is ready.");
+const modelRunColumns = sqlite.prepare("PRAGMA table_info(model_runs)").all() as Array<{ name: string }>;
+const hasModelRunColumn = (name: string) => modelRunColumns.some((column) => column.name === name);
 
+if (!hasModelRunColumn("total_tokens")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN total_tokens INTEGER");
+if (!hasModelRunColumn("timing_ms")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN timing_ms INTEGER");
+if (!hasModelRunColumn("finish_reason")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN finish_reason TEXT");
+if (!hasModelRunColumn("metadata")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN metadata TEXT");
+
+console.log("Flowux database is ready.");

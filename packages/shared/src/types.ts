@@ -3,6 +3,30 @@ export type MrpStatus = "pending" | "streaming" | "complete" | "error";
 export type ContextMode = "full_mrp" | "summary" | "response_only" | "excerpt" | "none";
 export type ArtifactType = "image" | "file" | "code" | "link" | "diff" | "terminal";
 export type ModelProvider = "mock" | "llama_cpp" | "openai_compatible";
+export type MrpSectionKind =
+  | "prompt"
+  | "response"
+  | "context_sent"
+  | "thinking"
+  | "tool_calls"
+  | "tool_results"
+  | "files"
+  | "artifacts"
+  | "usage"
+  | "timeline"
+  | "errors"
+  | "raw_events";
+export type MrpBlockKind =
+  | "text"
+  | "thinking"
+  | "tool_call"
+  | "tool_result"
+  | "file_reference"
+  | "artifact"
+  | "usage"
+  | "error"
+  | "event";
+export type ContextDefault = "include" | "exclude" | "summarize";
 
 export interface CanvasThread {
   id: string;
@@ -48,6 +72,45 @@ export interface CanvasPlacement {
   updatedAt: string;
 }
 
+export interface MrpSection {
+  id: string;
+  mrpId: string;
+  kind: MrpSectionKind;
+  title: string;
+  summary?: string;
+  sequence: number;
+  collapsedByDefault: boolean;
+  selectable: boolean;
+  contextDefault: ContextDefault;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MrpBlock {
+  id: string;
+  mrpId: string;
+  sectionId: string;
+  kind: MrpBlockKind;
+  sequence: number;
+  content: Record<string, unknown>;
+  selectable: boolean;
+  tokenEstimate?: number;
+  sourceEventIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MrpEvent {
+  id: string;
+  mrpId: string;
+  modelRunId?: string;
+  type: string;
+  sequence: number;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface Branch {
   id: string;
   parentCanvasId: string;
@@ -87,6 +150,10 @@ export interface ModelRun {
   inputMrpIds: string[];
   promptTokens?: number;
   completionTokens?: number;
+  totalTokens?: number;
+  timingMs?: number;
+  finishReason?: string;
+  metadata?: Record<string, unknown>;
   startedAt: string;
   completedAt?: string;
   error?: string;
@@ -96,6 +163,9 @@ export interface CanvasSnapshot {
   canvas: CanvasThread;
   mrps: Mrp[];
   placements: CanvasPlacement[];
+  sections: MrpSection[];
+  blocks: MrpBlock[];
+  events: MrpEvent[];
   branches: Branch[];
 }
 
@@ -116,4 +186,3 @@ export interface ContextMessage {
   content: string;
   mrpId?: string;
 }
-

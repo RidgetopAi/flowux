@@ -3,6 +3,7 @@ import Fastify from "fastify";
 import { loadConfig } from "./config.js";
 import "./db/client.js";
 import {
+  appendMrpEvent,
   buildMessagesForPrompt,
   completePromptMrp,
   createCanvas,
@@ -26,7 +27,8 @@ app.get("/api/health", async () => ({
   ok: true,
   modelMode: config.modelMode,
   modelBaseUrl: config.modelBaseUrl,
-  modelName: config.modelName
+  modelName: config.modelName,
+  modelMaxTokens: config.modelMaxTokens
 }));
 
 app.get("/api/canvases", async () => listCanvases());
@@ -84,13 +86,68 @@ app.post<{ Params: { canvasId: string }; Body: { prompt: string; layoutWidth?: n
 
       const adapter = createModelAdapter();
       let responseText = "";
+      let thinkingText = "";
+      let sawThinking = false;
+      let sawResponse = false;
+      let finishReason: string | undefined;
+      let usage:
+        | {
+            promptTokens?: number;
+            completionTokens?: number;
+            totalTokens?: number;
+          }
+        | undefined;
 
-      for await (const token of adapter.generate({ messages })) {
-        responseText += token;
-        send("token", { mrpId: created.mrp.id, token });
+      await appendMrpEvent(created.mrp.id, created.modelRun.id, "model_stream_started", {
+        provider: adapter.provider,
+        model: adapter.model
+      });
+
+      for await (const event of adapter.generate({ messages })) {
+        if (event.type === "thinking_delta") {
+          thinkingText += event.text;
+          if (!sawThinking) {
+            sawThinking = true;
+            await appendMrpEvent(created.mrp.id, created.modelRun.id, "thinking_started", {
+              preview: event.text.slice(0, 120)
+            });
+          }
+          send("thinking", { mrpId: created.mrp.id, token: event.text });
+          continue;
+        }
+
+        if (event.type === "response_delta") {
+          responseText += event.text;
+          if (!sawResponse) {
+            sawResponse = true;
+            await appendMrpEvent(created.mrp.id, created.modelRun.id, "response_started", {
+              preview: event.text.slice(0, 120)
+            });
+          }
+          send("token", { mrpId: created.mrp.id, token: event.text });
+          continue;
+        }
+
+        if (event.type === "usage") {
+          usage = event.usage;
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, "usage_reported", { usage: event.usage });
+          continue;
+        }
+
+        if (event.type === "done") {
+          finishReason = event.finishReason;
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, "model_stream_done", {
+            finishReason
+          });
+        }
       }
 
-      const complete = await completePromptMrp(request.params.canvasId, created.mrp.id, responseText);
+      const complete = await completePromptMrp(request.params.canvasId, created.mrp.id, {
+        response: responseText,
+        thinking: thinkingText,
+        usage,
+        finishReason
+      });
       send("complete", { mrp: complete });
       reply.raw.end();
     } catch (error) {

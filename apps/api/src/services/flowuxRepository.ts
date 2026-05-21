@@ -1,4 +1,4 @@
-import { and, desc, eq, max } from "drizzle-orm";
+import { and, desc, eq, inArray, max } from "drizzle-orm";
 import {
   buildContextMessages,
   type CanvasPlacement,
@@ -6,11 +6,17 @@ import {
   type CanvasThread,
   type CreatePromptResponse,
   type ModelRun,
-  type Mrp
+  type Mrp,
+  type MrpBlock,
+  type MrpBlockKind,
+  type MrpEvent,
+  type MrpSection,
+  type MrpSectionKind
 } from "@flowux/shared";
 import { db } from "../db/client.js";
-import { canvasPlacements, canvasThreads, modelRuns, mrps } from "../db/schema.js";
+import { canvasPlacements, canvasThreads, modelRuns, mrpBlocks, mrpEvents, mrps, mrpSections } from "../db/schema.js";
 import { createModelAdapter } from "../model/adapter.js";
+import type { TokenUsage } from "../model/adapter.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -41,15 +47,28 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
   if (!canvas) return undefined;
 
   const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
+  const mrpIds = canvasMrps.map((mrp) => mrp.id);
   const placements = await db
     .select()
     .from(canvasPlacements)
     .where(eq(canvasPlacements.canvasId, canvasId));
+  const sections = mrpIds.length
+    ? await db.select().from(mrpSections).where(inArray(mrpSections.mrpId, mrpIds)).orderBy(mrpSections.sequence)
+    : [];
+  const blocks = mrpIds.length
+    ? await db.select().from(mrpBlocks).where(inArray(mrpBlocks.mrpId, mrpIds)).orderBy(mrpBlocks.sequence)
+    : [];
+  const events = mrpIds.length
+    ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
+    : [];
 
   return {
     canvas: toCanvasThread(canvas),
     mrps: canvasMrps.map(toMrp),
     placements: placements.map(toPlacement),
+    sections: sections.map(toMrpSection),
+    blocks: blocks.map(toMrpBlock),
+    events: events.map(toMrpEvent),
     branches: []
   };
 }
@@ -162,6 +181,30 @@ export async function createPromptMrp(
   await db.insert(mrps).values(mrp);
   await db.insert(canvasPlacements).values(placement);
   await db.insert(modelRuns).values(modelRun);
+  await createSectionWithBlock(mrp.id, "prompt", "Prompt", 1, "text", { text: prompt }, {
+    collapsedByDefault: false,
+    selectable: true,
+    contextDefault: "include"
+  });
+  await createSectionWithBlock(
+    mrp.id,
+    "context_sent",
+    "Context Sent",
+    2,
+    "event",
+    { inputMrpIds, mode: "full_mrp", ordering: "canonical_sequence" },
+    {
+      collapsedByDefault: true,
+      selectable: true,
+      contextDefault: "exclude",
+      summary: `${inputMrpIds.length} selected MRP${inputMrpIds.length === 1 ? "" : "s"}`
+    }
+  );
+  await appendMrpEvent(mrp.id, modelRun.id, "turn_started", {
+    provider: modelRun.provider,
+    model: modelRun.model,
+    inputMrpIds
+  });
   await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
 
   return { mrp, placement, modelRun };
@@ -185,8 +228,16 @@ function getChronologicalPosition(sequence: number, layout: LayoutMetrics) {
   };
 }
 
-export async function completePromptMrp(canvasId: string, mrpId: string, response: string): Promise<Mrp> {
+export interface CompletePromptInput {
+  response: string;
+  thinking?: string;
+  usage?: TokenUsage;
+  finishReason?: string;
+}
+
+export async function completePromptMrp(canvasId: string, mrpId: string, input: CompletePromptInput): Promise<Mrp> {
   const timestamp = now();
+  const response = input.response;
   const summary = response.split(/\s+/).slice(0, 32).join(" ");
   await db
     .update(mrps)
@@ -200,12 +251,124 @@ export async function completePromptMrp(canvasId: string, mrpId: string, respons
 
   await db
     .update(modelRuns)
-    .set({ completedAt: timestamp })
+    .set({
+      completedAt: timestamp,
+      promptTokens: input.usage?.promptTokens,
+      completionTokens: input.usage?.completionTokens,
+      totalTokens: input.usage?.totalTokens,
+      finishReason: input.finishReason
+    })
     .where(eq(modelRuns.mrpId, mrpId));
+
+  if (response) {
+    await createSectionWithBlock(mrpId, "response", "Response", 3, "text", { text: response }, {
+      collapsedByDefault: false,
+      selectable: true,
+      contextDefault: "include",
+      summary
+    });
+  }
+
+  if (input.thinking) {
+    await createSectionWithBlock(mrpId, "thinking", "Thinking", 4, "thinking", { text: input.thinking }, {
+      collapsedByDefault: true,
+      selectable: true,
+      contextDefault: "exclude",
+      summary: input.thinking.split(/\s+/).slice(0, 24).join(" ")
+    });
+  }
+
+  if (input.usage) {
+    await createSectionWithBlock(mrpId, "usage", "Usage", 8, "usage", { usage: input.usage }, {
+      collapsedByDefault: true,
+      selectable: false,
+      contextDefault: "exclude",
+      summary: `${input.usage.totalTokens ?? "unknown"} total tokens`
+    });
+  }
+
+  await appendMrpEvent(mrpId, undefined, "turn_completed", {
+    finishReason: input.finishReason,
+    responseCharacters: response.length,
+    thinkingCharacters: input.thinking?.length ?? 0,
+    usage: input.usage
+  });
 
   const [mrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
   if (!mrp) throw new Error(`MRP ${mrpId} was not found after completion`);
   return toMrp(mrp);
+}
+
+export async function appendMrpEvent(
+  mrpId: string,
+  modelRunId: string | undefined,
+  type: string,
+  payload: Record<string, unknown>
+): Promise<MrpEvent> {
+  const [sequenceRow] = await db
+    .select({ value: max(mrpEvents.sequence) })
+    .from(mrpEvents)
+    .where(eq(mrpEvents.mrpId, mrpId));
+  const event: MrpEvent = {
+    id: id(),
+    mrpId,
+    ...(modelRunId ? { modelRunId } : {}),
+    type,
+    sequence: (sequenceRow?.value ?? 0) + 1,
+    payload,
+    createdAt: now()
+  };
+  await db.insert(mrpEvents).values(event);
+  return event;
+}
+
+interface SectionOptions {
+  collapsedByDefault: boolean;
+  selectable: boolean;
+  contextDefault: "include" | "exclude" | "summarize";
+  summary?: string;
+  metadata?: Record<string, unknown>;
+}
+
+async function createSectionWithBlock(
+  mrpId: string,
+  sectionKind: MrpSectionKind,
+  title: string,
+  sectionSequence: number,
+  blockKind: MrpBlockKind,
+  content: Record<string, unknown>,
+  options: SectionOptions
+) {
+  const timestamp = now();
+  const section: MrpSection = {
+    id: id(),
+    mrpId,
+    kind: sectionKind,
+    title,
+    ...(options.summary ? { summary: options.summary } : {}),
+    sequence: sectionSequence,
+    collapsedByDefault: options.collapsedByDefault,
+    selectable: options.selectable,
+    contextDefault: options.contextDefault,
+    ...(options.metadata ? { metadata: options.metadata } : {}),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  const block: MrpBlock = {
+    id: id(),
+    mrpId,
+    sectionId: section.id,
+    kind: blockKind,
+    sequence: 1,
+    content,
+    selectable: options.selectable,
+    sourceEventIds: [],
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+
+  await db.insert(mrpSections).values(section);
+  await db.insert(mrpBlocks).values(block);
 }
 
 export async function buildMessagesForPrompt(canvasId: string, prompt: string) {
@@ -270,5 +433,50 @@ function toPlacement(row: typeof canvasPlacements.$inferSelect): CanvasPlacement
     connectionHidden: row.connectionHidden,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
+  };
+}
+
+function toMrpSection(row: typeof mrpSections.$inferSelect): MrpSection {
+  return {
+    id: row.id,
+    mrpId: row.mrpId,
+    kind: row.kind,
+    title: row.title,
+    ...(row.summary ? { summary: row.summary } : {}),
+    sequence: row.sequence,
+    collapsedByDefault: row.collapsedByDefault,
+    selectable: row.selectable,
+    contextDefault: row.contextDefault,
+    ...(row.metadata ? { metadata: row.metadata } : {}),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+function toMrpBlock(row: typeof mrpBlocks.$inferSelect): MrpBlock {
+  return {
+    id: row.id,
+    mrpId: row.mrpId,
+    sectionId: row.sectionId,
+    kind: row.kind,
+    sequence: row.sequence,
+    content: row.content,
+    selectable: row.selectable,
+    ...(row.tokenEstimate ? { tokenEstimate: row.tokenEstimate } : {}),
+    sourceEventIds: row.sourceEventIds,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+function toMrpEvent(row: typeof mrpEvents.$inferSelect): MrpEvent {
+  return {
+    id: row.id,
+    mrpId: row.mrpId,
+    ...(row.modelRunId ? { modelRunId: row.modelRunId } : {}),
+    type: row.type,
+    sequence: row.sequence,
+    payload: row.payload,
+    createdAt: row.createdAt
   };
 }
