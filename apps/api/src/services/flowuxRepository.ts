@@ -1,4 +1,4 @@
-import { and, eq, max } from "drizzle-orm";
+import { and, desc, eq, max } from "drizzle-orm";
 import {
   buildContextMessages,
   type CanvasPlacement,
@@ -18,7 +18,7 @@ const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 
 export async function listCanvases(): Promise<CanvasThread[]> {
-  const rows = await db.select().from(canvasThreads).orderBy(canvasThreads.updatedAt);
+  const rows = await db.select().from(canvasThreads).orderBy(desc(canvasThreads.updatedAt));
   return rows.map(toCanvasThread);
 }
 

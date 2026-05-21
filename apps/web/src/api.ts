@@ -38,7 +38,7 @@ export async function streamPrompt(
   handlers: {
     onCreated: (payload: CreatePromptResponse) => void;
     onToken: (payload: { mrpId: string; token: string }) => void;
-    onComplete: () => void;
+    onComplete: (payload: { mrp: import("@flowux/shared").Mrp }) => void;
     onError: (message: string) => void;
   }
 ) {
@@ -71,7 +71,7 @@ export async function streamPrompt(
       const payload = JSON.parse(data) as unknown;
       if (eventName === "created") handlers.onCreated(payload as CreatePromptResponse);
       if (eventName === "token") handlers.onToken(payload as { mrpId: string; token: string });
-      if (eventName === "complete") handlers.onComplete();
+      if (eventName === "complete") handlers.onComplete(payload as { mrp: import("@flowux/shared").Mrp });
       if (eventName === "error") handlers.onError((payload as { message?: string }).message ?? "Stream error");
     }
   }
@@ -84,4 +84,3 @@ async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promi
   }
   return response.json() as Promise<T>;
 }
-
