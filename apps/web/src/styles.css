@@ -176,11 +176,13 @@ button, textarea { font: inherit; }
   pointer-events: auto;
   overflow: hidden;
   color: var(--hud-soft);
+  cursor: grab;
   will-change: left, top;
 }
 
 .mrp-card.is-dragging {
   z-index: 5;
+  cursor: grabbing;
   user-select: none;
   box-shadow: 0 0 34px rgba(168, 255, 241, .16), var(--hud-shadow-panel);
 }
@@ -203,15 +205,14 @@ button, textarea { font: inherit; }
 .mrp-drag {
   height: 34px;
   padding: 0 12px;
-  cursor: grab;
   border-bottom: 1px solid var(--hud-line);
   font: 10px/1 var(--hud-mono);
   color: var(--hud-muted);
   text-transform: uppercase;
 }
 
-.mrp-card.is-dragging .mrp-drag {
-  cursor: grabbing;
+.mrp-card button {
+  cursor: pointer;
 }
 
 .mrp-head {

@@ -94,6 +94,10 @@ export function App() {
   };
 
   const finishPan = () => setPan(undefined);
+  const snapBackToVisibleWidth = () => {
+    const workspaceWidth = workspaceRef.current?.clientWidth ?? 1260;
+    void snapBack(workspaceWidth / viewport.zoom);
+  };
 
   return (
     <main className="flowux-app">
@@ -107,7 +111,7 @@ export function App() {
           <span>{selectedCount} checked</span>
           <span>{snapshot?.canvas.status ?? "loading"}</span>
         </div>
-        <button className="hud-button" onClick={() => void snapBack()} title="Snap cards back to chronological layout">
+        <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
           <RotateCcw size={15} />
           Snap back
         </button>
@@ -235,6 +239,22 @@ function MrpCard({
     }
   };
 
+  const beginDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || isCardControl(event.target)) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({ startX: event.clientX, startY: event.clientY, x: positionRef.current.x, y: positionRef.current.y });
+  };
+
+  const moveDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!drag) return;
+    const nextPosition = {
+      x: drag.x + (event.clientX - drag.startX) / zoom,
+      y: drag.y + (event.clientY - drag.startY) / zoom
+    };
+    positionRef.current = nextPosition;
+    setPosition(nextPosition);
+  };
+
   return (
     <article
       className={`mrp-card hud-panel ${drag ? "is-dragging" : ""} ${placement.selectedForContext ? "is-selected" : ""} ${
@@ -246,25 +266,12 @@ function MrpCard({
         width: placement.width,
         minHeight: placement.collapsed ? 124 : placement.height
       }}
+      onPointerDown={beginDrag}
+      onPointerMove={moveDrag}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
     >
-      <div
-        className="mrp-drag"
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          setDrag({ startX: event.clientX, startY: event.clientY, x: placement.x, y: placement.y });
-        }}
-        onPointerMove={(event) => {
-          if (!drag) return;
-          const nextPosition = {
-            x: drag.x + (event.clientX - drag.startX) / zoom,
-            y: drag.y + (event.clientY - drag.startY) / zoom
-          };
-          positionRef.current = nextPosition;
-          setPosition(nextPosition);
-        }}
-        onPointerUp={finishDrag}
-        onPointerCancel={finishDrag}
-      >
+      <div className="mrp-drag">
         <Move size={14} />
         <span>MRP {mrp.sequence.toString().padStart(2, "0")}</span>
         <span className={`status status-${mrp.status}`}>{mrp.status}</span>
@@ -272,6 +279,7 @@ function MrpCard({
 
       <div className="mrp-head">
         <button
+          data-no-card-drag
           className="check-circle"
           onClick={() => void onPatch(mrp.id, { selectedForContext: !placement.selectedForContext })}
           title="Toggle active context"
@@ -280,6 +288,7 @@ function MrpCard({
         </button>
         <h2>{mrp.title || "Untitled MRP"}</h2>
         <button
+          data-no-card-drag
           className="icon-button"
           onClick={() => void onPatch(mrp.id, { collapsed: !placement.collapsed })}
           title={placement.collapsed ? "Expand card" : "Collapse card"}
@@ -307,6 +316,12 @@ function MrpCard({
       </footer>
     </article>
   );
+}
+
+function isCardControl(target: EventTarget) {
+  return target instanceof HTMLElement
+    ? Boolean(target.closest("button, a, input, textarea, select, [data-no-card-drag]"))
+    : false;
 }
 
 function clampZoom(value: number) {

@@ -71,16 +71,24 @@ export async function updatePlacement(
   return placement ? toPlacement(placement) : undefined;
 }
 
-export async function snapBack(canvasId: string): Promise<CanvasPlacement[]> {
+export async function snapBack(canvasId: string, layoutWidth = 1260): Promise<CanvasPlacement[]> {
   const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
   const timestamp = now();
+  const cardWidth = 360;
+  const cardHeight = 240;
+  const gapX = 60;
+  const gapY = 60;
+  const margin = 120;
+  const usableWidth = Math.max(cardWidth, layoutWidth - margin);
+  const columns = Math.max(1, Math.floor((usableWidth + gapX) / (cardWidth + gapX)));
 
   for (const mrp of canvasMrps) {
+    const index = mrp.sequence - 1;
     await db
       .update(canvasPlacements)
       .set({
-        x: 120 + ((mrp.sequence - 1) % 3) * 420,
-        y: 120 + Math.floor((mrp.sequence - 1) / 3) * 300,
+        x: margin + (index % columns) * (cardWidth + gapX),
+        y: margin + Math.floor(index / columns) * (cardHeight + gapY),
         updatedAt: timestamp
       })
       .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrp.id)));

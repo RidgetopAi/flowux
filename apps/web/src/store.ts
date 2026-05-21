@@ -10,7 +10,7 @@ interface FlowuxState {
   reloadCanvas: (canvasId: string) => Promise<void>;
   submitPrompt: (prompt: string) => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
-  snapBack: () => Promise<void>;
+  snapBack: (layoutWidth?: number) => Promise<void>;
 }
 
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
@@ -114,10 +114,10 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }));
   },
 
-  async snapBack() {
+  async snapBack(layoutWidth) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
-    const placements = await api.snapBack(canvasId);
+    const placements = await api.snapBack(canvasId, layoutWidth);
     set((state) => ({
       snapshot: state.snapshot && { ...state.snapshot, placements }
     }));

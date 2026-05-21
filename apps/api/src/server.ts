@@ -50,9 +50,12 @@ app.patch<{
   return placement;
 });
 
-app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/snap-back", async (request) => {
-  return snapBack(request.params.canvasId);
-});
+app.post<{ Params: { canvasId: string }; Body: { layoutWidth?: number } }>(
+  "/api/canvases/:canvasId/snap-back",
+  async (request) => {
+    return snapBack(request.params.canvasId, request.body?.layoutWidth);
+  }
+);
 
 app.post<{ Params: { canvasId: string }; Body: { prompt: string } }>(
   "/api/canvases/:canvasId/prompts/stream",

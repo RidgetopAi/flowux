@@ -28,8 +28,12 @@ export async function updatePlacement(
   });
 }
 
-export async function snapBack(canvasId: string): Promise<CanvasPlacement[]> {
-  return fetchJson(`/api/canvases/${canvasId}/snap-back`, { method: "POST" });
+export async function snapBack(canvasId: string, layoutWidth?: number): Promise<CanvasPlacement[]> {
+  return fetchJson(`/api/canvases/${canvasId}/snap-back`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ layoutWidth })
+  });
 }
 
 export async function streamPrompt(
