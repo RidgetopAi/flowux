@@ -1,0 +1,32 @@
+{
+  "name": "flowux",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spatial AI thread workspace MVP.",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @flowux/api\" \"npm run dev -w @flowux/web\"",
+    "dev:api": "npm run dev -w @flowux/api",
+    "dev:web": "npm run dev -w @flowux/web",
+    "build": "npm run build -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "typecheck": "npm run typecheck -ws --if-present",
+    "db:migrate": "npm run db:migrate -w @flowux/api"
+  },
+  "keywords": [
+    "ai",
+    "canvas",
+    "spatial-thread"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
