@@ -1,5 +1,5 @@
 import { Check, ChevronsDown, ChevronsUp, Circle, GitBranch, Loader2, Move, Plus, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Tldraw } from "tldraw";
 import type { CanvasPlacement, Mrp } from "@flowux/shared";
 import { findPlacement, useFlowuxStore } from "../store.js";
@@ -104,16 +104,35 @@ function MrpCard({
   placement: CanvasPlacement;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
+  const [position, setPosition] = useState({ x: placement.x, y: placement.y });
+  const positionRef = useRef(position);
   const [drag, setDrag] = useState<{ startX: number; startY: number; x: number; y: number }>();
+
+  useEffect(() => {
+    if (!drag) {
+      const nextPosition = { x: placement.x, y: placement.y };
+      positionRef.current = nextPosition;
+      setPosition(nextPosition);
+    }
+  }, [drag, placement.x, placement.y]);
+
+  const finishDrag = () => {
+    if (!drag) return;
+    setDrag(undefined);
+    const finalPosition = positionRef.current;
+    if (finalPosition.x !== placement.x || finalPosition.y !== placement.y) {
+      void onPatch(mrp.id, finalPosition);
+    }
+  };
 
   return (
     <article
-      className={`mrp-card hud-panel ${placement.selectedForContext ? "is-selected" : ""} ${
+      className={`mrp-card hud-panel ${drag ? "is-dragging" : ""} ${placement.selectedForContext ? "is-selected" : ""} ${
         placement.isExternalReference ? "is-external" : ""
       }`}
       style={{
-        left: placement.x,
-        top: placement.y,
+        left: position.x,
+        top: position.y,
         width: placement.width,
         minHeight: placement.collapsed ? 124 : placement.height
       }}
@@ -126,12 +145,15 @@ function MrpCard({
         }}
         onPointerMove={(event) => {
           if (!drag) return;
-          void onPatch(mrp.id, {
+          const nextPosition = {
             x: drag.x + event.clientX - drag.startX,
             y: drag.y + event.clientY - drag.startY
-          });
+          };
+          positionRef.current = nextPosition;
+          setPosition(nextPosition);
         }}
-        onPointerUp={() => setDrag(undefined)}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
       >
         <Move size={14} />
         <span>MRP {mrp.sequence.toString().padStart(2, "0")}</span>
@@ -198,4 +220,3 @@ function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }
     </svg>
   );
 }
-

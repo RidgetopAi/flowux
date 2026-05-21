@@ -148,6 +148,13 @@ button, textarea { font: inherit; }
   pointer-events: auto;
   overflow: hidden;
   color: var(--hud-soft);
+  will-change: left, top;
+}
+
+.mrp-card.is-dragging {
+  z-index: 5;
+  user-select: none;
+  box-shadow: 0 0 34px rgba(168, 255, 241, .16), var(--hud-shadow-panel);
 }
 
 .mrp-card.is-selected {
@@ -173,6 +180,10 @@ button, textarea { font: inherit; }
   font: 10px/1 var(--hud-mono);
   color: var(--hud-muted);
   text-transform: uppercase;
+}
+
+.mrp-card.is-dragging .mrp-drag {
+  cursor: grabbing;
 }
 
 .mrp-head {
@@ -301,4 +312,3 @@ button, textarea { font: inherit; }
   }
   .prompt-dock .icon-button { display: none; }
 }
-
