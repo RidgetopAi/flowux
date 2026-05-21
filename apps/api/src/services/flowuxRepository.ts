@@ -76,7 +76,7 @@ export async function snapBack(canvasId: string, layoutWidth = 1260, rowHeight =
   const timestamp = now();
   const cardWidth = 360;
   const gapX = 60;
-  const gapY = 90;
+  const gapY = 28;
   const margin = 120;
   const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
   const usableWidth = Math.max(cardWidth, layoutWidth - margin);

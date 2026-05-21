@@ -348,7 +348,7 @@ function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
     return card.getBoundingClientRect().height / zoom;
   });
   const maxHeight = heights.length ? Math.max(...heights) : 520;
-  return Math.ceil(maxHeight + 110);
+  return Math.ceil(maxHeight + 22);
 }
 
 function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }) {
