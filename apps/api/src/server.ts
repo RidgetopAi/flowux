@@ -15,6 +15,8 @@ import {
   listCanvases,
   saveContextBundleFromSelection,
   snapBack,
+  deleteCanvas,
+  updateCanvasTitle,
   updatePlacement
 } from "./services/flowuxRepository.js";
 import { createHarnessAdapter } from "./harness/index.js";
@@ -24,7 +26,7 @@ const app = Fastify({ logger: true });
 
 await app.register(cors, {
   origin: true,
-  methods: ["GET", "POST", "PATCH", "OPTIONS"]
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
 });
 
 app.get("/api/health", async () => ({
@@ -42,6 +44,28 @@ app.get("/api/canvases", async () => listCanvases());
 
 app.post<{ Body: { title?: string } }>("/api/canvases", async (request) => {
   return createCanvas(request.body?.title);
+});
+
+app.patch<{ Params: { canvasId: string }; Body: { title?: string } }>("/api/canvases/:canvasId", async (request, reply) => {
+  try {
+    const canvas = await updateCanvasTitle(request.params.canvasId, request.body?.title ?? "");
+    if (!canvas) return reply.code(404).send({ error: "canvas_not_found" });
+    return canvas;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "canvas_update_failed";
+    if (message === "title_required") return reply.code(400).send({ error: message });
+    throw error;
+  }
+});
+
+app.delete<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (request, reply) => {
+  try {
+    return await deleteCanvas(request.params.canvasId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "canvas_delete_failed";
+    if (message === "canvas_not_found") return reply.code(404).send({ error: message });
+    throw error;
+  }
 });
 
 app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/branches", async (request, reply) => {

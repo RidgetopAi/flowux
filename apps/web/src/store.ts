@@ -12,7 +12,9 @@ interface FlowuxState {
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
   switchCanvas: (canvasId: string) => Promise<void>;
-  createNewCanvas: () => Promise<void>;
+  createNewCanvas: (title?: string) => Promise<void>;
+  renameCurrentCanvas: (title: string) => Promise<void>;
+  deleteCurrentCanvas: () => Promise<void>;
   createChildCanvasFromSelection: () => Promise<void>;
   importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
   saveSelectedContextBundle: (name?: string) => Promise<void>;
@@ -71,16 +73,48 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
-  async createNewCanvas() {
+  async createNewCanvas(title = "Flowux Canvas") {
     set({ loading: true, error: undefined });
     try {
-      const canvas = await api.createCanvas("Flowux Canvas");
+      const canvas = await api.createCanvas(title);
       const snapshot = await api.getCanvas(canvas.id);
       const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
       set({ canvases, snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create canvas", loading: false });
+    }
+  },
+
+  async renameCurrentCanvas(title) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ error: undefined });
+    try {
+      const canvas = await api.updateCanvasTitle(canvasId, title);
+      set((state) => ({
+        canvases: state.canvases.map((item) => (item.id === canvas.id ? canvas : item)),
+        snapshot: state.snapshot && state.snapshot.canvas.id === canvas.id ? { ...state.snapshot, canvas } : state.snapshot
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to rename canvas" });
+    }
+  },
+
+  async deleteCurrentCanvas() {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ loading: true, error: undefined });
+    try {
+      await api.deleteCanvas(canvasId);
+      const canvases = await api.listCanvases();
+      const nextCanvas = canvases[0] ?? (await api.createCanvas("Flowux Canvas"));
+      const nextCanvases = canvases.length ? canvases : [nextCanvas];
+      const snapshot = await api.getCanvas(nextCanvas.id);
+      window.localStorage.setItem(activeCanvasStorageKey, nextCanvas.id);
+      set({ canvases: nextCanvases, snapshot, loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to delete canvas", loading: false });
     }
   },
 

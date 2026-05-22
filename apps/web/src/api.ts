@@ -20,6 +20,20 @@ export async function createCanvas(title: string): Promise<CanvasThread> {
   });
 }
 
+export async function updateCanvasTitle(canvasId: string, title: string): Promise<CanvasThread> {
+  return fetchJson(`/api/canvases/${canvasId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title })
+  });
+}
+
+export async function deleteCanvas(canvasId: string): Promise<{ deletedCanvasId: string }> {
+  return fetchJson(`/api/canvases/${canvasId}`, {
+    method: "DELETE"
+  });
+}
+
 export async function getCanvas(canvasId: string): Promise<CanvasSnapshot> {
   return fetchJson(`/api/canvases/${canvasId}`);
 }

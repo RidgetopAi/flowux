@@ -74,6 +74,14 @@ describe("flowuxRepository phase 3 provenance", () => {
       })
     );
 
+    const renamed = await repository.updateCanvasTitle(target.id, "Ridgey Workflow");
+    expect(renamed?.title).toBe("Ridgey Workflow");
+
+    await repository.deleteCanvas(child.canvas.id);
+    expect(await repository.getCanvasSnapshot(child.canvas.id)).toBeUndefined();
+    const parentAfterChildDelete = await repository.getCanvasSnapshot(parent.id);
+    expect(parentAfterChildDelete?.mrps).toContainEqual(expect.objectContaining({ id: created.mrp.id }));
+
     rmSync(dbPath, { force: true });
     rmSync(`${dbPath}-wal`, { force: true });
     rmSync(`${dbPath}-shm`, { force: true });

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, max } from "drizzle-orm";
+import { and, desc, eq, inArray, max, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   buildContextMessages,
@@ -25,6 +25,7 @@ import {
   canvasPlacements,
   canvasThreads,
   contextBundles,
+  artifacts,
   modelRuns,
   mrpBlocks,
   mrpEvents,
@@ -53,7 +54,7 @@ export async function createCanvas(title = "Untitled Flowux Canvas"): Promise<Ca
   const timestamp = now();
   const canvas: CanvasThread = {
     id: id(),
-    title,
+    title: title.trim() || "Untitled Flowux Canvas",
     status: "temporary",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -61,6 +62,53 @@ export async function createCanvas(title = "Untitled Flowux Canvas"): Promise<Ca
   };
   await db.insert(canvasThreads).values(canvas);
   return canvas;
+}
+
+export async function updateCanvasTitle(canvasId: string, title: string): Promise<CanvasThread | undefined> {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) throw new Error("title_required");
+
+  await db
+    .update(canvasThreads)
+    .set({ title: trimmedTitle, updatedAt: now() })
+    .where(eq(canvasThreads.id, canvasId));
+
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  return canvas ? toCanvasThread(canvas) : undefined;
+}
+
+export async function deleteCanvas(canvasId: string): Promise<{ deletedCanvasId: string }> {
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  if (!canvas) throw new Error("canvas_not_found");
+
+  const nativeMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId));
+  const nativeMrpIds = nativeMrps.map((mrp) => mrp.id);
+  const externallyReferencedPlacements = nativeMrpIds.length
+    ? await db
+        .select()
+        .from(canvasPlacements)
+        .where(and(inArray(canvasPlacements.mrpId, nativeMrpIds), ne(canvasPlacements.canvasId, canvasId)))
+    : [];
+  const externallyReferencedMrpIds = new Set(externallyReferencedPlacements.map((placement) => placement.mrpId));
+  const removableMrpIds = nativeMrpIds.filter((mrpId) => !externallyReferencedMrpIds.has(mrpId));
+
+  await db.delete(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  await db.delete(contextBundles).where(eq(contextBundles.canvasId, canvasId));
+  await db.delete(branches).where(eq(branches.parentCanvasId, canvasId));
+  await db.delete(branches).where(eq(branches.childCanvasId, canvasId));
+
+  if (removableMrpIds.length) {
+    await db.delete(artifacts).where(inArray(artifacts.mrpId, removableMrpIds));
+    await db.delete(modelRuns).where(inArray(modelRuns.mrpId, removableMrpIds));
+    await db.delete(mrpEvents).where(inArray(mrpEvents.mrpId, removableMrpIds));
+    await db.delete(mrpBlocks).where(inArray(mrpBlocks.mrpId, removableMrpIds));
+    await db.delete(mrpSections).where(inArray(mrpSections.mrpId, removableMrpIds));
+    await db.delete(mrps).where(inArray(mrps.id, removableMrpIds));
+  }
+
+  await db.delete(canvasThreads).where(eq(canvasThreads.id, canvasId));
+
+  return { deletedCanvasId: canvasId };
 }
 
 export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapshot | undefined> {

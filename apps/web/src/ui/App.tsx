@@ -10,11 +10,13 @@ import {
   Loader2,
   Maximize2,
   Move,
+  Pencil,
   Plus,
   RotateCcw,
   Save,
   Scan,
   Sparkles,
+  Trash2,
   ZoomIn,
   ZoomOut
 } from "lucide-react";
@@ -32,6 +34,8 @@ export function App() {
     loadInitial,
     switchCanvas,
     createNewCanvas,
+    renameCurrentCanvas,
+    deleteCurrentCanvas,
     createChildCanvasFromSelection,
     importSelectedFromCanvas,
     saveSelectedContextBundle,
@@ -163,6 +167,24 @@ export function App() {
     if (name === null) return;
     void saveSelectedContextBundle(name);
   };
+  const createNamedCanvas = () => {
+    const name = window.prompt("Name this canvas", "Ridgey workflow");
+    if (name === null) return;
+    void createNewCanvas(name.trim() || "Flowux Canvas");
+  };
+  const renameCanvas = () => {
+    if (!snapshot) return;
+    const name = window.prompt("Rename this canvas", snapshot.canvas.title);
+    if (name === null) return;
+    void renameCurrentCanvas(name);
+  };
+  const deleteCanvas = () => {
+    if (!snapshot) return;
+    const ok = window.confirm(`Delete canvas "${snapshot.canvas.title}"? This removes the canvas and its unreferenced thread data.`);
+    if (!ok) return;
+    resetView();
+    void deleteCurrentCanvas();
+  };
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
@@ -209,12 +231,20 @@ export function App() {
             className="hud-button"
             onClick={() => {
               resetView();
-              void createNewCanvas();
+              createNamedCanvas();
             }}
             title="Start a new blank canvas thread"
           >
             <Plus size={15} />
             New canvas
+          </button>
+          <button className="hud-button" onClick={renameCanvas} disabled={!snapshot} title="Rename current canvas">
+            <Pencil size={15} />
+            Rename
+          </button>
+          <button className="hud-button" onClick={deleteCanvas} disabled={!snapshot} title="Delete current canvas">
+            <Trash2 size={15} />
+            Delete
           </button>
           <button
             className="hud-button"
