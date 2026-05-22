@@ -21,9 +21,9 @@ import type { TokenUsage } from "../model/adapter.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CARD_WIDTH = 360;
 const CARD_HEIGHT = 240;
-const GAP_X = 60;
-const GAP_Y = 28;
-const MARGIN = 120;
+const GAP_X = 18;
+const GAP_Y = 10;
+const MARGIN = 56;
 
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();

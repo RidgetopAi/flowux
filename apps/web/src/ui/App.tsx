@@ -34,6 +34,7 @@ export function App() {
   } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const [focusedMrpId, setFocusedMrpId] = useState<string>();
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
   const workspaceRef = useRef<HTMLElement>(null);
 
@@ -51,6 +52,7 @@ export function App() {
   };
 
   const resetView = () => {
+    setFocusedMrpId(undefined);
     setViewport({ x: 0, y: 0, zoom: 1 });
   };
 
@@ -90,8 +92,13 @@ export function App() {
     });
   };
 
-  const handlePanStart = (event: ReactPointerEvent<HTMLElement>) => {
+  const handleWorkspacePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
+    if (focusedMrpId) {
+      setFocusedMrpId(undefined);
+      snapBackToVisibleWidth();
+      return;
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     setPan({ startX: event.clientX, startY: event.clientY, x: viewport.x, y: viewport.y });
   };
@@ -129,16 +136,25 @@ export function App() {
     const { layoutWidth, layoutLeft, layoutTop, rowHeight, workspaceWidth, workspaceHeight } = getVisibleLayout();
     setPrompt("");
     void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, ({ placement }) => {
-      centerViewportOnPlacement(placement, workspaceWidth, workspaceHeight);
+      setFocusedMrpId(placement.mrpId);
+      centerViewportOnPlacement(placement, workspaceWidth, workspaceHeight, { minZoom: 1.08 });
     });
   };
 
-  const centerViewportOnPlacement = (placement: CanvasPlacement, workspaceWidth: number, workspaceHeight: number) => {
-    setViewport((current) => ({
-      ...current,
-      x: workspaceWidth / 2 - (placement.x + placement.width / 2) * current.zoom,
-      y: workspaceHeight / 2 - (placement.y + Math.min(placement.height, 300) / 2) * current.zoom
-    }));
+  const centerViewportOnPlacement = (
+    placement: CanvasPlacement,
+    workspaceWidth: number,
+    workspaceHeight: number,
+    options: { minZoom?: number } = {}
+  ) => {
+    setViewport((current) => {
+      const nextZoom = clampZoom(Math.max(current.zoom, options.minZoom ?? current.zoom));
+      return {
+        zoom: nextZoom,
+        x: workspaceWidth / 2 - (placement.x + placement.width / 2) * nextZoom,
+        y: workspaceHeight / 2 - (placement.y + Math.min(placement.height, 300) / 2) * nextZoom
+      };
+    });
   };
 
   return (
@@ -194,7 +210,7 @@ export function App() {
         ref={workspaceRef}
         className={`workspace hud-shell ${pan ? "is-panning" : ""}`}
         onWheel={handleWheel}
-        onPointerDown={handlePanStart}
+        onPointerDown={handleWorkspacePointerDown}
         onPointerMove={handlePanMove}
         onPointerUp={finishPan}
         onPointerCancel={finishPan}
@@ -246,6 +262,7 @@ export function App() {
                 sections={snapshot.sections.filter((section) => section.mrpId === mrp.id)}
                 blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
                 zoom={viewport.zoom}
+                focused={focusedMrpId === mrp.id}
                 onPatch={patchPlacement}
               />
             );
@@ -307,6 +324,7 @@ function MrpCard({
   sections,
   blocks,
   zoom,
+  focused,
   onPatch
 }: {
   mrp: Mrp;
@@ -315,6 +333,7 @@ function MrpCard({
   sections: MrpSection[];
   blocks: MrpBlock[];
   zoom: number;
+  focused: boolean;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
   const [position, setPosition] = useState({ x: placement.x, y: placement.y });
@@ -365,7 +384,7 @@ function MrpCard({
     <article
       className={`mrp-card hud-panel ${drag ? "is-dragging" : ""} ${placement.selectedForContext ? "is-selected" : ""} ${
         placement.isExternalReference ? "is-external" : ""
-      }`}
+      } ${focused ? "is-focused" : ""}`}
       style={{
         left: position.x,
         top: position.y,
@@ -545,10 +564,11 @@ function getPlacementBounds(placements: CanvasPlacement[]) {
 function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
   if (!workspace) return 600;
   const heights = Array.from(workspace.querySelectorAll<HTMLElement>(".mrp-card")).map((card) => {
-    return card.getBoundingClientRect().height / zoom;
+    const focusedScale = card.classList.contains("is-focused") ? 1.14 : 1;
+    return card.getBoundingClientRect().height / zoom / focusedScale;
   });
   const maxHeight = heights.length ? Math.max(...heights) : 520;
-  return Math.ceil(maxHeight + 22);
+  return Math.ceil(maxHeight + 8);
 }
 
 function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }) {

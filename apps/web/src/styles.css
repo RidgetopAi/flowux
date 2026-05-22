@@ -218,7 +218,9 @@ select { font: inherit; }
   overflow: hidden;
   color: var(--hud-soft);
   cursor: grab;
-  will-change: left, top;
+  transform-origin: center top;
+  will-change: left, top, transform;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
 
 .mrp-card.is-dragging {
@@ -235,6 +237,17 @@ select { font: inherit; }
 
 .mrp-card.is-external {
   border-color: rgba(199, 189, 255, .55);
+}
+
+.mrp-card.is-focused {
+  z-index: 8;
+  border-color: rgba(168, 255, 241, .72);
+  transform: scale(1.14);
+  box-shadow: 0 0 42px rgba(168, 255, 241, .2), 0 28px 76px rgba(0, 0, 0, .48);
+}
+
+.mrp-card.is-focused.is-dragging {
+  z-index: 9;
 }
 
 .mrp-drag, .mrp-head, .mrp-card footer {
