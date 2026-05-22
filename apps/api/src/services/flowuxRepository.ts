@@ -19,6 +19,11 @@ import { createModelAdapter } from "../model/adapter.js";
 import type { TokenUsage } from "../model/adapter.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const CARD_WIDTH = 360;
+const CARD_HEIGHT = 240;
+const GAP_X = 60;
+const GAP_Y = 28;
+const MARGIN = 120;
 
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
@@ -149,7 +154,10 @@ export async function createPromptMrp(
     updatedAt: timestamp
   };
 
-  const position = getChronologicalPosition(sequence, layout);
+  const previousPlacement = await getPreviousPlacement(canvasId, maxSequence);
+  const position = previousPlacement
+    ? getNextPromptPosition(previousPlacement, layout)
+    : getChronologicalPosition(sequence, layout);
   const placement: CanvasPlacement = {
     id: id(),
     canvasId,
@@ -158,8 +166,8 @@ export async function createPromptMrp(
     isExternalReference: false,
     x: position.x,
     y: position.y,
-    width: 360,
-    height: 240,
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
     collapsed: false,
     selectedForContext: false,
     connectionHidden: false,
@@ -219,22 +227,53 @@ export async function createPromptMrp(
 }
 
 function getChronologicalPosition(sequence: number, layout: LayoutMetrics) {
-  const cardWidth = 360;
-  const gapX = 60;
-  const gapY = 28;
-  const margin = 120;
   const rowHeight = layout.rowHeight ?? 600;
   const layoutWidth = layout.layoutWidth ?? 1260;
   const layoutLeft = layout.layoutLeft ?? 0;
   const layoutTop = layout.layoutTop ?? 0;
   const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
-  const usableWidth = Math.max(cardWidth, layoutWidth - margin * 2);
-  const columns = Math.max(1, Math.floor((usableWidth + gapX) / (cardWidth + gapX)));
+  const usableWidth = Math.max(CARD_WIDTH, layoutWidth - MARGIN * 2);
+  const columns = Math.max(1, Math.floor((usableWidth + GAP_X) / (CARD_WIDTH + GAP_X)));
   const index = sequence - 1;
 
   return {
-    x: layoutLeft + margin + (index % columns) * (cardWidth + gapX),
-    y: layoutTop + margin + Math.floor(index / columns) * (safeRowHeight + gapY)
+    x: layoutLeft + MARGIN + (index % columns) * (CARD_WIDTH + GAP_X),
+    y: layoutTop + MARGIN + Math.floor(index / columns) * (safeRowHeight + GAP_Y)
+  };
+}
+
+async function getPreviousPlacement(canvasId: string, previousSequence: number): Promise<CanvasPlacement | undefined> {
+  if (previousSequence < 1) return undefined;
+  const [previousMrp] = await db
+    .select()
+    .from(mrps)
+    .where(and(eq(mrps.canvasId, canvasId), eq(mrps.sequence, previousSequence)));
+  if (!previousMrp) return undefined;
+
+  const [placement] = await db
+    .select()
+    .from(canvasPlacements)
+    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, previousMrp.id)));
+
+  return placement ? toPlacement(placement) : undefined;
+}
+
+function getNextPromptPosition(previous: CanvasPlacement, layout: LayoutMetrics) {
+  const rowHeight = layout.rowHeight ?? 600;
+  const layoutWidth = layout.layoutWidth ?? 1260;
+  const layoutLeft = layout.layoutLeft ?? 0;
+  const layoutTop = layout.layoutTop ?? 0;
+  const safeRowHeight = Math.max(360, Math.min(1200, rowHeight));
+  const visibleRight = layoutLeft + layoutWidth - MARGIN;
+  const nextX = previous.x + previous.width + GAP_X;
+
+  if (nextX + CARD_WIDTH <= visibleRight) {
+    return { x: nextX, y: previous.y };
+  }
+
+  return {
+    x: layoutLeft + MARGIN,
+    y: Math.max(previous.y + safeRowHeight + GAP_Y, layoutTop + MARGIN)
   };
 }
 
