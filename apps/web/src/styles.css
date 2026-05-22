@@ -148,6 +148,11 @@ select { font: inherit; }
   gap: 4px;
 }
 
+.canvas-selector.import-selector {
+  min-width: 160px;
+  max-width: 220px;
+}
+
 .canvas-selector .hud-label {
   margin: 0;
 }

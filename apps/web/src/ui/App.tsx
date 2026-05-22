@@ -6,11 +6,13 @@ import {
   Eye,
   EyeOff,
   GitBranch,
+  Import,
   Loader2,
   Maximize2,
   Move,
   Plus,
   RotateCcw,
+  Save,
   Scan,
   Sparkles,
   ZoomIn,
@@ -31,6 +33,8 @@ export function App() {
     switchCanvas,
     createNewCanvas,
     createChildCanvasFromSelection,
+    importSelectedFromCanvas,
+    saveSelectedContextBundle,
     submitPrompt,
     patchPlacement,
     snapBack
@@ -38,6 +42,7 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
+  const [importCanvasId, setImportCanvasId] = useState("");
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
   const workspaceRef = useRef<HTMLElement>(null);
 
@@ -49,6 +54,20 @@ export function App() {
     () => snapshot?.placements.filter((placement) => placement.selectedForContext).length ?? 0,
     [snapshot?.placements]
   );
+  const importableCanvases = useMemo(
+    () => canvases.filter((canvas) => canvas.id !== snapshot?.canvas.id),
+    [canvases, snapshot?.canvas.id]
+  );
+
+  useEffect(() => {
+    if (!importableCanvases.length) {
+      setImportCanvasId("");
+      return;
+    }
+    if (!importCanvasId || !importableCanvases.some((canvas) => canvas.id === importCanvasId)) {
+      setImportCanvasId(importableCanvases[0]?.id ?? "");
+    }
+  }, [importCanvasId, importableCanvases]);
 
   const zoomBy = (factor: number) => {
     setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
@@ -133,6 +152,17 @@ export function App() {
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     void snapBack({ layoutWidth, layoutLeft, layoutTop, rowHeight });
   };
+  const importSelectedRefs = () => {
+    if (!importCanvasId) return;
+    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
+    void importSelectedFromCanvas(importCanvasId, { layoutWidth, layoutLeft, layoutTop, rowHeight });
+  };
+  const saveContextSet = () => {
+    if (!selectedCount) return;
+    const name = window.prompt("Name this context set", `Context set ${(snapshot?.contextBundles.length ?? 0) + 1}`);
+    if (name === null) return;
+    void saveSelectedContextBundle(name);
+  };
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
@@ -172,6 +202,7 @@ export function App() {
           <div className="telemetry">
             <span>{snapshot?.mrps.length ?? 0} MRPs</span>
             <span>{selectedCount} checked</span>
+            <span>{snapshot?.contextBundles.length ?? 0} sets</span>
             <span>{snapshot?.canvas.status ?? "loading"}</span>
           </div>
           <button
@@ -196,6 +227,34 @@ export function App() {
           >
             <GitBranch size={15} />
             Branch
+          </button>
+          <button className="hud-button" onClick={saveContextSet} disabled={selectedCount === 0} title="Save checked MRPs as a context set">
+            <Save size={15} />
+            Save set
+          </button>
+          <label className="canvas-selector import-selector">
+            <span className="hud-label">Import</span>
+            <select
+              value={importCanvasId}
+              onChange={(event) => setImportCanvasId(event.target.value)}
+              disabled={!importableCanvases.length}
+              title="Source canvas for checked MRP references"
+            >
+              {importableCanvases.map((canvas) => (
+                <option key={canvas.id} value={canvas.id}>
+                  {canvas.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="hud-button"
+            onClick={importSelectedRefs}
+            disabled={!importCanvasId}
+            title="Import checked MRPs from the selected source canvas"
+          >
+            <Import size={15} />
+            Import refs
           </button>
           <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
             <RotateCcw size={15} />

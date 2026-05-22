@@ -220,6 +220,10 @@ export interface CreateChildCanvasResponse {
   placements: CanvasPlacement[];
 }
 
+export interface ImportExternalMrpsResponse {
+  placements: CanvasPlacement[];
+}
+
 export interface CreatePromptRequest {
   canvasId: string;
   prompt: string;

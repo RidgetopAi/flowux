@@ -14,6 +14,8 @@ interface FlowuxState {
   switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: () => Promise<void>;
   createChildCanvasFromSelection: () => Promise<void>;
+  importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
+  saveSelectedContextBundle: (name?: string) => Promise<void>;
   submitPrompt: (
     prompt: string,
     layout?: api.LayoutRequest,
@@ -94,6 +96,48 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       set({ canvases, snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create child canvas", loading: false });
+    }
+  },
+
+  async importSelectedFromCanvas(sourceCanvasId, layout = {}) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId || !sourceCanvasId || canvasId === sourceCanvasId) return;
+    set({ loading: true, error: undefined });
+    try {
+      const sourceSnapshot = await api.getCanvas(sourceCanvasId);
+      const selectedMrpIds = sourceSnapshot.placements
+        .filter((placement) => placement.selectedForContext)
+        .map((placement) => placement.mrpId);
+      if (!selectedMrpIds.length) {
+        set({ error: "Selected MRPs required on source canvas", loading: false });
+        return;
+      }
+      await api.importExternalMrps(canvasId, selectedMrpIds, layout);
+      const snapshot = await api.getCanvas(canvasId);
+      const canvases = await api.listCanvases();
+      set({ canvases, snapshot, loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to import references", loading: false });
+    }
+  },
+
+  async saveSelectedContextBundle(name) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ error: undefined });
+    try {
+      const bundle = await api.saveContextBundle(canvasId, name);
+      set((state) => ({
+        snapshot: state.snapshot && {
+          ...state.snapshot,
+          contextBundles: [
+            ...state.snapshot.contextBundles.filter((item) => item.id !== bundle.id),
+            bundle
+          ]
+        }
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to save context set" });
     }
   },
 

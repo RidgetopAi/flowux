@@ -11,7 +11,9 @@ import {
   createPromptMrp,
   failPromptMrp,
   getCanvasSnapshot,
+  importExternalMrps,
   listCanvases,
+  saveContextBundleFromSelection,
   snapBack,
   updatePlacement
 } from "./services/flowuxRepository.js";
@@ -54,6 +56,38 @@ app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/branches", a
     throw error;
   }
 });
+
+app.post<{
+  Params: { canvasId: string };
+  Body: { mrpIds?: string[]; layout?: { layoutWidth?: number; layoutLeft?: number; layoutTop?: number; rowHeight?: number } };
+}>("/api/canvases/:canvasId/references", async (request, reply) => {
+  try {
+    return await importExternalMrps(request.params.canvasId, request.body?.mrpIds ?? [], request.body?.layout ?? {});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "references_import_failed";
+    if (message === "canvas_not_found") return reply.code(404).send({ error: message });
+    if (message === "mrp_ids_required" || message === "source_mrps_not_found" || message === "no_importable_mrps") {
+      return reply.code(400).send({ error: message });
+    }
+    throw error;
+  }
+});
+
+app.post<{ Params: { canvasId: string }; Body: { name?: string } }>(
+  "/api/canvases/:canvasId/context-bundles",
+  async (request, reply) => {
+    try {
+      return await saveContextBundleFromSelection(request.params.canvasId, request.body?.name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "context_bundle_create_failed";
+      if (message === "canvas_not_found") return reply.code(404).send({ error: message });
+      if (message === "selected_mrps_required" || message === "selected_mrps_not_found") {
+        return reply.code(400).send({ error: message });
+      }
+      throw error;
+    }
+  }
+);
 
 app.get<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (request, reply) => {
   const snapshot = await getCanvasSnapshot(request.params.canvasId);

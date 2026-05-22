@@ -1,4 +1,12 @@
-import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreateChildCanvasResponse, CreatePromptResponse } from "@flowux/shared";
+import type {
+  CanvasPlacement,
+  CanvasSnapshot,
+  CanvasThread,
+  ContextBundle,
+  CreateChildCanvasResponse,
+  CreatePromptResponse,
+  ImportExternalMrpsResponse
+} from "@flowux/shared";
 
 export async function listCanvases(): Promise<CanvasThread[]> {
   return fetchJson("/api/canvases");
@@ -20,6 +28,26 @@ export async function createChildCanvas(canvasId: string): Promise<CreateChildCa
   return fetchJson(`/api/canvases/${canvasId}/branches`, {
     method: "POST",
     headers: { "content-type": "application/json" }
+  });
+}
+
+export async function importExternalMrps(
+  canvasId: string,
+  mrpIds: string[],
+  layout?: LayoutRequest
+): Promise<ImportExternalMrpsResponse> {
+  return fetchJson(`/api/canvases/${canvasId}/references`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ mrpIds, layout })
+  });
+}
+
+export async function saveContextBundle(canvasId: string, name?: string): Promise<ContextBundle> {
+  return fetchJson(`/api/canvases/${canvasId}/context-bundles`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name })
   });
 }
 

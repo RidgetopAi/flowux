@@ -39,6 +39,41 @@ describe("flowuxRepository phase 3 provenance", () => {
       })
     );
 
+    const bundle = await repository.saveContextBundleFromSelection(child.canvas.id, "Branch starter");
+    expect(bundle).toEqual(
+      expect.objectContaining({
+        canvasId: child.canvas.id,
+        name: "Branch starter",
+        selectedMrpIds: [created.mrp.id],
+        modeByMrpId: { [created.mrp.id]: "full_mrp" }
+      })
+    );
+
+    const target = await repository.createCanvas("Import Target");
+    const imported = await repository.importExternalMrps(target.id, [created.mrp.id], {
+      layoutWidth: 900,
+      rowHeight: 300
+    });
+    expect(imported.placements).toContainEqual(
+      expect.objectContaining({
+        canvasId: target.id,
+        mrpId: created.mrp.id,
+        originCanvasId: parent.id,
+        isExternalReference: true,
+        selectedForContext: false
+      })
+    );
+
+    const snapped = await repository.snapBack(child.canvas.id, 900, 300, 10, 20);
+    expect(snapped).toContainEqual(
+      expect.objectContaining({
+        canvasId: child.canvas.id,
+        mrpId: created.mrp.id,
+        x: 66,
+        y: 76
+      })
+    );
+
     rmSync(dbPath, { force: true });
     rmSync(`${dbPath}-wal`, { force: true });
     rmSync(`${dbPath}-shm`, { force: true });

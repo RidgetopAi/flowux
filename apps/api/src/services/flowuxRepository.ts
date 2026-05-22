@@ -10,6 +10,7 @@ import {
   type ContextBundle,
   type CreateChildCanvasResponse,
   type CreatePromptResponse,
+  type ImportExternalMrpsResponse,
   type ModelRun,
   type Mrp,
   type MrpBlock,
@@ -178,6 +179,93 @@ export async function createChildCanvasFromSelection(parentCanvasId: string): Pr
   return { canvas: childCanvas, branch, placements: childPlacements };
 }
 
+export async function importExternalMrps(
+  canvasId: string,
+  mrpIds: string[],
+  layout: LayoutMetrics = {}
+): Promise<ImportExternalMrpsResponse> {
+  const timestamp = now();
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  if (!canvas) throw new Error("canvas_not_found");
+
+  const requestedIds = Array.from(new Set(mrpIds.filter(Boolean)));
+  if (!requestedIds.length) throw new Error("mrp_ids_required");
+
+  const sourceMrps = await db.select().from(mrps).where(inArray(mrps.id, requestedIds)).orderBy(mrps.sequence);
+  if (!sourceMrps.length) throw new Error("source_mrps_not_found");
+
+  const existingPlacements = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  const existingMrpIds = new Set(existingPlacements.map((placement) => placement.mrpId));
+  const importableMrps = sourceMrps.filter((mrp) => mrp.canvasId !== canvasId && !existingMrpIds.has(mrp.id));
+  if (!importableMrps.length) throw new Error("no_importable_mrps");
+
+  const orderedExistingPlacements = orderPlacementsByMrpSequence(existingPlacements.map(toPlacement), []);
+  let previousPlacement = orderedExistingPlacements.at(-1);
+  const placements: CanvasPlacement[] = importableMrps.map((mrp, index) => {
+    const position = previousPlacement
+      ? getNextPromptPosition(previousPlacement, layout)
+      : getChronologicalPosition(index + 1, layout);
+    const placement: CanvasPlacement = {
+      id: id(),
+      canvasId,
+      mrpId: mrp.id,
+      originCanvasId: mrp.canvasId,
+      isExternalReference: true,
+      x: position.x,
+      y: position.y,
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+      collapsed: false,
+      selectedForContext: false,
+      connectionHidden: false,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+    previousPlacement = placement;
+    return placement;
+  });
+
+  await db.insert(canvasPlacements).values(placements);
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
+
+  return { placements };
+}
+
+export async function saveContextBundleFromSelection(canvasId: string, name?: string): Promise<ContextBundle> {
+  const timestamp = now();
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  if (!canvas) throw new Error("canvas_not_found");
+
+  const placements = await db
+    .select()
+    .from(canvasPlacements)
+    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
+  if (!placements.length) throw new Error("selected_mrps_required");
+
+  const selectedMrpIds = placements.map((placement) => placement.mrpId);
+  const selectedMrps = await db.select().from(mrps).where(inArray(mrps.id, selectedMrpIds)).orderBy(mrps.sequence);
+  const selectedById = new Map(selectedMrps.map((mrp) => [mrp.id, mrp]));
+  const orderedMrpIds = selectedMrpIds
+    .filter((mrpId) => selectedById.has(mrpId))
+    .sort((a, b) => (selectedById.get(a)?.sequence ?? 0) - (selectedById.get(b)?.sequence ?? 0));
+  if (!orderedMrpIds.length) throw new Error("selected_mrps_not_found");
+
+  const bundle: ContextBundle = {
+    id: id(),
+    canvasId,
+    name: name?.trim() || `Context set ${new Date(timestamp).toLocaleString("en-US", { month: "short", day: "numeric" })}`,
+    selectedMrpIds: orderedMrpIds,
+    modeByMrpId: Object.fromEntries(orderedMrpIds.map((mrpId) => [mrpId, "full_mrp" as ContextMode])),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+
+  await db.insert(contextBundles).values(bundle);
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
+
+  return bundle;
+}
+
 export async function updatePlacement(
   canvasId: string,
   mrpId: string,
@@ -209,17 +297,19 @@ export async function snapBack(
   layoutLeft = 0,
   layoutTop = 0
 ): Promise<CanvasPlacement[]> {
-  const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
   const currentPlacements = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
-  const placementByMrpId = new Map(currentPlacements.map((placement) => [placement.mrpId, toPlacement(placement)]));
+  const currentMrpIds = currentPlacements.map((placement) => placement.mrpId);
+  const canvasMrps = currentMrpIds.length
+    ? await db.select().from(mrps).where(inArray(mrps.id, currentMrpIds)).orderBy(mrps.sequence)
+    : [];
+  const orderedPlacements = orderPlacementsByMrpSequence(currentPlacements.map(toPlacement), canvasMrps.map(toMrp), canvasId);
   const timestamp = now();
   let previousPlacement: CanvasPlacement | undefined;
 
-  for (const mrp of canvasMrps) {
-    const currentPlacement = placementByMrpId.get(mrp.id);
+  for (const [index, currentPlacement] of orderedPlacements.entries()) {
     const position = previousPlacement
       ? getNextPromptPosition(previousPlacement, { layoutWidth, rowHeight, layoutLeft, layoutTop })
-      : getChronologicalPosition(1, { layoutWidth, rowHeight, layoutLeft, layoutTop });
+      : getChronologicalPosition(index + 1, { layoutWidth, rowHeight, layoutLeft, layoutTop });
     await db
       .update(canvasPlacements)
       .set({
@@ -227,21 +317,9 @@ export async function snapBack(
         y: position.y,
         updatedAt: timestamp
       })
-      .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrp.id)));
+      .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, currentPlacement.mrpId)));
     previousPlacement = {
-      ...(currentPlacement ?? {
-        id: "",
-        canvasId,
-        mrpId: mrp.id,
-        isExternalReference: false,
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        collapsed: false,
-        selectedForContext: false,
-        connectionHidden: false,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      }),
+      ...currentPlacement,
       x: position.x,
       y: position.y,
       width: currentPlacement?.width ?? CARD_WIDTH,
@@ -367,6 +445,21 @@ function getChronologicalPosition(sequence: number, layout: LayoutMetrics) {
     x: layoutLeft + MARGIN + (index % columns) * (CARD_WIDTH + GAP_X),
     y: layoutTop + MARGIN + Math.floor(index / columns) * (safeRowHeight + GAP_Y)
   };
+}
+
+function orderPlacementsByMrpSequence(placements: CanvasPlacement[], relatedMrps: Mrp[], nativeCanvasId?: string) {
+  const mrpById = new Map(relatedMrps.map((mrp) => [mrp.id, mrp]));
+  return [...placements].sort((a, b) => {
+    const mrpA = mrpById.get(a.mrpId);
+    const mrpB = mrpById.get(b.mrpId);
+    const nativeRankA = nativeCanvasId && mrpA?.canvasId === nativeCanvasId ? 0 : 1;
+    const nativeRankB = nativeCanvasId && mrpB?.canvasId === nativeCanvasId ? 0 : 1;
+    if (nativeRankA !== nativeRankB) return nativeRankA - nativeRankB;
+    const sequenceA = mrpA?.sequence ?? Number.MAX_SAFE_INTEGER;
+    const sequenceB = mrpB?.sequence ?? Number.MAX_SAFE_INTEGER;
+    if (sequenceA !== sequenceB) return sequenceA - sequenceB;
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 async function getPreviousPlacement(canvasId: string, previousSequence: number): Promise<CanvasPlacement | undefined> {
