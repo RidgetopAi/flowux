@@ -26,8 +26,7 @@ export async function getCanvas(canvasId: string): Promise<CanvasSnapshot> {
 
 export async function createChildCanvas(canvasId: string): Promise<CreateChildCanvasResponse> {
   return fetchJson(`/api/canvases/${canvasId}/branches`, {
-    method: "POST",
-    headers: { "content-type": "application/json" }
+    method: "POST"
   });
 }
 
