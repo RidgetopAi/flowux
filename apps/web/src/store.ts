@@ -18,6 +18,8 @@ interface FlowuxState {
   createChildCanvasFromSelection: () => Promise<void>;
   importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
   saveSelectedContextBundle: (name?: string) => Promise<void>;
+  applyContextBundle: (bundleId: string) => Promise<void>;
+  deleteContextBundle: (bundleId: string) => Promise<void>;
   submitPrompt: (
     prompt: string,
     layout?: api.LayoutRequest,
@@ -172,6 +174,37 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       }));
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to save context set" });
+    }
+  },
+
+  async applyContextBundle(bundleId) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId || !bundleId) return;
+    set({ error: undefined });
+    try {
+      const placements = await api.applyContextBundle(canvasId, bundleId);
+      set((state) => ({
+        snapshot: state.snapshot && { ...state.snapshot, placements }
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to apply context set" });
+    }
+  },
+
+  async deleteContextBundle(bundleId) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId || !bundleId) return;
+    set({ error: undefined });
+    try {
+      await api.deleteContextBundle(canvasId, bundleId);
+      set((state) => ({
+        snapshot: state.snapshot && {
+          ...state.snapshot,
+          contextBundles: state.snapshot.contextBundles.filter((bundle) => bundle.id !== bundleId)
+        }
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to delete context set" });
     }
   },
 

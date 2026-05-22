@@ -64,6 +64,18 @@ export async function saveContextBundle(canvasId: string, name?: string): Promis
   });
 }
 
+export async function applyContextBundle(canvasId: string, bundleId: string): Promise<CanvasPlacement[]> {
+  return fetchJson(`/api/canvases/${canvasId}/context-bundles/${bundleId}/apply`, {
+    method: "POST"
+  });
+}
+
+export async function deleteContextBundle(canvasId: string, bundleId: string): Promise<{ deletedBundleId: string }> {
+  return fetchJson(`/api/canvases/${canvasId}/context-bundles/${bundleId}`, {
+    method: "DELETE"
+  });
+}
+
 export async function updatePlacement(
   canvasId: string,
   mrpId: string,

@@ -4,11 +4,13 @@ import { loadConfig } from "./config.js";
 import "./db/client.js";
 import {
   appendMrpEvent,
+  applyContextBundle,
   buildMessagesForPrompt,
   completePromptMrp,
   createCanvas,
   createChildCanvasFromSelection,
   createPromptMrp,
+  deleteContextBundle,
   failPromptMrp,
   getCanvasSnapshot,
   importExternalMrps,
@@ -108,6 +110,32 @@ app.post<{ Params: { canvasId: string }; Body: { name?: string } }>(
       if (message === "selected_mrps_required" || message === "selected_mrps_not_found") {
         return reply.code(400).send({ error: message });
       }
+      throw error;
+    }
+  }
+);
+
+app.post<{ Params: { canvasId: string; bundleId: string } }>(
+  "/api/canvases/:canvasId/context-bundles/:bundleId/apply",
+  async (request, reply) => {
+    try {
+      return await applyContextBundle(request.params.canvasId, request.params.bundleId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "context_bundle_apply_failed";
+      if (message === "context_bundle_not_found") return reply.code(404).send({ error: message });
+      throw error;
+    }
+  }
+);
+
+app.delete<{ Params: { canvasId: string; bundleId: string } }>(
+  "/api/canvases/:canvasId/context-bundles/:bundleId",
+  async (request, reply) => {
+    try {
+      return await deleteContextBundle(request.params.canvasId, request.params.bundleId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "context_bundle_delete_failed";
+      if (message === "context_bundle_not_found") return reply.code(404).send({ error: message });
       throw error;
     }
   }

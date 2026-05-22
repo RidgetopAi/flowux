@@ -314,6 +314,46 @@ export async function saveContextBundleFromSelection(canvasId: string, name?: st
   return bundle;
 }
 
+export async function applyContextBundle(canvasId: string, bundleId: string): Promise<CanvasPlacement[]> {
+  const timestamp = now();
+  const [bundle] = await db
+    .select()
+    .from(contextBundles)
+    .where(and(eq(contextBundles.canvasId, canvasId), eq(contextBundles.id, bundleId)));
+  if (!bundle) throw new Error("context_bundle_not_found");
+
+  const selectedMrpIds = bundle.selectedMrpIds;
+  await db
+    .update(canvasPlacements)
+    .set({ selectedForContext: false, updatedAt: timestamp })
+    .where(eq(canvasPlacements.canvasId, canvasId));
+
+  if (selectedMrpIds.length) {
+    await db
+      .update(canvasPlacements)
+      .set({ selectedForContext: true, updatedAt: timestamp })
+      .where(and(eq(canvasPlacements.canvasId, canvasId), inArray(canvasPlacements.mrpId, selectedMrpIds)));
+  }
+
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
+
+  const placements = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  return placements.map(toPlacement);
+}
+
+export async function deleteContextBundle(canvasId: string, bundleId: string): Promise<{ deletedBundleId: string }> {
+  const [bundle] = await db
+    .select()
+    .from(contextBundles)
+    .where(and(eq(contextBundles.canvasId, canvasId), eq(contextBundles.id, bundleId)));
+  if (!bundle) throw new Error("context_bundle_not_found");
+
+  await db.delete(contextBundles).where(and(eq(contextBundles.canvasId, canvasId), eq(contextBundles.id, bundleId)));
+  await db.update(canvasThreads).set({ updatedAt: now() }).where(eq(canvasThreads.id, canvasId));
+
+  return { deletedBundleId: bundleId };
+}
+
 export async function updatePlacement(
   canvasId: string,
   mrpId: string,

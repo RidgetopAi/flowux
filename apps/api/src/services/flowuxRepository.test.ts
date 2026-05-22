@@ -48,6 +48,17 @@ describe("flowuxRepository phase 3 provenance", () => {
         modeByMrpId: { [created.mrp.id]: "full_mrp" }
       })
     );
+    await repository.updatePlacement(child.canvas.id, created.mrp.id, { selectedForContext: false });
+    const appliedPlacements = await repository.applyContextBundle(child.canvas.id, bundle.id);
+    expect(appliedPlacements).toContainEqual(
+      expect.objectContaining({
+        mrpId: created.mrp.id,
+        selectedForContext: true
+      })
+    );
+    await repository.deleteContextBundle(child.canvas.id, bundle.id);
+    const childAfterBundleDelete = await repository.getCanvasSnapshot(child.canvas.id);
+    expect(childAfterBundleDelete?.contextBundles).toEqual([]);
 
     const target = await repository.createCanvas("Import Target");
     const imported = await repository.importExternalMrps(target.id, [created.mrp.id], {

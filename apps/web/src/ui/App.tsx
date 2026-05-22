@@ -39,6 +39,8 @@ export function App() {
     createChildCanvasFromSelection,
     importSelectedFromCanvas,
     saveSelectedContextBundle,
+    applyContextBundle,
+    deleteContextBundle,
     submitPrompt,
     patchPlacement,
     snapBack
@@ -47,6 +49,7 @@ export function App() {
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
   const [importCanvasId, setImportCanvasId] = useState("");
+  const [contextBundleId, setContextBundleId] = useState("");
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
   const workspaceRef = useRef<HTMLElement>(null);
 
@@ -72,6 +75,17 @@ export function App() {
       setImportCanvasId(importableCanvases[0]?.id ?? "");
     }
   }, [importCanvasId, importableCanvases]);
+
+  useEffect(() => {
+    const bundles = snapshot?.contextBundles ?? [];
+    if (!bundles.length) {
+      setContextBundleId("");
+      return;
+    }
+    if (!contextBundleId || !bundles.some((bundle) => bundle.id === contextBundleId)) {
+      setContextBundleId(bundles[0]?.id ?? "");
+    }
+  }, [contextBundleId, snapshot?.contextBundles]);
 
   const zoomBy = (factor: number) => {
     setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
@@ -167,6 +181,17 @@ export function App() {
     if (name === null) return;
     void saveSelectedContextBundle(name);
   };
+  const applyContextSet = () => {
+    if (!contextBundleId) return;
+    void applyContextBundle(contextBundleId);
+  };
+  const deleteContextSet = () => {
+    const bundle = snapshot?.contextBundles.find((item) => item.id === contextBundleId);
+    if (!bundle) return;
+    const ok = window.confirm(`Delete context set "${bundle.name || "Untitled set"}"?`);
+    if (!ok) return;
+    void deleteContextBundle(bundle.id);
+  };
   const createNamedCanvas = () => {
     const name = window.prompt("Name this canvas", "Ridgey workflow");
     if (name === null) return;
@@ -261,6 +286,29 @@ export function App() {
           <button className="hud-button" onClick={saveContextSet} disabled={selectedCount === 0} title="Save checked MRPs as a context set">
             <Save size={15} />
             Save set
+          </button>
+          <label className="canvas-selector import-selector">
+            <span className="hud-label">Set</span>
+            <select
+              value={contextBundleId}
+              onChange={(event) => setContextBundleId(event.target.value)}
+              disabled={!snapshot?.contextBundles.length}
+              title="Saved context sets for this canvas"
+            >
+              {(snapshot?.contextBundles ?? []).map((bundle) => (
+                <option key={bundle.id} value={bundle.id}>
+                  {bundle.name || "Untitled set"} · {bundle.selectedMrpIds.length}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="hud-button" onClick={applyContextSet} disabled={!contextBundleId} title="Apply selected context set">
+            <Check size={15} />
+            Apply set
+          </button>
+          <button className="hud-button" onClick={deleteContextSet} disabled={!contextBundleId} title="Delete selected context set">
+            <Trash2 size={15} />
+            Delete set
           </button>
           <label className="canvas-selector import-selector">
             <span className="hud-label">Import</span>
