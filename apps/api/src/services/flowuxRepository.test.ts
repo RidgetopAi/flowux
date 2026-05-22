@@ -84,6 +84,10 @@ describe("flowuxRepository phase 3 provenance", () => {
         y: 76
       })
     );
+    const clearedPlacements = await repository.updateCanvasSelection(child.canvas.id, false);
+    expect(clearedPlacements.every((placement) => !placement.selectedForContext)).toBe(true);
+    const checkedPlacements = await repository.updateCanvasSelection(child.canvas.id, true);
+    expect(checkedPlacements.every((placement) => placement.selectedForContext)).toBe(true);
 
     const renamed = await repository.updateCanvasTitle(target.id, "Ridgey Workflow");
     expect(renamed?.title).toBe("Ridgey Workflow");

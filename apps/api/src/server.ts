@@ -19,6 +19,7 @@ import {
   snapBack,
   deleteCanvas,
   updateCanvasTitle,
+  updateCanvasSelection,
   updatePlacement
 } from "./services/flowuxRepository.js";
 import { createHarnessAdapter } from "./harness/index.js";
@@ -155,6 +156,13 @@ app.patch<{
   if (!placement) return reply.code(404).send({ error: "placement_not_found" });
   return placement;
 });
+
+app.patch<{ Params: { canvasId: string }; Body: { selectedForContext?: boolean } }>(
+  "/api/canvases/:canvasId/placements",
+  async (request) => {
+    return updateCanvasSelection(request.params.canvasId, Boolean(request.body?.selectedForContext));
+  }
+);
 
 app.post<{
   Params: { canvasId: string };

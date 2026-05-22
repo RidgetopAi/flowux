@@ -26,6 +26,7 @@ interface FlowuxState {
     onCreated?: (payload: CreatePromptResponse) => void
   ) => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
+  setAllContextSelection: (selectedForContext: boolean) => Promise<void>;
   snapBack: (layout?: api.LayoutRequest) => Promise<void>;
 }
 
@@ -286,6 +287,20 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
         placements: state.snapshot.placements.map((item) => (item.id === placement.id ? placement : item))
       }
     }));
+  },
+
+  async setAllContextSelection(selectedForContext) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ error: undefined });
+    try {
+      const placements = await api.updateCanvasSelection(canvasId, selectedForContext);
+      set((state) => ({
+        snapshot: state.snapshot && { ...state.snapshot, placements }
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to update context selection" });
+    }
   },
 
   async snapBack(layout) {

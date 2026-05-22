@@ -88,6 +88,14 @@ export async function updatePlacement(
   });
 }
 
+export async function updateCanvasSelection(canvasId: string, selectedForContext: boolean): Promise<CanvasPlacement[]> {
+  return fetchJson(`/api/canvases/${canvasId}/placements`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedForContext })
+  });
+}
+
 export interface LayoutRequest {
   layoutWidth?: number;
   layoutLeft?: number;

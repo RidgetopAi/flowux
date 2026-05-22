@@ -371,6 +371,18 @@ export async function updatePlacement(
   return placement ? toPlacement(placement) : undefined;
 }
 
+export async function updateCanvasSelection(canvasId: string, selectedForContext: boolean): Promise<CanvasPlacement[]> {
+  const timestamp = now();
+  await db
+    .update(canvasPlacements)
+    .set({ selectedForContext, updatedAt: timestamp })
+    .where(eq(canvasPlacements.canvasId, canvasId));
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
+
+  const placements = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  return placements.map(toPlacement);
+}
+
 interface LayoutMetrics {
   layoutWidth?: number;
   layoutLeft?: number;

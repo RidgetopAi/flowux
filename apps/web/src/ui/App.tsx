@@ -44,6 +44,7 @@ export function App() {
     deleteContextBundle,
     submitPrompt,
     patchPlacement,
+    setAllContextSelection,
     snapBack
   } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
@@ -281,6 +282,24 @@ export function App() {
             <span>{snapshot?.contextBundles.length ?? 0} sets</span>
             <span>{snapshot?.canvas.status ?? "loading"}</span>
           </div>
+          <button
+            className="hud-button"
+            onClick={() => void setAllContextSelection(true)}
+            disabled={!snapshot?.placements.length}
+            title="Check every MRP on this canvas"
+          >
+            <Check size={15} />
+            Check all
+          </button>
+          <button
+            className="hud-button"
+            onClick={() => void setAllContextSelection(false)}
+            disabled={selectedCount === 0}
+            title="Clear checked MRPs"
+          >
+            <Circle size={15} />
+            Clear
+          </button>
           <button
             className="hud-button"
             onClick={() => {
