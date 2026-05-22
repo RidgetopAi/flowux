@@ -60,6 +60,17 @@ export function App() {
     void loadInitial();
   }, [loadInitial]);
 
+  useEffect(() => {
+    if (!focusedMrpId) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setFocusedMrpId(undefined);
+      window.requestAnimationFrame(() => snapBackToVisibleWidth());
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusedMrpId]);
+
   const selectedCount = useMemo(
     () => snapshot?.placements.filter((placement) => placement.selectedForContext).length ?? 0,
     [snapshot?.placements]
@@ -159,11 +170,6 @@ export function App() {
 
   const handleWorkspacePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
-    if (focusedMrpId) {
-      setFocusedMrpId(undefined);
-      window.requestAnimationFrame(() => snapBackToVisibleWidth());
-      return;
-    }
     event.currentTarget.setPointerCapture(event.pointerId);
     setPan({ startX: event.clientX, startY: event.clientY, x: viewport.x, y: viewport.y });
   };
