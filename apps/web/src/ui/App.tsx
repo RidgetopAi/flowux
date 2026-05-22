@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { Tldraw } from "tldraw";
-import type { CanvasPlacement, Mrp, MrpBlock, MrpSection, MrpSectionKind } from "@flowux/shared";
+import type { CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind } from "@flowux/shared";
 import { findPlacement, useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -242,6 +242,7 @@ export function App() {
                 key={mrp.id}
                 mrp={mrp}
                 placement={placement}
+                modelRun={snapshot.modelRuns.find((modelRun) => modelRun.mrpId === mrp.id)}
                 sections={snapshot.sections.filter((section) => section.mrpId === mrp.id)}
                 blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
                 zoom={viewport.zoom}
@@ -302,6 +303,7 @@ function formatCanvasTime(value: string) {
 function MrpCard({
   mrp,
   placement,
+  modelRun,
   sections,
   blocks,
   zoom,
@@ -309,6 +311,7 @@ function MrpCard({
 }: {
   mrp: Mrp;
   placement: CanvasPlacement;
+  modelRun?: ModelRun;
   sections: MrpSection[];
   blocks: MrpBlock[];
   zoom: number;
@@ -356,6 +359,7 @@ function MrpCard({
   const detailSections = sections
     .filter((section) => !["prompt", "response"].includes(section.kind))
     .sort((a, b) => a.sequence - b.sequence);
+  const runMeta = getRunMeta(modelRun, detailSections);
 
   return (
     <article
@@ -399,8 +403,17 @@ function MrpCard({
         </button>
       </div>
 
+      <div className="mrp-meta" aria-label="Model run metadata">
+        {runMeta.map((item) => (
+          <span key={item.label} title={item.title}>
+            {item.value}
+          </span>
+        ))}
+      </div>
+
       {!placement.collapsed && (
         <div className="mrp-body">
+          {mrp.summary && <p className="mrp-summary">{mrp.summary}</p>}
           <section>
             <p className="hud-label">Prompt</p>
             <p>{promptText}</p>
@@ -448,6 +461,32 @@ function MrpSectionDrawer({ section, blocks }: { section: MrpSection; blocks: Mr
       <pre>{body}</pre>
     </details>
   );
+}
+
+function getRunMeta(modelRun: ModelRun | undefined, sections: MrpSection[]) {
+  const tools = sections
+    .filter((section) => section.kind === "tool_calls" || section.kind === "tool_results")
+    .map((section) => section.summary)
+    .filter(Boolean);
+  return [
+    modelRun ? { label: "provider", value: modelRun.provider.replace("_", " "), title: "Harness provider" } : undefined,
+    modelRun ? { label: "model", value: shortenModelName(modelRun.model), title: modelRun.model } : undefined,
+    modelRun?.totalTokens
+      ? { label: "tokens", value: `${modelRun.totalTokens.toLocaleString()} tok`, title: "Total tokens" }
+      : undefined,
+    modelRun?.timingMs ? { label: "time", value: formatDuration(modelRun.timingMs), title: "Run duration" } : undefined,
+    modelRun?.finishReason ? { label: "finish", value: modelRun.finishReason, title: "Finish reason" } : undefined,
+    tools.length ? { label: "tools", value: `${tools.length} tool sections`, title: tools.join(" / ") } : undefined
+  ].filter((item): item is { label: string; value: string; title: string } => Boolean(item));
+}
+
+function shortenModelName(value: string) {
+  return value.replace(/^.*\//, "").replace(/-?instruct/i, "");
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
 }
 
 function getSectionText(sections: MrpSection[], blocks: MrpBlock[], kind: MrpSectionKind) {

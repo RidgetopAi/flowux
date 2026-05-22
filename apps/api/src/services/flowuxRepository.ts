@@ -66,11 +66,13 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
   const events = mrpIds.length
     ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
     : [];
+  const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
 
   return {
     canvas: toCanvasThread(canvas),
     mrps: canvasMrps.map(toMrp),
     placements: placements.map(toPlacement),
+    modelRuns: runs.map(toModelRun),
     sections: sections.map(toMrpSection),
     blocks: blocks.map(toMrpBlock),
     events: events.map(toMrpEvent),
@@ -317,11 +319,23 @@ export interface CompletePromptInput {
 export async function completePromptMrp(canvasId: string, mrpId: string, input: CompletePromptInput): Promise<Mrp> {
   const timestamp = now();
   const response = input.response;
-  const summary = response.split(/\s+/).slice(0, 32).join(" ");
+  const [existingMrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
+  const [existingRun] = await db.select().from(modelRuns).where(eq(modelRuns.mrpId, mrpId));
+  const timingMs = existingRun ? Math.max(0, Date.parse(timestamp) - Date.parse(existingRun.startedAt)) : undefined;
+  const summary = deriveMrpSummary(response, existingMrp?.userPrompt ?? "");
+  const title = deriveMrpTitle(existingMrp?.userPrompt ?? "", response);
+  const runMetadata = {
+    responseCharacters: response.length,
+    thinkingCharacters: input.thinking?.length ?? 0,
+    toolCallEvents: input.toolCalls?.length ?? 0,
+    toolResultEvents: input.toolResults?.length ?? 0,
+    rawEvents: input.rawEvents?.length ?? 0
+  };
   await db
     .update(mrps)
     .set({
       assistantResponse: response,
+      title,
       summary,
       status: "complete",
       updatedAt: timestamp
@@ -335,7 +349,9 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
       promptTokens: input.usage?.promptTokens,
       completionTokens: input.usage?.completionTokens,
       totalTokens: input.usage?.totalTokens,
-      finishReason: input.finishReason
+      timingMs,
+      finishReason: input.finishReason,
+      metadata: runMetadata
     })
     .where(eq(modelRuns.mrpId, mrpId));
 
@@ -376,11 +392,11 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
   }
 
   if (input.usage) {
-    await createSectionWithBlock(mrpId, "usage", "Usage", 8, "usage", { usage: input.usage }, {
+    await createSectionWithBlock(mrpId, "usage", "Run", 8, "usage", { usage: input.usage, timingMs, finishReason: input.finishReason, metadata: runMetadata }, {
       collapsedByDefault: true,
       selectable: false,
       contextDefault: "exclude",
-      summary: `${input.usage.totalTokens ?? "unknown"} total tokens`
+      summary: formatRunSummary(input.usage.totalTokens, timingMs, input.finishReason)
     });
   }
 
@@ -406,6 +422,51 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
   const [mrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
   if (!mrp) throw new Error(`MRP ${mrpId} was not found after completion`);
   return toMrp(mrp);
+}
+
+function deriveMrpTitle(prompt: string, response: string) {
+  const promptSnippet = normalizeSnippet(prompt);
+  const responseSnippet = normalizeSnippet(response);
+  const source = isInstructionPrompt(promptSnippet) ? responseSnippet || promptSnippet : promptSnippet || responseSnippet || "Untitled MRP";
+  const withoutLeadIn = source
+    .replace(/^(can you|could you|please|tell me|show me|give me|reply with|write|say|use mandrel and)\s+/i, "")
+    .replace(/^(what is|what are|how do|how does|why does|why is)\s+/i, "")
+    .trim();
+  return truncateAtWord(withoutLeadIn || source, 58);
+}
+
+function isInstructionPrompt(value: string) {
+  return /^(reply with|write|say)\b/i.test(value);
+}
+
+function deriveMrpSummary(response: string, prompt: string) {
+  const source = normalizeSnippet(response) || normalizeSnippet(prompt) || "No response captured.";
+  const firstSentence = source.match(/^(.{24,220}?[.!?])(\s|$)/)?.[1];
+  return truncateAtWord(firstSentence ?? source, 180);
+}
+
+function normalizeSnippet(value: string) {
+  return value
+    .replace(/```[\s\S]*?```/g, " code block ")
+    .replace(/[#>*_`[\]()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateAtWord(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  const sliced = value.slice(0, maxLength + 1);
+  const trimmed = sliced.slice(0, Math.max(0, sliced.lastIndexOf(" "))).trim();
+  return `${trimmed || value.slice(0, maxLength).trim()}...`;
+}
+
+function formatRunSummary(totalTokens?: number, timingMs?: number, finishReason?: string) {
+  const parts = [
+    totalTokens ? `${totalTokens.toLocaleString()} tokens` : "tokens unknown",
+    timingMs ? `${(timingMs / 1000).toFixed(1)}s` : undefined,
+    finishReason
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 export async function appendMrpEvent(
@@ -523,6 +584,26 @@ function toMrp(row: typeof mrps.$inferSelect): Mrp {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...(row.modelRunId ? { modelRunId: row.modelRunId } : {})
+  };
+}
+
+function toModelRun(row: typeof modelRuns.$inferSelect): ModelRun {
+  return {
+    id: row.id,
+    canvasId: row.canvasId,
+    mrpId: row.mrpId,
+    provider: row.provider,
+    model: row.model,
+    inputMrpIds: row.inputMrpIds,
+    ...(row.promptTokens ? { promptTokens: row.promptTokens } : {}),
+    ...(row.completionTokens ? { completionTokens: row.completionTokens } : {}),
+    ...(row.totalTokens ? { totalTokens: row.totalTokens } : {}),
+    ...(row.timingMs ? { timingMs: row.timingMs } : {}),
+    ...(row.finishReason ? { finishReason: row.finishReason } : {}),
+    ...(row.metadata ? { metadata: row.metadata } : {}),
+    startedAt: row.startedAt,
+    ...(row.completedAt ? { completedAt: row.completedAt } : {}),
+    ...(row.error ? { error: row.error } : {})
   };
 }
 

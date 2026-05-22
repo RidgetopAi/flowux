@@ -206,6 +206,7 @@ export interface CanvasSnapshot {
   canvas: CanvasThread;
   mrps: Mrp[];
   placements: CanvasPlacement[];
+  modelRuns: ModelRun[];
   sections: MrpSection[];
   blocks: MrpBlock[];
   events: MrpEvent[];

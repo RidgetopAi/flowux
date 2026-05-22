@@ -88,6 +88,7 @@ const [health, snapshot] = await Promise.all([
   fetch(`${baseUrl}/api/canvases/${canvas.id}`).then((response) => response.json())
 ]);
 const mrp = snapshot.mrps[0];
+const modelRun = snapshot.modelRuns[0];
 
 console.log(JSON.stringify(
   {
@@ -95,7 +96,10 @@ console.log(JSON.stringify(
     remoteHost: health.piMonoRemoteHost,
     remoteCwd: health.piMonoRemoteCwd,
     mrpStatus: mrp?.status,
+    mrpTitle: mrp?.title,
+    mrpSummary: mrp?.summary,
     assistantResponse: mrp?.assistantResponse,
+    modelRun,
     thinkingChars,
     responseChars,
     errors,

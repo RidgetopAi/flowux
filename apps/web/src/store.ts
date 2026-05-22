@@ -94,6 +94,10 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
               ? {
                   ...state.snapshot,
                   mrps: [...state.snapshot.mrps.filter((mrp) => mrp.id !== payload.mrp.id), payload.mrp],
+                  modelRuns: [
+                    ...state.snapshot.modelRuns.filter((modelRun) => modelRun.id !== payload.modelRun.id),
+                    payload.modelRun
+                  ],
                   placements: [
                     ...state.snapshot.placements.filter((placement) => placement.id !== payload.placement.id),
                     payload.placement
