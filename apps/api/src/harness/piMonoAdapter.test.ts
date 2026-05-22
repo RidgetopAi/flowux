@@ -60,4 +60,26 @@ describe("mapPiMonoEvent", () => {
       }
     ]);
   });
+
+  test("maps turn end usage into portable usage before done", () => {
+    expect(
+      mapPiMonoEvent({
+        type: "turn_end",
+        message: {
+          usage: {
+            input: 10,
+            output: 5,
+            totalTokens: 15
+          }
+        }
+      })
+    ).toEqual([
+      {
+        type: "usage",
+        usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        raw: expect.any(Object)
+      },
+      { type: "done", raw: expect.any(Object) }
+    ]);
+  });
 });

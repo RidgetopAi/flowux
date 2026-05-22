@@ -34,7 +34,9 @@ export function loadConfig(): FlowuxConfig {
     modelMaxTokens: Number(process.env.FLOWUX_MODEL_MAX_TOKENS ?? 2048),
     piMonoRemoteHost: process.env.FLOWUX_PI_MONO_REMOTE_HOST ?? "ridgetop@ridgetop-desktop",
     piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects/flowux",
-    piMonoCommand: process.env.FLOWUX_PI_MONO_COMMAND ?? "pi --mode rpc",
+    piMonoCommand:
+      process.env.FLOWUX_PI_MONO_COMMAND ??
+      "PATH=/home/ridgetop/.local/flowux/node-v22.22.3-linux-x64/bin:$PATH PI_OFFLINE=1 node /home/ridgetop/projects/pi-mono/packages/coding-agent/dist/cli.js --mode rpc --provider local-qwen --model qwen3.6-35b --no-session --thinking minimal",
     piMonoModel: process.env.FLOWUX_PI_MONO_MODEL ?? process.env.FLOWUX_MODEL_NAME ?? "qwen3.6-35b"
   };
 }
