@@ -1,0 +1,63 @@
+import { describe, expect, test } from "vitest";
+import { mapPiMonoEvent } from "./piMonoAdapter.js";
+
+describe("mapPiMonoEvent", () => {
+  test("maps text and thinking deltas into portable Flowux events", () => {
+    expect(
+      mapPiMonoEvent({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "hello" }
+      })
+    ).toEqual([{ type: "response_delta", text: "hello", raw: expect.any(Object) }]);
+
+    expect(
+      mapPiMonoEvent({
+        type: "message_update",
+        assistantMessageEvent: { type: "thinking_delta", delta: "trace" }
+      })
+    ).toEqual([{ type: "thinking_delta", text: "trace", raw: expect.any(Object) }]);
+  });
+
+  test("maps Pi tool execution lifecycle into tool call and result events", () => {
+    expect(
+      mapPiMonoEvent({
+        type: "tool_execution_start",
+        toolCallId: "call-1",
+        toolName: "bash",
+        args: { command: "pwd" }
+      })
+    ).toEqual([
+      {
+        type: "tool_call_started",
+        toolCall: { id: "call-1", name: "bash", args: { command: "pwd" }, status: "started" },
+        raw: expect.any(Object)
+      }
+    ]);
+
+    expect(
+      mapPiMonoEvent({
+        type: "tool_execution_end",
+        toolCallId: "call-1",
+        toolName: "bash",
+        result: { content: [{ type: "text", text: "/tmp" }] },
+        isError: false
+      })
+    ).toEqual([
+      {
+        type: "tool_result_completed",
+        toolResult: {
+          toolCallId: "call-1",
+          toolName: "bash",
+          result: { content: [{ type: "text", text: "/tmp" }] },
+          isError: false
+        },
+        raw: expect.any(Object)
+      },
+      {
+        type: "tool_call_completed",
+        toolCall: { id: "call-1", name: "bash", args: undefined, status: "complete" },
+        raw: expect.any(Object)
+      }
+    ]);
+  });
+});

@@ -13,7 +13,7 @@ import {
   snapBack,
   updatePlacement
 } from "./services/flowuxRepository.js";
-import { createModelAdapter } from "./model/adapter.js";
+import { createHarnessAdapter } from "./harness/index.js";
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
@@ -25,10 +25,13 @@ await app.register(cors, {
 
 app.get("/api/health", async () => ({
   ok: true,
+  harnessMode: config.harnessMode,
   modelMode: config.modelMode,
   modelBaseUrl: config.modelBaseUrl,
   modelName: config.modelName,
-  modelMaxTokens: config.modelMaxTokens
+  modelMaxTokens: config.modelMaxTokens,
+  piMonoRemoteHost: config.piMonoRemoteHost,
+  piMonoRemoteCwd: config.piMonoRemoteCwd
 }));
 
 app.get("/api/canvases", async () => listCanvases());
@@ -98,11 +101,14 @@ app.post<{
       });
       send("created", created);
 
-      const adapter = createModelAdapter();
+      const adapter = createHarnessAdapter();
       let responseText = "";
       let thinkingText = "";
       let sawThinking = false;
       let sawResponse = false;
+      const toolCalls: Array<Record<string, unknown>> = [];
+      const toolResults: Array<Record<string, unknown>> = [];
+      const rawEvents: Array<Record<string, unknown>> = [];
       let finishReason: string | undefined;
       let usage:
         | {
@@ -114,10 +120,18 @@ app.post<{
 
       await appendMrpEvent(created.mrp.id, created.modelRun.id, "model_stream_started", {
         provider: adapter.provider,
-        model: adapter.model
+        model: adapter.model,
+        harnessMode: adapter.mode,
+        capabilities: adapter.capabilities
       });
 
-      for await (const event of adapter.generate({ messages })) {
+      for await (const event of adapter.generate({
+        messages,
+        prompt,
+        canvasId: request.params.canvasId,
+        mrpId: created.mrp.id,
+        modelRunId: created.modelRun.id
+      })) {
         if (event.type === "thinking_delta") {
           thinkingText += event.text;
           if (!sawThinking) {
@@ -142,9 +156,54 @@ app.post<{
           continue;
         }
 
+        if (event.type === "tool_call_started" || event.type === "tool_call_delta" || event.type === "tool_call_completed") {
+          toolCalls.push({
+            type: event.type,
+            toolCall: event.toolCall,
+            ...(event.type === "tool_call_delta" ? { delta: event.delta } : {})
+          });
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, event.type, {
+            toolCall: event.toolCall,
+            ...(event.type === "tool_call_delta" ? { delta: event.delta } : {})
+          });
+          continue;
+        }
+
+        if (event.type === "tool_result_delta" || event.type === "tool_result_completed") {
+          toolResults.push({
+            type: event.type,
+            toolResult: event.toolResult
+          });
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, event.type, {
+            toolResult: event.toolResult
+          });
+          continue;
+        }
+
         if (event.type === "usage") {
           usage = event.usage;
           await appendMrpEvent(created.mrp.id, created.modelRun.id, "usage_reported", { usage: event.usage });
+          continue;
+        }
+
+        if (event.type === "raw_event") {
+          rawEvents.push({
+            type: event.eventType,
+            raw: event.raw
+          });
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, "raw_event", {
+            eventType: event.eventType,
+            raw: event.raw
+          });
+          continue;
+        }
+
+        if (event.type === "error") {
+          await appendMrpEvent(created.mrp.id, created.modelRun.id, "model_error", {
+            message: event.message,
+            raw: event.raw
+          });
+          send("error", { message: event.message });
           continue;
         }
 
@@ -160,7 +219,10 @@ app.post<{
         response: responseText,
         thinking: thinkingText,
         usage,
-        finishReason
+        finishReason,
+        toolCalls,
+        toolResults,
+        rawEvents
       });
       send("complete", { mrp: complete });
       reply.raw.end();

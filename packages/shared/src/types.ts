@@ -2,7 +2,8 @@ export type CanvasStatus = "temporary" | "saved" | "archived";
 export type MrpStatus = "pending" | "streaming" | "complete" | "error";
 export type ContextMode = "full_mrp" | "summary" | "response_only" | "excerpt" | "none";
 export type ArtifactType = "image" | "file" | "code" | "link" | "diff" | "terminal";
-export type ModelProvider = "mock" | "llama_cpp" | "openai_compatible";
+export type ModelProvider = "mock" | "llama_cpp" | "openai_compatible" | "pi_mono" | "codex" | "ampcode" | "squire";
+export type HarnessMode = "direct_model" | "pi_mono" | "codex" | "ampcode" | "squire";
 export type MrpSectionKind =
   | "prompt"
   | "response"
@@ -158,6 +159,48 @@ export interface ModelRun {
   completedAt?: string;
   error?: string;
 }
+
+export interface TurnTokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
+export interface FlowuxToolCall {
+  id: string;
+  name: string;
+  args?: unknown;
+  status?: "started" | "streaming" | "complete" | "error";
+}
+
+export interface FlowuxToolResult {
+  toolCallId: string;
+  toolName?: string;
+  result?: unknown;
+  isError?: boolean;
+}
+
+export interface FlowuxFileReference {
+  path: string;
+  action?: "read" | "write" | "edit" | "delete" | "search" | "unknown";
+  metadata?: Record<string, unknown>;
+}
+
+export type FlowuxTurnEvent =
+  | { type: "turn_started"; raw?: unknown }
+  | { type: "response_delta"; text: string; raw?: unknown }
+  | { type: "thinking_delta"; text: string; raw?: unknown }
+  | { type: "tool_call_started"; toolCall: FlowuxToolCall; raw?: unknown }
+  | { type: "tool_call_delta"; toolCall: FlowuxToolCall; delta?: unknown; raw?: unknown }
+  | { type: "tool_call_completed"; toolCall: FlowuxToolCall; raw?: unknown }
+  | { type: "tool_result_delta"; toolResult: FlowuxToolResult; raw?: unknown }
+  | { type: "tool_result_completed"; toolResult: FlowuxToolResult; raw?: unknown }
+  | { type: "file_referenced"; file: FlowuxFileReference; raw?: unknown }
+  | { type: "artifact_created"; artifact: Omit<Artifact, "id" | "mrpId" | "createdAt">; raw?: unknown }
+  | { type: "usage"; usage: TurnTokenUsage; raw?: unknown }
+  | { type: "raw_event"; eventType: string; raw: unknown }
+  | { type: "error"; message: string; raw?: unknown }
+  | { type: "done"; finishReason?: string; raw?: unknown };
 
 export interface CanvasSnapshot {
   canvas: CanvasThread;

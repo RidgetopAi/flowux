@@ -15,7 +15,7 @@ import {
 } from "@flowux/shared";
 import { db } from "../db/client.js";
 import { canvasPlacements, canvasThreads, modelRuns, mrpBlocks, mrpEvents, mrps, mrpSections } from "../db/schema.js";
-import { createModelAdapter } from "../model/adapter.js";
+import { createHarnessAdapter } from "../harness/index.js";
 import type { TokenUsage } from "../model/adapter.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -206,7 +206,7 @@ export async function createPromptMrp(
     .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
   const inputMrpIds = selectedPlacements.map((item) => item.mrpId);
 
-  const adapter = createModelAdapter();
+  const adapter = createHarnessAdapter();
   const modelRun: ModelRun = {
     id: id(),
     canvasId,
@@ -244,6 +244,8 @@ export async function createPromptMrp(
   await appendMrpEvent(mrp.id, modelRun.id, "turn_started", {
     provider: modelRun.provider,
     model: modelRun.model,
+    harnessMode: adapter.mode,
+    capabilities: adapter.capabilities,
     inputMrpIds
   });
   await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
@@ -307,6 +309,9 @@ export interface CompletePromptInput {
   thinking?: string;
   usage?: TokenUsage;
   finishReason?: string;
+  toolCalls?: Array<Record<string, unknown>>;
+  toolResults?: Array<Record<string, unknown>>;
+  rawEvents?: Array<Record<string, unknown>>;
 }
 
 export async function completePromptMrp(canvasId: string, mrpId: string, input: CompletePromptInput): Promise<Mrp> {
@@ -352,6 +357,24 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
     });
   }
 
+  if (input.toolCalls?.length) {
+    await createSectionWithBlock(mrpId, "tool_calls", "Tool Calls", 5, "tool_call", { toolCalls: input.toolCalls }, {
+      collapsedByDefault: true,
+      selectable: true,
+      contextDefault: "summarize",
+      summary: `${input.toolCalls.length} tool event${input.toolCalls.length === 1 ? "" : "s"}`
+    });
+  }
+
+  if (input.toolResults?.length) {
+    await createSectionWithBlock(mrpId, "tool_results", "Tool Results", 6, "tool_result", { toolResults: input.toolResults }, {
+      collapsedByDefault: true,
+      selectable: true,
+      contextDefault: "summarize",
+      summary: `${input.toolResults.length} tool result event${input.toolResults.length === 1 ? "" : "s"}`
+    });
+  }
+
   if (input.usage) {
     await createSectionWithBlock(mrpId, "usage", "Usage", 8, "usage", { usage: input.usage }, {
       collapsedByDefault: true,
@@ -361,11 +384,23 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
     });
   }
 
+  if (input.rawEvents?.length) {
+    await createSectionWithBlock(mrpId, "raw_events", "Raw Events", 9, "event", { events: input.rawEvents }, {
+      collapsedByDefault: true,
+      selectable: false,
+      contextDefault: "exclude",
+      summary: `${input.rawEvents.length} raw event${input.rawEvents.length === 1 ? "" : "s"}`
+    });
+  }
+
   await appendMrpEvent(mrpId, undefined, "turn_completed", {
     finishReason: input.finishReason,
     responseCharacters: response.length,
     thinkingCharacters: input.thinking?.length ?? 0,
-    usage: input.usage
+    usage: input.usage,
+    toolCallEvents: input.toolCalls?.length ?? 0,
+    toolResultEvents: input.toolResults?.length ?? 0,
+    rawEvents: input.rawEvents?.length ?? 0
   });
 
   const [mrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));

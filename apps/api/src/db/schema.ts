@@ -144,7 +144,9 @@ export const modelRuns = sqliteTable("model_runs", {
   id: text("id").primaryKey(),
   canvasId: text("canvas_id").notNull(),
   mrpId: text("mrp_id").notNull(),
-  provider: text("provider", { enum: ["mock", "llama_cpp", "openai_compatible"] }).notNull(),
+  provider: text("provider", {
+    enum: ["mock", "llama_cpp", "openai_compatible", "pi_mono", "codex", "ampcode", "squire"]
+  }).notNull(),
   model: text("model").notNull(),
   inputMrpIds: text("input_mrp_ids", { mode: "json" }).$type<string[]>().notNull(),
   promptTokens: integer("prompt_tokens"),

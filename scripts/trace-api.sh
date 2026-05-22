@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # Keep native modules on the same Node ABI the dev server uses.
+  export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+fi
+
 cd "$(dirname "$0")/.."
 
 port="${FLOWUX_TRACE_PORT:-6174}"
