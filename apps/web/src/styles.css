@@ -28,6 +28,7 @@
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 button, textarea { font: inherit; }
+select { font: inherit; }
 
 .flowux-app {
   height: 100vh;
@@ -133,6 +134,34 @@ button, textarea { font: inherit; }
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.canvas-selector {
+  min-width: 220px;
+  max-width: min(360px, 34vw);
+  display: grid;
+  gap: 4px;
+}
+
+.canvas-selector .hud-label {
+  margin: 0;
+}
+
+.canvas-selector select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--hud-line);
+  border-radius: var(--hud-radius-pill);
+  background: rgba(0, 0, 0, .28);
+  color: var(--hud-ink);
+  padding: 0 34px 0 12px;
+  outline: none;
+  font: 11px/1 var(--hud-mono);
+  text-transform: uppercase;
+}
+
+.canvas-selector select:disabled {
+  color: var(--hud-muted);
 }
 
 .workspace {
@@ -425,6 +454,14 @@ button, textarea { font: inherit; }
     height: auto;
     grid-template-columns: 1fr;
     align-items: start;
+  }
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .canvas-selector {
+    max-width: none;
+    width: 100%;
   }
   .telemetry { flex-wrap: wrap; }
   .workspace { height: calc(100vh - 186px); }

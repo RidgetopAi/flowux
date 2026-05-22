@@ -1,4 +1,4 @@
-import type { CanvasPlacement, CanvasSnapshot, CreatePromptResponse, Mrp } from "@flowux/shared";
+import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreatePromptResponse, Mrp } from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
 
@@ -6,10 +6,12 @@ const activeCanvasStorageKey = "flowux.activeCanvasId";
 
 interface FlowuxState {
   snapshot?: CanvasSnapshot;
+  canvases: CanvasThread[];
   loading: boolean;
   error?: string;
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
+  switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: () => Promise<void>;
   submitPrompt: (
     prompt: string,
@@ -21,6 +23,7 @@ interface FlowuxState {
 }
 
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
+  canvases: [],
   loading: false,
 
   async loadInitial() {
@@ -30,9 +33,10 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       const storedCanvasId = window.localStorage.getItem(activeCanvasStorageKey);
       const canvas =
         canvases.find((item) => item.id === storedCanvasId) ?? canvases[0] ?? (await api.createCanvas("Flowux MVP Canvas"));
+      const nextCanvases = canvases.some((item) => item.id === canvas.id) ? canvases : [canvas, ...canvases];
       const snapshot = await api.getCanvas(canvas.id);
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
-      set({ snapshot, loading: false });
+      set({ canvases: nextCanvases, snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to load Flowux", loading: false });
     }
@@ -41,13 +45,26 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   async reloadCanvas(canvasId) {
     try {
       const snapshot = await api.getCanvas(canvasId);
+      const canvases = await api.listCanvases();
       set((state) => {
         if (state.snapshot?.canvas.id !== canvasId) return state;
         window.localStorage.setItem(activeCanvasStorageKey, canvasId);
-        return { snapshot, error: undefined };
+        return { canvases, snapshot, error: undefined };
       });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to reload canvas" });
+    }
+  },
+
+  async switchCanvas(canvasId) {
+    set({ loading: true, error: undefined });
+    try {
+      const snapshot = await api.getCanvas(canvasId);
+      const canvases = await api.listCanvases();
+      window.localStorage.setItem(activeCanvasStorageKey, canvasId);
+      set({ canvases, snapshot, loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to switch canvas", loading: false });
     }
   },
 
@@ -56,8 +73,9 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     try {
       const canvas = await api.createCanvas("Flowux Canvas");
       const snapshot = await api.getCanvas(canvas.id);
+      const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
-      set({ snapshot, loading: false });
+      set({ canvases, snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create canvas", loading: false });
     }

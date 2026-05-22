@@ -20,7 +20,18 @@ import type { CanvasPlacement, Mrp, MrpBlock, MrpSection, MrpSectionKind } from 
 import { findPlacement, useFlowuxStore } from "../store.js";
 
 export function App() {
-  const { snapshot, loading, error, loadInitial, createNewCanvas, submitPrompt, patchPlacement, snapBack } = useFlowuxStore();
+  const {
+    snapshot,
+    canvases,
+    loading,
+    error,
+    loadInitial,
+    switchCanvas,
+    createNewCanvas,
+    submitPrompt,
+    patchPlacement,
+    snapBack
+  } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
@@ -138,6 +149,24 @@ export function App() {
           <h1>Flowux</h1>
         </div>
         <div className="topbar-actions">
+          <label className="canvas-selector">
+            <span className="hud-label">Canvas</span>
+            <select
+              value={snapshot?.canvas.id ?? ""}
+              onChange={(event) => {
+                resetView();
+                void switchCanvas(event.target.value);
+              }}
+              disabled={!canvases.length}
+              title="Switch canvas thread"
+            >
+              {canvases.map((canvas) => (
+                <option key={canvas.id} value={canvas.id}>
+                  {canvas.title} · {formatCanvasTime(canvas.updatedAt)}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="telemetry">
             <span>{snapshot?.mrps.length ?? 0} MRPs</span>
             <span>{selectedCount} checked</span>
@@ -262,6 +291,12 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function formatCanvasTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function MrpCard({
