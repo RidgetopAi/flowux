@@ -119,9 +119,7 @@ export async function snapBack(
     const currentPlacement = placementByMrpId.get(mrp.id);
     const position = previousPlacement
       ? getNextPromptPosition(previousPlacement, { layoutWidth, rowHeight, layoutLeft, layoutTop })
-      : currentPlacement
-        ? { x: currentPlacement.x, y: currentPlacement.y }
-        : getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight, layoutLeft, layoutTop });
+      : getChronologicalPosition(1, { layoutWidth, rowHeight, layoutLeft, layoutTop });
     await db
       .update(canvasPlacements)
       .set({
