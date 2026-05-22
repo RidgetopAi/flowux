@@ -478,11 +478,7 @@ export async function createPromptMrp(
     updatedAt: timestamp
   };
 
-  const selectedPlacements = await db
-    .select()
-    .from(canvasPlacements)
-    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
-  const inputMrpIds = selectedPlacements.map((item) => item.mrpId);
+  const inputMrpIds = await getPromptContextMrpIds(canvasId);
 
   const adapter = createHarnessAdapter();
   const modelRun: ModelRun = {
@@ -878,21 +874,31 @@ async function createSectionWithBlock(
 }
 
 export async function buildMessagesForPrompt(canvasId: string, prompt: string) {
-  const placements = await db
-    .select()
-    .from(canvasPlacements)
-    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
-  const selectedMrpIds = placements.map((placement) => placement.mrpId);
-  const canvasMrps = selectedMrpIds.length
-    ? await db.select().from(mrps).where(inArray(mrps.id, selectedMrpIds)).orderBy(mrps.sequence)
+  const contextMrpIds = await getPromptContextMrpIds(canvasId);
+  const canvasMrps = contextMrpIds.length
+    ? await db.select().from(mrps).where(inArray(mrps.id, contextMrpIds)).orderBy(mrps.sequence)
     : [];
 
   return buildContextMessages({
     mrps: canvasMrps.map(toMrp).filter((mrp) => mrp.status === "complete"),
-    selectedMrpIds,
+    selectedMrpIds: contextMrpIds,
     systemPrompt: "You are Flowux, a spatial AI workspace assistant. Preserve project reasoning and answer concisely.",
     currentPrompt: prompt
   });
+}
+
+async function getPromptContextMrpIds(canvasId: string) {
+  const nativeCompletedMrps = await db
+    .select()
+    .from(mrps)
+    .where(and(eq(mrps.canvasId, canvasId), eq(mrps.status, "complete")))
+    .orderBy(mrps.sequence);
+  const selectedPlacements = await db
+    .select()
+    .from(canvasPlacements)
+    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
+
+  return Array.from(new Set([...nativeCompletedMrps.map((mrp) => mrp.id), ...selectedPlacements.map((placement) => placement.mrpId)]));
 }
 
 function toCanvasThread(row: typeof canvasThreads.$inferSelect): CanvasThread {

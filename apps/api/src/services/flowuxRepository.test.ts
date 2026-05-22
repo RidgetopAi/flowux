@@ -15,6 +15,16 @@ describe("flowuxRepository phase 3 provenance", () => {
     const parent = await repository.createCanvas("Phase 3 Parent");
     const created = await repository.createPromptMrp(parent.id, "source prompt", { layoutWidth: 900, rowHeight: 300 });
     await repository.completePromptMrp(parent.id, created.mrp.id, { response: "source response", finishReason: "stop" });
+
+    const historyMessages = await repository.buildMessagesForPrompt(parent.id, "what did I ask before?");
+    expect(historyMessages).toContainEqual(expect.objectContaining({ role: "user", content: "source prompt", mrpId: created.mrp.id }));
+    expect(historyMessages).toContainEqual(
+      expect.objectContaining({ role: "assistant", content: "source response", mrpId: created.mrp.id })
+    );
+    const followup = await repository.createPromptMrp(parent.id, "follow up", { layoutWidth: 900, rowHeight: 300 });
+    expect(followup.modelRun.inputMrpIds).toContain(created.mrp.id);
+    await repository.failPromptMrp(parent.id, followup.mrp.id, "test cleanup");
+
     await repository.updatePlacement(parent.id, created.mrp.id, { selectedForContext: true });
 
     const child = await repository.createChildCanvasFromSelection(parent.id);
