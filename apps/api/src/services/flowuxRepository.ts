@@ -110,10 +110,18 @@ export async function snapBack(
   layoutTop = 0
 ): Promise<CanvasPlacement[]> {
   const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
+  const currentPlacements = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  const placementByMrpId = new Map(currentPlacements.map((placement) => [placement.mrpId, toPlacement(placement)]));
   const timestamp = now();
+  let previousPlacement: CanvasPlacement | undefined;
 
   for (const mrp of canvasMrps) {
-    const position = getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight, layoutLeft, layoutTop });
+    const currentPlacement = placementByMrpId.get(mrp.id);
+    const position = previousPlacement
+      ? getNextPromptPosition(previousPlacement, { layoutWidth, rowHeight, layoutLeft, layoutTop })
+      : currentPlacement
+        ? { x: currentPlacement.x, y: currentPlacement.y }
+        : getChronologicalPosition(mrp.sequence, { layoutWidth, rowHeight, layoutLeft, layoutTop });
     await db
       .update(canvasPlacements)
       .set({
@@ -122,6 +130,25 @@ export async function snapBack(
         updatedAt: timestamp
       })
       .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrp.id)));
+    previousPlacement = {
+      ...(currentPlacement ?? {
+        id: "",
+        canvasId,
+        mrpId: mrp.id,
+        isExternalReference: false,
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        collapsed: false,
+        selectedForContext: false,
+        connectionHidden: false,
+        createdAt: timestamp,
+        updatedAt: timestamp
+      }),
+      x: position.x,
+      y: position.y,
+      width: currentPlacement?.width ?? CARD_WIDTH,
+      height: currentPlacement?.height ?? CARD_HEIGHT
+    };
   }
 
   const rows = await db.select().from(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
