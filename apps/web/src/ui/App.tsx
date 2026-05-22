@@ -96,7 +96,7 @@ export function App() {
     if (event.button !== 0 || event.target !== event.currentTarget) return;
     if (focusedMrpId) {
       setFocusedMrpId(undefined);
-      snapBackToVisibleWidth();
+      window.requestAnimationFrame(() => snapBackToVisibleWidth());
       return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -133,27 +133,10 @@ export function App() {
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
-    const { layoutWidth, layoutLeft, layoutTop, rowHeight, workspaceWidth, workspaceHeight } = getVisibleLayout();
+    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     setPrompt("");
     void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, ({ placement }) => {
       setFocusedMrpId(placement.mrpId);
-      centerViewportOnPlacement(placement, workspaceWidth, workspaceHeight, { minZoom: 1.08 });
-    });
-  };
-
-  const centerViewportOnPlacement = (
-    placement: CanvasPlacement,
-    workspaceWidth: number,
-    workspaceHeight: number,
-    options: { minZoom?: number } = {}
-  ) => {
-    setViewport((current) => {
-      const nextZoom = clampZoom(Math.max(current.zoom, options.minZoom ?? current.zoom));
-      return {
-        zoom: nextZoom,
-        x: workspaceWidth / 2 - (placement.x + placement.width / 2) * nextZoom,
-        y: workspaceHeight / 2 - (placement.y + Math.min(placement.height, 300) / 2) * nextZoom
-      };
     });
   };
 
@@ -263,6 +246,8 @@ export function App() {
                 blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
                 zoom={viewport.zoom}
                 focused={focusedMrpId === mrp.id}
+                focusFrame={focusedMrpId === mrp.id ? getFocusFrame(workspaceRef.current, viewport) : undefined}
+                onFocus={() => setFocusedMrpId(mrp.id)}
                 onPatch={patchPlacement}
               />
             );
@@ -317,6 +302,26 @@ function formatCanvasTime(value: string) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+interface FocusFrame {
+  x: number;
+  y: number;
+  width: number;
+  scale: number;
+}
+
+function getFocusFrame(workspace: HTMLElement | null, viewport: { x: number; y: number; zoom: number }): FocusFrame | undefined {
+  if (!workspace) return undefined;
+  const screenWidth = Math.min(820, Math.max(520, workspace.clientWidth - 220));
+  const centerX = (workspace.clientWidth / 2 - viewport.x) / viewport.zoom;
+  const topY = (workspace.clientHeight * 0.12 - viewport.y) / viewport.zoom;
+  return {
+    x: centerX - screenWidth / 2,
+    y: topY,
+    width: screenWidth,
+    scale: 1 / viewport.zoom
+  };
+}
+
 function MrpCard({
   mrp,
   placement,
@@ -325,6 +330,8 @@ function MrpCard({
   blocks,
   zoom,
   focused,
+  focusFrame,
+  onFocus,
   onPatch
 }: {
   mrp: Mrp;
@@ -334,6 +341,8 @@ function MrpCard({
   blocks: MrpBlock[];
   zoom: number;
   focused: boolean;
+  focusFrame?: FocusFrame;
+  onFocus: () => void;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
   const [position, setPosition] = useState({ x: placement.x, y: placement.y });
@@ -386,9 +395,19 @@ function MrpCard({
         placement.isExternalReference ? "is-external" : ""
       } ${focused ? "is-focused" : ""}`}
       style={{
-        left: position.x,
-        top: position.y,
-        width: placement.width,
+        ...(focusFrame
+          ? {
+              left: focusFrame.x,
+              top: focusFrame.y,
+              width: focusFrame.width,
+              transform: `scale(${focusFrame.scale})`
+            }
+          : {
+              left: position.x,
+              top: position.y,
+              width: placement.width,
+              transform: undefined
+            }),
         minHeight: placement.collapsed ? 124 : placement.height
       }}
       onPointerDown={beginDrag}
@@ -415,7 +434,10 @@ function MrpCard({
         <button
           data-no-card-drag
           className="icon-button"
-          onClick={() => void onPatch(mrp.id, { collapsed: !placement.collapsed })}
+          onClick={() => {
+            if (placement.collapsed) onFocus();
+            void onPatch(mrp.id, { collapsed: !placement.collapsed });
+          }}
           title={placement.collapsed ? "Expand card" : "Collapse card"}
         >
           {placement.collapsed ? <ChevronsDown size={16} /> : <ChevronsUp size={16} />}
@@ -564,7 +586,7 @@ function getPlacementBounds(placements: CanvasPlacement[]) {
 function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
   if (!workspace) return 600;
   const heights = Array.from(workspace.querySelectorAll<HTMLElement>(".mrp-card")).map((card) => {
-    const focusedScale = card.classList.contains("is-focused") ? 1.14 : 1;
+    const focusedScale = card.classList.contains("is-focused") ? 1 / zoom : 1;
     return card.getBoundingClientRect().height / zoom / focusedScale;
   });
   const maxHeight = heights.length ? Math.max(...heights) : 520;
