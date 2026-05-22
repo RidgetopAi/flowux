@@ -3,6 +3,8 @@ import {
   ChevronsDown,
   ChevronsUp,
   Circle,
+  Eye,
+  EyeOff,
   GitBranch,
   Loader2,
   Maximize2,
@@ -273,7 +275,7 @@ export function App() {
               const a = findPlacement(snapshot, previous);
               const b = findPlacement(snapshot, mrp);
               if (!a || !b || a.connectionHidden || b.connectionHidden) return null;
-              return <Connection key={`${previous.id}-${mrp.id}`} from={a} to={b} />;
+              return <Connection key={`${previous.id}-${mrp.id}`} from={a} to={b} external={a.isExternalReference || b.isExternalReference} />;
             })}
         </div>
 
@@ -494,8 +496,24 @@ function MrpCard({
       )}
 
       <footer>
-        <GitBranch size={13} />
-        <span>{placement.isExternalReference ? "external reference" : "thread native"}</span>
+        <span className="mrp-provenance">
+          <GitBranch size={13} />
+          {placement.isExternalReference ? (
+            <span title={placement.originCanvasId ? `Source canvas ${placement.originCanvasId}` : "External reference"}>
+              external source {placement.originCanvasId ? shortId(placement.originCanvasId) : ""}
+            </span>
+          ) : (
+            <span>thread native</span>
+          )}
+        </span>
+        <button
+          data-no-card-drag
+          className="connection-toggle"
+          onClick={() => void onPatch(mrp.id, { connectionHidden: !placement.connectionHidden })}
+          title={placement.connectionHidden ? "Show connection lines" : "Hide connection lines"}
+        >
+          {placement.connectionHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+        </button>
       </footer>
     </article>
   );
@@ -606,7 +624,7 @@ function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
   return Math.ceil(maxHeight + 8);
 }
 
-function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }) {
+function Connection({ from, to, external }: { from: CanvasPlacement; to: CanvasPlacement; external?: boolean }) {
   const x1 = from.x + from.width;
   const y1 = from.y + 80;
   const x2 = to.x;
@@ -617,7 +635,7 @@ function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }
   const height = Math.abs(y2 - y1) || 1;
 
   return (
-    <svg className="connection" style={{ left, top, width, height }} viewBox={`0 0 ${width} ${height}`}>
+    <svg className={`connection ${external ? "is-external" : ""}`} style={{ left, top, width, height }} viewBox={`0 0 ${width} ${height}`}>
       <line
         x1={x1 < x2 ? 0 : width}
         y1={y1 < y2 ? 0 : height}
@@ -626,4 +644,8 @@ function Connection({ from, to }: { from: CanvasPlacement; to: CanvasPlacement }
       />
     </svg>
   );
+}
+
+function shortId(value: string) {
+  return value.slice(0, 8);
 }

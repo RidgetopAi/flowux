@@ -422,6 +422,40 @@ select { font: inherit; }
   color: var(--hud-muted);
   font: 10px/1 var(--hud-mono);
   text-transform: uppercase;
+  justify-content: space-between;
+}
+
+.mrp-provenance {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mrp-provenance span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-toggle {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: var(--hud-radius-pill);
+  background: transparent;
+  color: var(--hud-muted);
+  padding: 0;
+}
+
+.connection-toggle:hover {
+  border-color: var(--hud-line);
+  color: var(--hud-ink);
+  background: rgba(255, 255, 255, .04);
 }
 
 .status {
@@ -442,6 +476,11 @@ select { font: inherit; }
   stroke: rgba(168, 255, 241, .28);
   stroke-width: 1.5;
   stroke-dasharray: 6 8;
+}
+
+.connection.is-external line {
+  stroke: rgba(199, 189, 255, .38);
+  stroke-dasharray: 3 7;
 }
 
 .prompt-dock {
