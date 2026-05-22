@@ -6,6 +6,7 @@ export interface HarnessTurnInput {
   canvasId: string;
   mrpId: string;
   modelRunId: string;
+  signal?: AbortSignal;
 }
 
 export interface HarnessCapabilities {

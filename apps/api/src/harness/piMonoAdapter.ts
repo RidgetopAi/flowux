@@ -6,6 +6,8 @@ import type { FlowuxConfig } from "../config.js";
 import type { HarnessAdapter, HarnessTurnInput } from "./types.js";
 
 type PiRpcEvent = Record<string, unknown> & { type?: string };
+const PI_PROMPT_ACK_TIMEOUT_MS = 30_000;
+const PI_EVENT_IDLE_TIMEOUT_MS = 120_000;
 
 export function mapPiMonoEvent(raw: PiRpcEvent): FlowuxTurnEvent[] {
   if (raw.type === "turn_start") return [{ type: "turn_started", raw }];
@@ -13,6 +15,9 @@ export function mapPiMonoEvent(raw: PiRpcEvent): FlowuxTurnEvent[] {
     const usage = extractUsage(raw);
     const finishReason = extractStopReason(raw);
     return [...(usage ? [{ type: "usage" as const, usage, raw }] : []), { type: "done", finishReason, raw }];
+  }
+  if (raw.type === "error") {
+    return [{ type: "error", message: stringValue(raw.reason) ?? "pi_mono_rpc_error", raw }];
   }
 
   if (raw.type === "message_update") {
@@ -91,11 +96,16 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
 
   async *generate(input: HarnessTurnInput): AsyncGenerator<FlowuxTurnEvent> {
     const session = new PiRpcProcess(this.config);
+    const abort = () => void session.stop();
+    input.signal?.addEventListener("abort", abort, { once: true });
     try {
+      if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
       await session.start();
+      if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
       await session.prompt(formatPiPrompt(input));
 
       for await (const raw of session.events()) {
+        if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
         for (const event of mapPiMonoEvent(raw)) {
           yield event;
           if (event.type === "done" && event.finishReason !== "toolUse") {
@@ -116,6 +126,7 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
       };
       yield { type: "done", finishReason: "error" };
     } finally {
+      input.signal?.removeEventListener("abort", abort);
       await session.stop();
     }
   }
@@ -161,8 +172,11 @@ class PiRpcProcess {
     process.stdin.write(`${JSON.stringify({ id: requestId, type: "prompt", message })}\n`);
 
     while (true) {
-      const raw = await this.nextEvent();
+      const raw = await this.nextEvent(PI_PROMPT_ACK_TIMEOUT_MS, "Pi-Mono prompt acknowledgement timed out");
       if (!raw) throw new Error(`Pi-Mono RPC ended before prompt acknowledgement. stderr: ${this.stderr.trim()}`);
+      if (raw.type === "error") {
+        throw new Error(`${stringValue(raw.reason) ?? "Pi-Mono prompt failed"}. stderr: ${this.stderr.trim()}`);
+      }
       if (raw.type !== "response" || raw.id !== requestId) {
         this.pushEvent(raw);
         continue;
@@ -176,10 +190,11 @@ class PiRpcProcess {
 
   async *events(): AsyncGenerator<PiRpcEvent> {
     while (true) {
-      const event = await this.nextEvent();
+      const event = await this.nextEvent(PI_EVENT_IDLE_TIMEOUT_MS, "Pi-Mono RPC event stream timed out");
       if (!event) return;
       if (event.type === "response") continue;
       yield event;
+      if (event.type === "error") return;
       if (event.type === "agent_end") return;
     }
   }
@@ -214,7 +229,7 @@ class PiRpcProcess {
     this.eventsQueue.push(event);
   }
 
-  private nextEvent(): Promise<PiRpcEvent | undefined> {
+  private nextEvent(timeoutMs?: number, timeoutMessage?: string): Promise<PiRpcEvent | undefined> {
     const event = this.eventsQueue.shift();
     if (event) return Promise.resolve(event);
 
@@ -223,7 +238,22 @@ class PiRpcProcess {
     }
 
     return new Promise((resolve) => {
-      this.waiters.push(resolve);
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const waiter = (event: PiRpcEvent | undefined) => {
+        if (timeout) clearTimeout(timeout);
+        resolve(event);
+      };
+      this.waiters.push(waiter);
+      if (timeoutMs) {
+        timeout = setTimeout(() => {
+          this.waiters = this.waiters.filter((item) => item !== waiter);
+          resolve({
+            type: "error",
+            reason: timeoutMessage ?? "Pi-Mono RPC timed out",
+            stderr: this.stderr.trim()
+          });
+        }, timeoutMs);
+      }
     });
   }
 

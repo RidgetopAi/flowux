@@ -95,4 +95,10 @@ describe("mapPiMonoEvent", () => {
       }).at(-1)
     ).toEqual({ type: "done", finishReason: "toolUse", raw: expect.any(Object) });
   });
+
+  test("maps RPC timeout errors into portable error events", () => {
+    expect(mapPiMonoEvent({ type: "error", reason: "Pi-Mono RPC event stream timed out" })).toEqual([
+      { type: "error", message: "Pi-Mono RPC event stream timed out", raw: expect.any(Object) }
+    ]);
+  });
 });

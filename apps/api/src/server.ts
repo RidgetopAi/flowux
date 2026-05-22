@@ -8,6 +8,7 @@ import {
   completePromptMrp,
   createCanvas,
   createPromptMrp,
+  failPromptMrp,
   getCanvasSnapshot,
   listCanvases,
   snapBack,
@@ -86,14 +87,22 @@ app.post<{
       connection: "keep-alive"
     });
 
+    const abortController = new AbortController();
+    let streamClosed = false;
+    reply.raw.on("close", () => {
+      if (!streamClosed) abortController.abort();
+    });
+
     const send = (event: string, data: unknown) => {
+      if (reply.raw.destroyed) return;
       reply.raw.write(`event: ${event}\n`);
       reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    let created: Awaited<ReturnType<typeof createPromptMrp>> | undefined;
     try {
       const messages = await buildMessagesForPrompt(request.params.canvasId, prompt);
-      const created = await createPromptMrp(request.params.canvasId, prompt, {
+      created = await createPromptMrp(request.params.canvasId, prompt, {
         layoutWidth: request.body?.layoutWidth,
         layoutLeft: request.body?.layoutLeft,
         layoutTop: request.body?.layoutTop,
@@ -110,6 +119,7 @@ app.post<{
       const toolResults: Array<Record<string, unknown>> = [];
       const rawEvents: Array<Record<string, unknown>> = [];
       let finishReason: string | undefined;
+      let errorMessage: string | undefined;
       let usage:
         | {
             promptTokens?: number;
@@ -130,7 +140,8 @@ app.post<{
         prompt,
         canvasId: request.params.canvasId,
         mrpId: created.mrp.id,
-        modelRunId: created.modelRun.id
+        modelRunId: created.modelRun.id,
+        signal: abortController.signal
       })) {
         if (event.type === "thinking_delta") {
           thinkingText += event.text;
@@ -199,6 +210,7 @@ app.post<{
         }
 
         if (event.type === "error") {
+          errorMessage = event.message;
           await appendMrpEvent(created.mrp.id, created.modelRun.id, "model_error", {
             message: event.message,
             raw: event.raw
@@ -215,6 +227,13 @@ app.post<{
         }
       }
 
+      if (errorMessage && !responseText) {
+        const failed = await failPromptMrp(request.params.canvasId, created.mrp.id, errorMessage);
+        send("complete", { mrp: failed });
+        reply.raw.end();
+        return;
+      }
+
       const complete = await completePromptMrp(request.params.canvasId, created.mrp.id, {
         response: responseText,
         thinking: thinkingText,
@@ -225,9 +244,16 @@ app.post<{
         rawEvents
       });
       send("complete", { mrp: complete });
+      streamClosed = true;
       reply.raw.end();
     } catch (error) {
-      send("error", { message: error instanceof Error ? error.message : "unknown_error" });
+      const message = error instanceof Error ? error.message : "unknown_error";
+      send("error", { message });
+      if (created) {
+        const failed = await failPromptMrp(request.params.canvasId, created.mrp.id, message);
+        send("complete", { mrp: failed });
+      }
+      streamClosed = true;
       reply.raw.end();
     }
   }

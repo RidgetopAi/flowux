@@ -424,6 +424,51 @@ export async function completePromptMrp(canvasId: string, mrpId: string, input: 
   return toMrp(mrp);
 }
 
+export async function failPromptMrp(canvasId: string, mrpId: string, message: string): Promise<Mrp> {
+  const timestamp = now();
+  const [existingMrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
+  const [existingRun] = await db.select().from(modelRuns).where(eq(modelRuns.mrpId, mrpId));
+  const timingMs = existingRun ? Math.max(0, Date.parse(timestamp) - Date.parse(existingRun.startedAt)) : undefined;
+  const summary = truncateAtWord(normalizeSnippet(message) || "Model run failed.", 180);
+
+  await db
+    .update(mrps)
+    .set({
+      title: deriveMrpTitle(existingMrp?.userPrompt ?? "", message),
+      summary,
+      status: "error",
+      updatedAt: timestamp
+    })
+    .where(and(eq(mrps.canvasId, canvasId), eq(mrps.id, mrpId)));
+
+  await db
+    .update(modelRuns)
+    .set({
+      completedAt: timestamp,
+      timingMs,
+      finishReason: "error",
+      error: message,
+      metadata: { errorMessage: message }
+    })
+    .where(eq(modelRuns.mrpId, mrpId));
+
+  await createSectionWithBlock(mrpId, "errors", "Errors", 7, "error", { message, timingMs }, {
+    collapsedByDefault: false,
+    selectable: false,
+    contextDefault: "exclude",
+    summary
+  });
+  await appendMrpEvent(mrpId, existingRun?.id, "turn_completed", {
+    finishReason: "error",
+    error: message,
+    timingMs
+  });
+
+  const [mrp] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
+  if (!mrp) throw new Error(`MRP ${mrpId} was not found after failure`);
+  return toMrp(mrp);
+}
+
 function deriveMrpTitle(prompt: string, response: string) {
   const promptSnippet = normalizeSnippet(prompt);
   const responseSnippet = normalizeSnippet(response);
