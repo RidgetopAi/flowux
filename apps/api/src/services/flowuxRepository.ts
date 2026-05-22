@@ -1,9 +1,14 @@
 import { and, desc, eq, inArray, max } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import {
   buildContextMessages,
+  type Branch,
   type CanvasPlacement,
   type CanvasSnapshot,
   type CanvasThread,
+  type ContextMode,
+  type ContextBundle,
+  type CreateChildCanvasResponse,
   type CreatePromptResponse,
   type ModelRun,
   type Mrp,
@@ -14,7 +19,17 @@ import {
   type MrpSectionKind
 } from "@flowux/shared";
 import { db } from "../db/client.js";
-import { canvasPlacements, canvasThreads, modelRuns, mrpBlocks, mrpEvents, mrps, mrpSections } from "../db/schema.js";
+import {
+  branches,
+  canvasPlacements,
+  canvasThreads,
+  contextBundles,
+  modelRuns,
+  mrpBlocks,
+  mrpEvents,
+  mrps,
+  mrpSections
+} from "../db/schema.js";
 import { createHarnessAdapter } from "../harness/index.js";
 import type { TokenUsage } from "../model/adapter.js";
 
@@ -26,7 +41,7 @@ const GAP_Y = 10;
 const MARGIN = 56;
 
 const now = () => new Date().toISOString();
-const id = () => crypto.randomUUID();
+const id = () => randomUUID();
 
 export async function listCanvases(): Promise<CanvasThread[]> {
   const rows = await db.select().from(canvasThreads).orderBy(desc(canvasThreads.updatedAt));
@@ -51,12 +66,17 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
   const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
   if (!canvas) return undefined;
 
-  const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
-  const mrpIds = canvasMrps.map((mrp) => mrp.id);
   const placements = await db
     .select()
     .from(canvasPlacements)
     .where(eq(canvasPlacements.canvasId, canvasId));
+  const placementMrpIds = placements.map((placement) => placement.mrpId);
+  const nativeMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId)).orderBy(mrps.sequence);
+  const nativeMrpIds = nativeMrps.map((mrp) => mrp.id);
+  const mrpIds = Array.from(new Set([...nativeMrpIds, ...placementMrpIds]));
+  const snapshotMrps = mrpIds.length
+    ? await db.select().from(mrps).where(inArray(mrps.id, mrpIds)).orderBy(mrps.sequence)
+    : [];
   const sections = mrpIds.length
     ? await db.select().from(mrpSections).where(inArray(mrpSections.mrpId, mrpIds)).orderBy(mrpSections.sequence)
     : [];
@@ -67,17 +87,95 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
     ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
     : [];
   const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
+  const branchRows = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.parentCanvasId, canvasId));
+  const parentBranchRows = await db
+    .select()
+    .from(branches)
+    .where(eq(branches.childCanvasId, canvasId));
+  const bundleRows = await db.select().from(contextBundles).where(eq(contextBundles.canvasId, canvasId));
 
   return {
     canvas: toCanvasThread(canvas),
-    mrps: canvasMrps.map(toMrp),
+    mrps: snapshotMrps.map(toMrp),
     placements: placements.map(toPlacement),
     modelRuns: runs.map(toModelRun),
     sections: sections.map(toMrpSection),
     blocks: blocks.map(toMrpBlock),
     events: events.map(toMrpEvent),
-    branches: []
+    branches: [...branchRows, ...parentBranchRows].map(toBranch),
+    contextBundles: bundleRows.map(toContextBundle)
   };
+}
+
+export async function createChildCanvasFromSelection(parentCanvasId: string): Promise<CreateChildCanvasResponse> {
+  const timestamp = now();
+  const [parentCanvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, parentCanvasId));
+  if (!parentCanvas) throw new Error("parent_canvas_not_found");
+
+  const selectedPlacements = await db
+    .select()
+    .from(canvasPlacements)
+    .where(and(eq(canvasPlacements.canvasId, parentCanvasId), eq(canvasPlacements.selectedForContext, true)));
+  if (!selectedPlacements.length) throw new Error("selected_mrps_required");
+
+  const selectedMrpIds = selectedPlacements.map((placement) => placement.mrpId);
+  const selectedMrps = await db.select().from(mrps).where(inArray(mrps.id, selectedMrpIds)).orderBy(mrps.sequence);
+  const selectedById = new Map(selectedMrps.map((mrp) => [mrp.id, mrp]));
+  const orderedMrpIds = selectedMrpIds
+    .filter((mrpId) => selectedById.has(mrpId))
+    .sort((a, b) => (selectedById.get(a)?.sequence ?? 0) - (selectedById.get(b)?.sequence ?? 0));
+  if (!orderedMrpIds.length) throw new Error("selected_mrps_not_found");
+
+  const branchId = id();
+  const childCanvas: CanvasThread = {
+    id: id(),
+    title: `${parentCanvas.title} Branch`,
+    status: "temporary",
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: new Date(Date.now() + 30 * DAY_MS).toISOString(),
+    parentCanvasId,
+    parentBranchId: branchId,
+    summary: `${orderedMrpIds.length} source MRP${orderedMrpIds.length === 1 ? "" : "s"}`
+  };
+  const branch: Branch = {
+    id: branchId,
+    parentCanvasId,
+    childCanvasId: childCanvas.id,
+    sourceMrpIds: orderedMrpIds,
+    createdAt: timestamp,
+    label: childCanvas.title
+  };
+  const childPlacements: CanvasPlacement[] = orderedMrpIds.map((mrpId, index) => {
+    const sourceMrp = selectedById.get(mrpId);
+    const position = getChronologicalPosition(index + 1, {});
+    return {
+      id: id(),
+      canvasId: childCanvas.id,
+      mrpId,
+      originCanvasId: sourceMrp?.canvasId ?? parentCanvasId,
+      isExternalReference: true,
+      x: position.x,
+      y: position.y,
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+      collapsed: false,
+      selectedForContext: true,
+      connectionHidden: false,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+  });
+
+  await db.insert(canvasThreads).values(childCanvas);
+  await db.insert(branches).values(branch);
+  await db.insert(canvasPlacements).values(childPlacements);
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, parentCanvasId));
+
+  return { canvas: childCanvas, branch, placements: childPlacements };
 }
 
 export async function updatePlacement(
@@ -587,15 +685,18 @@ async function createSectionWithBlock(
 }
 
 export async function buildMessagesForPrompt(canvasId: string, prompt: string) {
-  const canvasMrps = await db.select().from(mrps).where(eq(mrps.canvasId, canvasId));
   const placements = await db
     .select()
     .from(canvasPlacements)
     .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.selectedForContext, true)));
+  const selectedMrpIds = placements.map((placement) => placement.mrpId);
+  const canvasMrps = selectedMrpIds.length
+    ? await db.select().from(mrps).where(inArray(mrps.id, selectedMrpIds)).orderBy(mrps.sequence)
+    : [];
 
   return buildContextMessages({
     mrps: canvasMrps.map(toMrp).filter((mrp) => mrp.status === "complete"),
-    selectedMrpIds: placements.map((placement) => placement.mrpId),
+    selectedMrpIds,
     systemPrompt: "You are Flowux, a spatial AI workspace assistant. Preserve project reasoning and answer concisely.",
     currentPrompt: prompt
   });
@@ -649,6 +750,29 @@ function toModelRun(row: typeof modelRuns.$inferSelect): ModelRun {
     startedAt: row.startedAt,
     ...(row.completedAt ? { completedAt: row.completedAt } : {}),
     ...(row.error ? { error: row.error } : {})
+  };
+}
+
+function toBranch(row: typeof branches.$inferSelect): Branch {
+  return {
+    id: row.id,
+    parentCanvasId: row.parentCanvasId,
+    childCanvasId: row.childCanvasId,
+    sourceMrpIds: row.sourceMrpIds,
+    createdAt: row.createdAt,
+    ...(row.label ? { label: row.label } : {})
+  };
+}
+
+function toContextBundle(row: typeof contextBundles.$inferSelect): ContextBundle {
+  return {
+    id: row.id,
+    canvasId: row.canvasId,
+    ...(row.name ? { name: row.name } : {}),
+    selectedMrpIds: row.selectedMrpIds,
+    modeByMrpId: row.modeByMrpId as Record<string, ContextMode>,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
   };
 }
 

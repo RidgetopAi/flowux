@@ -28,6 +28,7 @@ export function App() {
     loadInitial,
     switchCanvas,
     createNewCanvas,
+    createChildCanvasFromSelection,
     submitPrompt,
     patchPlacement,
     snapBack
@@ -181,6 +182,18 @@ export function App() {
           >
             <Plus size={15} />
             New canvas
+          </button>
+          <button
+            className="hud-button"
+            onClick={() => {
+              resetView();
+              void createChildCanvasFromSelection();
+            }}
+            disabled={selectedCount === 0}
+            title="Create a child canvas from checked MRPs"
+          >
+            <GitBranch size={15} />
+            Branch
           </button>
           <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
             <RotateCcw size={15} />

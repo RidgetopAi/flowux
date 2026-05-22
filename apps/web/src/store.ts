@@ -13,6 +13,7 @@ interface FlowuxState {
   reloadCanvas: (canvasId: string) => Promise<void>;
   switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: () => Promise<void>;
+  createChildCanvasFromSelection: () => Promise<void>;
   submitPrompt: (
     prompt: string,
     layout?: api.LayoutRequest,
@@ -78,6 +79,21 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       set({ canvases, snapshot, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to create canvas", loading: false });
+    }
+  },
+
+  async createChildCanvasFromSelection() {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ loading: true, error: undefined });
+    try {
+      const child = await api.createChildCanvas(canvasId);
+      const snapshot = await api.getCanvas(child.canvas.id);
+      const canvases = await api.listCanvases();
+      window.localStorage.setItem(activeCanvasStorageKey, child.canvas.id);
+      set({ canvases, snapshot, loading: false });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to create child canvas", loading: false });
     }
   },
 

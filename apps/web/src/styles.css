@@ -84,6 +84,11 @@ select { font: inherit; }
   text-transform: uppercase;
 }
 
+.hud-button:disabled, .icon-button:disabled, .check-circle:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
 .icon-button, .check-circle {
   width: 38px;
   padding: 0;

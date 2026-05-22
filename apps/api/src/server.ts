@@ -7,6 +7,7 @@ import {
   buildMessagesForPrompt,
   completePromptMrp,
   createCanvas,
+  createChildCanvasFromSelection,
   createPromptMrp,
   failPromptMrp,
   getCanvasSnapshot,
@@ -39,6 +40,19 @@ app.get("/api/canvases", async () => listCanvases());
 
 app.post<{ Body: { title?: string } }>("/api/canvases", async (request) => {
   return createCanvas(request.body?.title);
+});
+
+app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/branches", async (request, reply) => {
+  try {
+    return await createChildCanvasFromSelection(request.params.canvasId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "branch_create_failed";
+    if (message === "parent_canvas_not_found") return reply.code(404).send({ error: message });
+    if (message === "selected_mrps_required" || message === "selected_mrps_not_found") {
+      return reply.code(400).send({ error: message });
+    }
+    throw error;
+  }
 });
 
 app.get<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (request, reply) => {

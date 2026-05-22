@@ -211,6 +211,13 @@ export interface CanvasSnapshot {
   blocks: MrpBlock[];
   events: MrpEvent[];
   branches: Branch[];
+  contextBundles: ContextBundle[];
+}
+
+export interface CreateChildCanvasResponse {
+  canvas: CanvasThread;
+  branch: Branch;
+  placements: CanvasPlacement[];
 }
 
 export interface CreatePromptRequest {

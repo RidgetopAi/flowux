@@ -1,4 +1,4 @@
-import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreatePromptResponse } from "@flowux/shared";
+import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreateChildCanvasResponse, CreatePromptResponse } from "@flowux/shared";
 
 export async function listCanvases(): Promise<CanvasThread[]> {
   return fetchJson("/api/canvases");
@@ -14,6 +14,13 @@ export async function createCanvas(title: string): Promise<CanvasThread> {
 
 export async function getCanvas(canvasId: string): Promise<CanvasSnapshot> {
   return fetchJson(`/api/canvases/${canvasId}`);
+}
+
+export async function createChildCanvas(canvasId: string): Promise<CreateChildCanvasResponse> {
+  return fetchJson(`/api/canvases/${canvasId}/branches`, {
+    method: "POST",
+    headers: { "content-type": "application/json" }
+  });
 }
 
 export async function updatePlacement(
