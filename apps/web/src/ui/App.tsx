@@ -3,6 +3,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   Circle,
+  CornerUpLeft,
   Eye,
   EyeOff,
   GitBranch,
@@ -50,6 +51,7 @@ export function App() {
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
   const [importCanvasId, setImportCanvasId] = useState("");
   const [contextBundleId, setContextBundleId] = useState("");
+  const [childCanvasId, setChildCanvasId] = useState("");
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
   const workspaceRef = useRef<HTMLElement>(null);
 
@@ -65,6 +67,18 @@ export function App() {
     () => canvases.filter((canvas) => canvas.id !== snapshot?.canvas.id),
     [canvases, snapshot?.canvas.id]
   );
+  const parentCanvas = useMemo(
+    () => canvases.find((canvas) => canvas.id === snapshot?.canvas.parentCanvasId),
+    [canvases, snapshot?.canvas.parentCanvasId]
+  );
+  const childCanvases = useMemo(() => {
+    const childIds = new Set(
+      (snapshot?.branches ?? [])
+        .filter((branch) => branch.parentCanvasId === snapshot?.canvas.id)
+        .map((branch) => branch.childCanvasId)
+    );
+    return canvases.filter((canvas) => childIds.has(canvas.id));
+  }, [canvases, snapshot?.branches, snapshot?.canvas.id]);
 
   useEffect(() => {
     if (!importableCanvases.length) {
@@ -86,6 +100,16 @@ export function App() {
       setContextBundleId(bundles[0]?.id ?? "");
     }
   }, [contextBundleId, snapshot?.contextBundles]);
+
+  useEffect(() => {
+    if (!childCanvases.length) {
+      setChildCanvasId("");
+      return;
+    }
+    if (!childCanvasId || !childCanvases.some((canvas) => canvas.id === childCanvasId)) {
+      setChildCanvasId(childCanvases[0]?.id ?? "");
+    }
+  }, [childCanvasId, childCanvases]);
 
   const zoomBy = (factor: number) => {
     setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
@@ -210,6 +234,11 @@ export function App() {
     resetView();
     void deleteCurrentCanvas();
   };
+  const openCanvas = (canvasId: string) => {
+    if (!canvasId) return;
+    resetView();
+    void switchCanvas(canvasId);
+  };
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
@@ -282,6 +311,29 @@ export function App() {
           >
             <GitBranch size={15} />
             Branch
+          </button>
+          <button className="hud-button" onClick={() => parentCanvas && openCanvas(parentCanvas.id)} disabled={!parentCanvas} title="Open parent canvas">
+            <CornerUpLeft size={15} />
+            Parent
+          </button>
+          <label className="canvas-selector import-selector">
+            <span className="hud-label">Child</span>
+            <select
+              value={childCanvasId}
+              onChange={(event) => setChildCanvasId(event.target.value)}
+              disabled={!childCanvases.length}
+              title="Child canvases branched from this canvas"
+            >
+              {childCanvases.map((canvas) => (
+                <option key={canvas.id} value={canvas.id}>
+                  {canvas.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="hud-button" onClick={() => openCanvas(childCanvasId)} disabled={!childCanvasId} title="Open selected child canvas">
+            <GitBranch size={15} />
+            Open child
           </button>
           <button className="hud-button" onClick={saveContextSet} disabled={selectedCount === 0} title="Save checked MRPs as a context set">
             <Save size={15} />
