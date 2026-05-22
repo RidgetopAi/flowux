@@ -66,6 +66,7 @@ describe("mapPiMonoEvent", () => {
       mapPiMonoEvent({
         type: "turn_end",
         message: {
+          stopReason: "stop",
           usage: {
             input: 10,
             output: 5,
@@ -79,7 +80,19 @@ describe("mapPiMonoEvent", () => {
         usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
         raw: expect.any(Object)
       },
-      { type: "done", raw: expect.any(Object) }
+      { type: "done", finishReason: "stop", raw: expect.any(Object) }
     ]);
+  });
+
+  test("marks tool-use turn end as non-final so the RPC stream can continue", () => {
+    expect(
+      mapPiMonoEvent({
+        type: "turn_end",
+        message: {
+          stopReason: "toolUse",
+          usage: { input: 7, output: 3, totalTokens: 10 }
+        }
+      }).at(-1)
+    ).toEqual({ type: "done", finishReason: "toolUse", raw: expect.any(Object) });
   });
 });

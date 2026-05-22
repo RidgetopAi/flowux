@@ -50,7 +50,7 @@ const stream = await fetch(`${baseUrl}/api/canvases/${canvas.id}/prompts/stream`
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
-    prompt: "Reply with one short sentence saying Pi harness is connected.",
+    prompt: process.env.FLOWUX_TRACE_PROMPT ?? "Reply with one short sentence saying Pi harness is connected.",
     layoutWidth: 1260,
     rowHeight: 430
   })

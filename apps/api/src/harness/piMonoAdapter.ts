@@ -11,7 +11,8 @@ export function mapPiMonoEvent(raw: PiRpcEvent): FlowuxTurnEvent[] {
   if (raw.type === "turn_start") return [{ type: "turn_started", raw }];
   if (raw.type === "turn_end") {
     const usage = extractUsage(raw);
-    return [...(usage ? [{ type: "usage" as const, usage, raw }] : []), { type: "done", raw }];
+    const finishReason = extractStopReason(raw);
+    return [...(usage ? [{ type: "usage" as const, usage, raw }] : []), { type: "done", finishReason, raw }];
   }
 
   if (raw.type === "message_update") {
@@ -179,7 +180,7 @@ class PiRpcProcess {
       if (!event) return;
       if (event.type === "response") continue;
       yield event;
-      if (event.type === "turn_end") return;
+      if (event.type === "agent_end") return;
     }
   }
 
@@ -310,6 +311,11 @@ function extractUsage(event: Record<string, unknown>) {
     completionTokens: numberValue(usage.output),
     totalTokens: numberValue(usage.totalTokens)
   };
+}
+
+function extractStopReason(event: Record<string, unknown>): string | undefined {
+  const message = event.message as Record<string, unknown> | undefined;
+  return stringValue(message?.stopReason);
 }
 
 function numberValue(value: unknown): number | undefined {
