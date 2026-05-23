@@ -272,7 +272,10 @@ class PiRpcProcess {
 
 function formatPiPrompt(input: HarnessTurnInput): string {
   const contextualMessages = input.messages.filter((message) => message.role !== "system");
-  if (contextualMessages.length <= 1) return input.prompt;
+  const runtimeContext = formatRuntimeContext(input);
+  if (contextualMessages.length <= 1) {
+    return [runtimeContext, input.prompt].filter(Boolean).join("\n\n");
+  }
 
   const context = contextualMessages
     .slice(0, -1)
@@ -285,10 +288,29 @@ function formatPiPrompt(input: HarnessTurnInput): string {
 
   return [
     "Flowux selected MRP context follows. Use it as working context, but keep your normal Pi-Mono project instructions and tools.",
+    runtimeContext,
     context,
     "Current user prompt:",
     input.prompt
   ].join("\n\n");
+}
+
+function formatRuntimeContext(input: HarnessTurnInput): string | undefined {
+  const context = input.executionContext;
+  if (!context) return undefined;
+
+  return [
+    "Flowux runtime context:",
+    `- Harness: ${context.harness}`,
+    context.hostLabel ? `- Tool host: ${context.hostLabel}` : undefined,
+    context.workspaceLabel ? `- Tool workspace: ${context.workspaceLabel}` : undefined,
+    context.filesystemScope ? `- Filesystem scope: ${context.filesystemScope}` : undefined,
+    context.toolCapabilities.length ? `- Tool capabilities: ${context.toolCapabilities.join(", ")}` : undefined,
+    context.warning ? `- Boundary: ${context.warning}` : undefined,
+    "Use this runtime context when reasoning about filesystem paths and tool access."
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function shellQuote(value: string): string {

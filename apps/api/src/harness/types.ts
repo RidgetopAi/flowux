@@ -1,4 +1,4 @@
-import type { ContextMessage, FlowuxTurnEvent, HarnessMode, ModelProvider } from "@flowux/shared";
+import type { ContextMessage, ExecutionContext, FlowuxTurnEvent, HarnessMode, ModelProvider } from "@flowux/shared";
 
 export interface HarnessTurnInput {
   messages: ContextMessage[];
@@ -6,6 +6,7 @@ export interface HarnessTurnInput {
   canvasId: string;
   mrpId: string;
   modelRunId: string;
+  executionContext?: ExecutionContext;
   signal?: AbortSignal;
 }
 

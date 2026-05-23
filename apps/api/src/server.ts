@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { loadConfig } from "./config.js";
 import "./db/client.js";
+import { getExecutionContext } from "./executionContext.js";
 import {
   appendMrpEvent,
   applyContextBundle,
@@ -49,17 +50,7 @@ app.get("/api/health", async () => ({
   modelMaxTokens: config.modelMaxTokens,
   piMonoRemoteHost: config.piMonoRemoteHost,
   piMonoRemoteCwd: config.piMonoRemoteCwd,
-  executionContext: {
-    harness: config.harnessMode,
-    hostLabel: getExecutionHostLabel(),
-    workspaceLabel: getExecutionWorkspaceLabel(),
-    filesystemScope: getExecutionWorkspaceLabel(),
-    toolCapabilities: getToolCapabilities(),
-    warning:
-      config.harnessMode === "pi_mono"
-        ? "Tools run on the configured remote host, not necessarily on the Flowux UI machine."
-        : undefined
-  }
+  executionContext: getExecutionContext(config)
 }));
 
 app.get("/api/canvases", async () => listCanvases());
@@ -292,6 +283,7 @@ app.post<{
         canvasId: request.params.canvasId,
         mrpId: created.mrp.id,
         modelRunId: created.modelRun.id,
+        executionContext: getExecutionContext(config),
         signal: abortController.signal
       })) {
         if (event.type === "thinking_delta") {
@@ -416,20 +408,3 @@ app.post<{
 );
 
 await app.listen({ port: config.port, host: "0.0.0.0" });
-
-function getExecutionHostLabel() {
-  if (config.harnessMode === "pi_mono") return config.piMonoRemoteHost;
-  if (config.harnessMode === "direct_model") return "local api";
-  return config.harnessMode;
-}
-
-function getExecutionWorkspaceLabel() {
-  if (config.harnessMode === "pi_mono") return config.piMonoRemoteCwd;
-  return process.cwd();
-}
-
-function getToolCapabilities() {
-  if (config.harnessMode === "pi_mono") return ["filesystem", "shell", "tools"];
-  if (config.harnessMode === "direct_model") return config.modelMode === "llama_cpp" ? ["model"] : ["mock"];
-  return ["tools"];
-}
