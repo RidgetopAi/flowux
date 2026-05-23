@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Save,
   Scan,
+  Search,
   Sparkles,
   Square,
   Trash2,
@@ -33,12 +34,14 @@ export function App() {
     canvases,
     loading,
     promptRunning,
+    searchResults,
     executionContext,
     error,
     loadInitial,
     switchCanvas,
     createNewCanvas,
     renameCurrentCanvas,
+    saveCurrentCanvas,
     deleteCurrentCanvas,
     createChildCanvasFromSelection,
     importSelectedFromCanvas,
@@ -47,11 +50,15 @@ export function App() {
     deleteContextBundle,
     submitPrompt,
     cancelActivePrompt,
+    searchWorkspace,
+    loadMrpDetails,
     patchPlacement,
     setAllContextSelection,
     snapBack
   } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [pendingFocusMrpId, setPendingFocusMrpId] = useState<string>();
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
   const [focusedFrame, setFocusedFrame] = useState<FocusFrame>();
@@ -64,6 +71,13 @@ export function App() {
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void searchWorkspace(searchQuery);
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery, searchWorkspace]);
 
   useEffect(() => {
     if (!focusedMrpId) return;
@@ -128,6 +142,12 @@ export function App() {
       setChildCanvasId(childCanvases[0]?.id ?? "");
     }
   }, [childCanvasId, childCanvases]);
+
+  useEffect(() => {
+    if (!pendingFocusMrpId || !snapshot?.placements.some((placement) => placement.mrpId === pendingFocusMrpId)) return;
+    focusMrp(pendingFocusMrpId);
+    setPendingFocusMrpId(undefined);
+  }, [pendingFocusMrpId, snapshot?.canvas.id, snapshot?.placements]);
 
   const zoomBy = (factor: number) => {
     setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
@@ -209,6 +229,7 @@ export function App() {
     void snapBack({ layoutWidth, layoutLeft, layoutTop, rowHeight });
   };
   const focusMrp = (mrpId: string) => {
+    void loadMrpDetails(mrpId);
     setFocusedMrpId(mrpId);
     setFocusedFrame(getFocusFrame(workspaceRef.current, viewport));
   };
@@ -257,6 +278,12 @@ export function App() {
     resetView();
     void switchCanvas(canvasId);
   };
+  const openSearchResult = (canvasId: string, mrpId?: string) => {
+    resetView();
+    setSearchQuery("");
+    if (mrpId) setPendingFocusMrpId(mrpId);
+    void switchCanvas(canvasId);
+  };
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value) return;
@@ -275,6 +302,29 @@ export function App() {
           <h1>Flowux</h1>
         </div>
         <div className="topbar-actions">
+          <label className="search-box">
+            <Search size={15} />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search canvases and MRPs"
+            />
+            {searchResults.length > 0 && (
+              <div className="search-results hud-panel">
+                {searchResults.map((result) => (
+                  <button
+                    key={`${result.kind}-${result.id}`}
+                    type="button"
+                    onClick={() => openSearchResult(result.canvasId, result.mrpId)}
+                  >
+                    <span>{result.kind}</span>
+                    <strong>{result.title}</strong>
+                    <small>{result.snippet}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </label>
           <label className="canvas-selector">
             <span className="hud-label">Canvas</span>
             <select
@@ -337,6 +387,10 @@ export function App() {
           <button className="hud-button" onClick={renameCanvas} disabled={!snapshot} title="Rename current canvas">
             <Pencil size={15} />
             Rename
+          </button>
+          <button className="hud-button" onClick={() => void saveCurrentCanvas()} disabled={!snapshot || snapshot.canvas.status === "saved"} title="Save canvas permanently">
+            <Save size={15} />
+            Save canvas
           </button>
           <button className="hud-button" onClick={deleteCanvas} disabled={!snapshot} title="Delete current canvas">
             <Trash2 size={15} />
@@ -493,9 +547,10 @@ export function App() {
                 zoom={viewport.zoom}
                 focused={focusedMrpId === mrp.id}
                 focusFrame={focusedMrpId === mrp.id ? focusedFrame : undefined}
-                onFocus={() => focusMrp(mrp.id)}
-                onPatch={patchPlacement}
-              />
+            onFocus={() => focusMrp(mrp.id)}
+            onLoadDetails={() => void loadMrpDetails(mrp.id)}
+            onPatch={patchPlacement}
+          />
             );
           })}
 
@@ -597,6 +652,7 @@ function MrpCard({
   focused,
   focusFrame,
   onFocus,
+  onLoadDetails,
   onPatch
 }: {
   mrp: Mrp;
@@ -608,6 +664,7 @@ function MrpCard({
   focused: boolean;
   focusFrame?: FocusFrame;
   onFocus: () => void;
+  onLoadDetails: () => void;
   onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
 }) {
   const [position, setPosition] = useState({ x: placement.x, y: placement.y });
@@ -700,7 +757,10 @@ function MrpCard({
           data-no-card-drag
           className="icon-button"
           onClick={() => {
-            if (placement.collapsed) onFocus();
+            if (placement.collapsed) {
+              onLoadDetails();
+              onFocus();
+            }
             void onPatch(mrp.id, { collapsed: !placement.collapsed });
           }}
           title={placement.collapsed ? "Expand card" : "Collapse card"}

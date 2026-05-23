@@ -235,6 +235,31 @@ export interface CanvasSnapshot {
   contextBundles: ContextBundle[];
 }
 
+export interface MrpDetails {
+  mrpId: string;
+  modelRuns: ModelRun[];
+  sections: MrpSection[];
+  blocks: MrpBlock[];
+  events: MrpEvent[];
+}
+
+export type SearchResultKind = "canvas" | "mrp" | "artifact";
+
+export interface SearchResult {
+  id: string;
+  kind: SearchResultKind;
+  canvasId: string;
+  mrpId?: string;
+  title: string;
+  snippet: string;
+  updatedAt: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: SearchResult[];
+}
+
 export interface CreateChildCanvasResponse {
   canvas: CanvasThread;
   branch: Branch;

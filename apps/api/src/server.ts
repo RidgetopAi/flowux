@@ -14,11 +14,14 @@ import {
   deleteContextBundle,
   failPromptMrp,
   getCanvasSnapshot,
+  getMrpDetails,
   importExternalMrps,
   listCanvases,
   saveContextBundleFromSelection,
+  searchWorkspace,
   snapBack,
   deleteCanvas,
+  updateCanvasStatus,
   updateCanvasTitle,
   updateCanvasSelection,
   updatePlacement
@@ -55,13 +58,22 @@ app.get("/api/health", async () => ({
 
 app.get("/api/canvases", async () => listCanvases());
 
+app.get<{ Querystring: { q?: string; limit?: string } }>("/api/search", async (request) =>
+  searchWorkspace(request.query.q ?? "", Number(request.query.limit ?? 30))
+);
+
 app.post<{ Body: { title?: string } }>("/api/canvases", async (request) => {
   return createCanvas(request.body?.title);
 });
 
-app.patch<{ Params: { canvasId: string }; Body: { title?: string } }>("/api/canvases/:canvasId", async (request, reply) => {
+app.patch<{ Params: { canvasId: string }; Body: { title?: string; status?: "temporary" | "saved" } }>(
+  "/api/canvases/:canvasId",
+  async (request, reply) => {
   try {
-    const canvas = await updateCanvasTitle(request.params.canvasId, request.body?.title ?? "");
+    const canvas =
+      request.body?.status === "saved" || request.body?.status === "temporary"
+        ? await updateCanvasStatus(request.params.canvasId, request.body.status)
+        : await updateCanvasTitle(request.params.canvasId, request.body?.title ?? "");
     if (!canvas) return reply.code(404).send({ error: "canvas_not_found" });
     return canvas;
   } catch (error) {
@@ -69,7 +81,8 @@ app.patch<{ Params: { canvasId: string }; Body: { title?: string } }>("/api/canv
     if (message === "title_required") return reply.code(400).send({ error: message });
     throw error;
   }
-});
+}
+);
 
 app.delete<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (request, reply) => {
   try {
@@ -152,10 +165,16 @@ app.delete<{ Params: { canvasId: string; bundleId: string } }>(
   }
 );
 
-app.get<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (request, reply) => {
-  const snapshot = await getCanvasSnapshot(request.params.canvasId);
+app.get<{ Params: { canvasId: string }; Querystring: { summary?: string } }>("/api/canvases/:canvasId", async (request, reply) => {
+  const snapshot = await getCanvasSnapshot(request.params.canvasId, { summaryOnly: request.query.summary === "true" });
   if (!snapshot) return reply.code(404).send({ error: "canvas_not_found" });
   return snapshot;
+});
+
+app.get<{ Params: { canvasId: string; mrpId: string } }>("/api/canvases/:canvasId/mrps/:mrpId/details", async (request, reply) => {
+  const details = await getMrpDetails(request.params.canvasId, request.params.mrpId);
+  if (!details) return reply.code(404).send({ error: "mrp_not_found" });
+  return details;
 });
 
 app.patch<{

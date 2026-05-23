@@ -14,10 +14,12 @@ import {
   type ModelRun,
   type Mrp,
   type MrpBlock,
+  type MrpDetails,
   type MrpBlockKind,
   type MrpEvent,
   type MrpSection,
-  type MrpSectionKind
+  type MrpSectionKind,
+  type SearchResponse
 } from "@flowux/shared";
 import { db } from "../db/client.js";
 import {
@@ -45,7 +47,12 @@ const MARGIN = 56;
 const now = () => new Date().toISOString();
 const id = () => randomUUID();
 
+interface SnapshotOptions {
+  summaryOnly?: boolean;
+}
+
 export async function listCanvases(): Promise<CanvasThread[]> {
+  await pruneExpiredTemporaryCanvases();
   const rows = await db.select().from(canvasThreads).orderBy(desc(canvasThreads.updatedAt));
   return rows.map(toCanvasThread);
 }
@@ -71,6 +78,21 @@ export async function updateCanvasTitle(canvasId: string, title: string): Promis
   await db
     .update(canvasThreads)
     .set({ title: trimmedTitle, updatedAt: now() })
+    .where(eq(canvasThreads.id, canvasId));
+
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  return canvas ? toCanvasThread(canvas) : undefined;
+}
+
+export async function updateCanvasStatus(canvasId: string, status: "temporary" | "saved"): Promise<CanvasThread | undefined> {
+  const timestamp = now();
+  await db
+    .update(canvasThreads)
+    .set({
+      status,
+      expiresAt: status === "temporary" ? new Date(Date.now() + 30 * DAY_MS).toISOString() : null,
+      updatedAt: timestamp
+    })
     .where(eq(canvasThreads.id, canvasId));
 
   const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
@@ -111,7 +133,16 @@ export async function deleteCanvas(canvasId: string): Promise<{ deletedCanvasId:
   return { deletedCanvasId: canvasId };
 }
 
-export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapshot | undefined> {
+async function pruneExpiredTemporaryCanvases() {
+  const timestamp = now();
+  const expired = await db.select().from(canvasThreads).where(eq(canvasThreads.status, "temporary"));
+  for (const canvas of expired) {
+    if (!canvas.expiresAt || canvas.expiresAt > timestamp) continue;
+    await deleteCanvas(canvas.id);
+  }
+}
+
+export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptions = {}): Promise<CanvasSnapshot | undefined> {
   const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
   if (!canvas) return undefined;
 
@@ -129,12 +160,14 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
   const sections = mrpIds.length
     ? await db.select().from(mrpSections).where(inArray(mrpSections.mrpId, mrpIds)).orderBy(mrpSections.sequence)
     : [];
-  const blocks = mrpIds.length
-    ? await db.select().from(mrpBlocks).where(inArray(mrpBlocks.mrpId, mrpIds)).orderBy(mrpBlocks.sequence)
-    : [];
-  const events = mrpIds.length
-    ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
-    : [];
+  const blocks =
+    mrpIds.length && !options.summaryOnly
+      ? await db.select().from(mrpBlocks).where(inArray(mrpBlocks.mrpId, mrpIds)).orderBy(mrpBlocks.sequence)
+      : [];
+  const events =
+    mrpIds.length && !options.summaryOnly
+      ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
+      : [];
   const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
   const branchRows = await db
     .select()
@@ -156,6 +189,94 @@ export async function getCanvasSnapshot(canvasId: string): Promise<CanvasSnapsho
     events: events.map(toMrpEvent),
     branches: [...branchRows, ...parentBranchRows].map(toBranch),
     contextBundles: bundleRows.map(toContextBundle)
+  };
+}
+
+export async function getMrpDetails(canvasId: string, mrpId: string): Promise<MrpDetails | undefined> {
+  const [placement] = await db
+    .select()
+    .from(canvasPlacements)
+    .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrpId)));
+  if (!placement) return undefined;
+
+  const runs = await db.select().from(modelRuns).where(eq(modelRuns.mrpId, mrpId));
+  const sections = await db.select().from(mrpSections).where(eq(mrpSections.mrpId, mrpId)).orderBy(mrpSections.sequence);
+  const blocks = await db.select().from(mrpBlocks).where(eq(mrpBlocks.mrpId, mrpId)).orderBy(mrpBlocks.sequence);
+  const events = await db.select().from(mrpEvents).where(eq(mrpEvents.mrpId, mrpId)).orderBy(mrpEvents.sequence);
+
+  return {
+    mrpId,
+    modelRuns: runs.map(toModelRun),
+    sections: sections.map(toMrpSection),
+    blocks: blocks.map(toMrpBlock),
+    events: events.map(toMrpEvent)
+  };
+}
+
+export async function searchWorkspace(query: string, limit = 30): Promise<SearchResponse> {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return { query: "", results: [] };
+
+  const canvasRows = await db.select().from(canvasThreads).orderBy(desc(canvasThreads.updatedAt));
+  const mrpRows = await db.select().from(mrps).orderBy(desc(mrps.updatedAt));
+  const artifactRows = await db.select().from(artifacts).orderBy(desc(artifacts.createdAt));
+  const mrpById = new Map(mrpRows.map((mrp) => [mrp.id, mrp]));
+
+  const results = [
+    ...canvasRows.flatMap((canvas) => {
+      const haystack = [canvas.title, canvas.summary, canvas.status].filter(Boolean).join("\n");
+      return matchesQuery(haystack, normalized)
+        ? [
+            {
+              id: canvas.id,
+              kind: "canvas" as const,
+              canvasId: canvas.id,
+              title: canvas.title,
+              snippet: makeSnippet(haystack, normalized),
+              updatedAt: canvas.updatedAt
+            }
+          ]
+        : [];
+    }),
+    ...mrpRows.flatMap((mrp) => {
+      const haystack = [mrp.title, mrp.summary, mrp.userPrompt, mrp.assistantResponse].filter(Boolean).join("\n");
+      return matchesQuery(haystack, normalized)
+        ? [
+            {
+              id: mrp.id,
+              kind: "mrp" as const,
+              canvasId: mrp.canvasId,
+              mrpId: mrp.id,
+              title: mrp.title || `MRP ${mrp.sequence}`,
+              snippet: makeSnippet(haystack, normalized),
+              updatedAt: mrp.updatedAt
+            }
+          ]
+        : [];
+    }),
+    ...artifactRows.flatMap((artifact) => {
+      const sourceMrp = mrpById.get(artifact.mrpId);
+      if (!sourceMrp) return [];
+      const haystack = [artifact.name, artifact.uri, artifact.mimeType, JSON.stringify(artifact.metadata ?? {})].filter(Boolean).join("\n");
+      return matchesQuery(haystack, normalized)
+        ? [
+            {
+              id: artifact.id,
+              kind: "artifact" as const,
+              canvasId: sourceMrp.canvasId,
+              mrpId: artifact.mrpId,
+              title: artifact.name,
+              snippet: makeSnippet(haystack, normalized),
+              updatedAt: artifact.createdAt
+            }
+          ]
+        : [];
+    })
+  ];
+
+  return {
+    query,
+    results: results.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, limit)
   };
 }
 
@@ -914,6 +1035,18 @@ function toCanvasThread(row: typeof canvasThreads.$inferSelect): CanvasThread {
     ...(row.summary ? { summary: row.summary } : {}),
     ...(row.modelConfigId ? { modelConfigId: row.modelConfigId } : {})
   };
+}
+
+function matchesQuery(value: string, normalizedQuery: string) {
+  return value.toLowerCase().includes(normalizedQuery);
+}
+
+function makeSnippet(value: string, normalizedQuery: string) {
+  const normalizedValue = value.toLowerCase();
+  const index = normalizedValue.indexOf(normalizedQuery);
+  const start = Math.max(0, index - 80);
+  const end = Math.min(value.length, (index < 0 ? 0 : index) + normalizedQuery.length + 120);
+  return truncateAtWord(value.slice(start, end).replace(/\s+/g, " ").trim(), 220);
 }
 
 function toMrp(row: typeof mrps.$inferSelect): Mrp {

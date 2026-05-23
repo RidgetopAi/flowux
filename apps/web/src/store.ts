@@ -1,4 +1,12 @@
-import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreatePromptResponse, ExecutionContext, Mrp } from "@flowux/shared";
+import type {
+  CanvasPlacement,
+  CanvasSnapshot,
+  CanvasThread,
+  CreatePromptResponse,
+  ExecutionContext,
+  Mrp,
+  SearchResult
+} from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
 
@@ -9,6 +17,7 @@ interface FlowuxState {
   canvases: CanvasThread[];
   loading: boolean;
   promptRunning: boolean;
+  searchResults: SearchResult[];
   executionContext?: ExecutionContext;
   error?: string;
   loadInitial: () => Promise<void>;
@@ -16,7 +25,10 @@ interface FlowuxState {
   switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: (title?: string) => Promise<void>;
   renameCurrentCanvas: (title: string) => Promise<void>;
+  saveCurrentCanvas: () => Promise<void>;
   deleteCurrentCanvas: () => Promise<void>;
+  searchWorkspace: (query: string) => Promise<void>;
+  loadMrpDetails: (mrpId: string) => Promise<void>;
   createChildCanvasFromSelection: () => Promise<void>;
   importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
   saveSelectedContextBundle: (name?: string) => Promise<void>;
@@ -37,6 +49,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   canvases: [],
   loading: false,
   promptRunning: false,
+  searchResults: [],
 
   async loadInitial() {
     set({ loading: true, error: undefined });
@@ -47,7 +60,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       const canvas =
         canvases.find((item) => item.id === storedCanvasId) ?? canvases[0] ?? (await api.createCanvas("Flowux MVP Canvas"));
       const nextCanvases = canvases.some((item) => item.id === canvas.id) ? canvases : [canvas, ...canvases];
-      const snapshot = await api.getCanvas(canvas.id);
+      const snapshot = await api.getCanvas(canvas.id, { summary: true });
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
       set({ canvases: nextCanvases, snapshot, executionContext: health.executionContext, loading: false });
     } catch (error) {
@@ -57,7 +70,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
 
   async reloadCanvas(canvasId) {
     try {
-      const snapshot = await api.getCanvas(canvasId);
+      const snapshot = await api.getCanvas(canvasId, { summary: true });
       const canvases = await api.listCanvases();
       set((state) => {
         if (state.snapshot?.canvas.id !== canvasId) return state;
@@ -72,7 +85,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   async switchCanvas(canvasId) {
     set({ loading: true, error: undefined });
     try {
-      const snapshot = await api.getCanvas(canvasId);
+      const snapshot = await api.getCanvas(canvasId, { summary: true });
       const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, canvasId);
       set({ canvases, snapshot, loading: false });
@@ -85,7 +98,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const canvas = await api.createCanvas(title);
-      const snapshot = await api.getCanvas(canvas.id);
+      const snapshot = await api.getCanvas(canvas.id, { summary: true });
       const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
       set({ canvases, snapshot, loading: false });
@@ -109,6 +122,21 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
+  async saveCurrentCanvas() {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ error: undefined });
+    try {
+      const canvas = await api.updateCanvasStatus(canvasId, "saved");
+      set((state) => ({
+        canvases: state.canvases.map((item) => (item.id === canvas.id ? canvas : item)),
+        snapshot: state.snapshot && state.snapshot.canvas.id === canvas.id ? { ...state.snapshot, canvas } : state.snapshot
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to save canvas" });
+    }
+  },
+
   async deleteCurrentCanvas() {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
@@ -118,7 +146,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       const canvases = await api.listCanvases();
       const nextCanvas = canvases[0] ?? (await api.createCanvas("Flowux Canvas"));
       const nextCanvases = canvases.length ? canvases : [nextCanvas];
-      const snapshot = await api.getCanvas(nextCanvas.id);
+      const snapshot = await api.getCanvas(nextCanvas.id, { summary: true });
       window.localStorage.setItem(activeCanvasStorageKey, nextCanvas.id);
       set({ canvases: nextCanvases, snapshot, loading: false });
     } catch (error) {
@@ -132,7 +160,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const child = await api.createChildCanvas(canvasId);
-      const snapshot = await api.getCanvas(child.canvas.id);
+      const snapshot = await api.getCanvas(child.canvas.id, { summary: true });
       const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, child.canvas.id);
       set({ canvases, snapshot, loading: false });
@@ -146,7 +174,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     if (!canvasId || !sourceCanvasId || canvasId === sourceCanvasId) return;
     set({ loading: true, error: undefined });
     try {
-      const sourceSnapshot = await api.getCanvas(sourceCanvasId);
+      const sourceSnapshot = await api.getCanvas(sourceCanvasId, { summary: true });
       const selectedMrpIds = sourceSnapshot.placements
         .filter((placement) => placement.selectedForContext)
         .map((placement) => placement.mrpId);
@@ -155,7 +183,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
         return;
       }
       await api.importExternalMrps(canvasId, selectedMrpIds, layout);
-      const snapshot = await api.getCanvas(canvasId);
+      const snapshot = await api.getCanvas(canvasId, { summary: true });
       const canvases = await api.listCanvases();
       set({ canvases, snapshot, loading: false });
     } catch (error) {
@@ -285,6 +313,45 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
+  async searchWorkspace(query) {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      set({ searchResults: [] });
+      return;
+    }
+    try {
+      const response = await api.searchWorkspace(trimmed);
+      set({ searchResults: response.results, error: undefined });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Search failed" });
+    }
+  },
+
+  async loadMrpDetails(mrpId) {
+    const canvasId = get().snapshot?.canvas.id;
+    const snapshot = get().snapshot;
+    if (!canvasId || !snapshot) return;
+    if (snapshot.blocks.some((block) => block.mrpId === mrpId) || snapshot.events.some((event) => event.mrpId === mrpId)) return;
+
+    try {
+      const details = await api.getMrpDetails(canvasId, mrpId);
+      set((state) => {
+        if (!state.snapshot || state.snapshot.canvas.id !== canvasId) return state;
+        return {
+          snapshot: {
+            ...state.snapshot,
+            modelRuns: mergeById(state.snapshot.modelRuns, details.modelRuns),
+            sections: mergeById(state.snapshot.sections, details.sections),
+            blocks: mergeById(state.snapshot.blocks, details.blocks),
+            events: mergeById(state.snapshot.events, details.events)
+          }
+        };
+      });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to load MRP details" });
+    }
+  },
+
   async patchPlacement(mrpId, patch) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
@@ -330,6 +397,12 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }));
   }
 }));
+
+function mergeById<T extends { id: string }>(current: T[], next: T[]) {
+  const byId = new Map(current.map((item) => [item.id, item]));
+  for (const item of next) byId.set(item.id, item);
+  return Array.from(byId.values());
+}
 
 export function findPlacement(snapshot: CanvasSnapshot, mrp: Mrp) {
   return snapshot.placements.find((placement) => placement.mrpId === mrp.id);

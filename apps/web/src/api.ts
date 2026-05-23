@@ -6,7 +6,9 @@ import type {
   CreateChildCanvasResponse,
   CreatePromptResponse,
   HealthStatus,
-  ImportExternalMrpsResponse
+  ImportExternalMrpsResponse,
+  MrpDetails,
+  SearchResponse
 } from "@flowux/shared";
 
 export async function getHealth(): Promise<HealthStatus> {
@@ -33,14 +35,31 @@ export async function updateCanvasTitle(canvasId: string, title: string): Promis
   });
 }
 
+export async function updateCanvasStatus(canvasId: string, status: "temporary" | "saved"): Promise<CanvasThread> {
+  return fetchJson(`/api/canvases/${canvasId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ status })
+  });
+}
+
 export async function deleteCanvas(canvasId: string): Promise<{ deletedCanvasId: string }> {
   return fetchJson(`/api/canvases/${canvasId}`, {
     method: "DELETE"
   });
 }
 
-export async function getCanvas(canvasId: string): Promise<CanvasSnapshot> {
-  return fetchJson(`/api/canvases/${canvasId}`);
+export async function getCanvas(canvasId: string, options: { summary?: boolean } = {}): Promise<CanvasSnapshot> {
+  return fetchJson(`/api/canvases/${canvasId}${options.summary ? "?summary=true" : ""}`);
+}
+
+export async function getMrpDetails(canvasId: string, mrpId: string): Promise<MrpDetails> {
+  return fetchJson(`/api/canvases/${canvasId}/mrps/${mrpId}/details`);
+}
+
+export async function searchWorkspace(query: string): Promise<SearchResponse> {
+  const params = new URLSearchParams({ q: query });
+  return fetchJson(`/api/search?${params.toString()}`);
 }
 
 export async function createChildCanvas(canvasId: string): Promise<CreateChildCanvasResponse> {
