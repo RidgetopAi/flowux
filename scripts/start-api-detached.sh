@@ -32,18 +32,25 @@ if command -v fuser >/dev/null 2>&1; then
 fi
 
 rm -f "$FLOWUX_API_LOG"
-nohup env \
-  PATH="$PATH" \
-  FLOWUX_DB_PATH="$FLOWUX_DB_PATH" \
-  FLOWUX_API_PORT="$FLOWUX_API_PORT" \
-  FLOWUX_HARNESS_MODE="$FLOWUX_HARNESS_MODE" \
-  FLOWUX_PI_MONO_PROVIDER="$FLOWUX_PI_MONO_PROVIDER" \
-  FLOWUX_PI_MONO_MODEL="$FLOWUX_PI_MONO_MODEL" \
-  FLOWUX_MODEL_NAME="$FLOWUX_MODEL_NAME" \
-  FLOWUX_MODEL_MODE="${FLOWUX_MODEL_MODE:-mock}" \
-  FLOWUX_MODEL_BASE_URL="${FLOWUX_MODEL_BASE_URL:-http://127.0.0.1:5005}" \
-  FLOWUX_PI_MONO_OFFLINE="${FLOWUX_PI_MONO_OFFLINE:-}" \
-  "$FLOWUX_ROOT/node_modules/.bin/tsx" apps/api/src/server.ts >"$FLOWUX_API_LOG" 2>&1 &
+flowux_build_api_runtime
+launcher=(env
+  "PATH=$PATH"
+  "FLOWUX_DB_PATH=$FLOWUX_DB_PATH"
+  "FLOWUX_API_PORT=$FLOWUX_API_PORT"
+  "FLOWUX_HARNESS_MODE=$FLOWUX_HARNESS_MODE"
+  "FLOWUX_PI_MONO_PROVIDER=$FLOWUX_PI_MONO_PROVIDER"
+  "FLOWUX_PI_MONO_MODEL=$FLOWUX_PI_MONO_MODEL"
+  "FLOWUX_MODEL_NAME=$FLOWUX_MODEL_NAME"
+  "FLOWUX_MODEL_MODE=${FLOWUX_MODEL_MODE:-mock}"
+  "FLOWUX_MODEL_BASE_URL=${FLOWUX_MODEL_BASE_URL:-http://127.0.0.1:5005}"
+  "FLOWUX_PI_MONO_OFFLINE=${FLOWUX_PI_MONO_OFFLINE:-}"
+  node "$FLOWUX_ROOT/apps/api/dist/server.js")
+
+if command -v setsid >/dev/null 2>&1; then
+  setsid "${launcher[@]}" </dev/null >"$FLOWUX_API_LOG" 2>&1 &
+else
+  nohup "${launcher[@]}" </dev/null >"$FLOWUX_API_LOG" 2>&1 &
+fi
 
 pid=$!
 echo "Started Flowux API ($mode) pid=$pid"

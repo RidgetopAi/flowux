@@ -21,3 +21,12 @@ flowux_cd_root() {
 flowux_tsx() {
   "$FLOWUX_ROOT/node_modules/.bin/tsx" "$@"
 }
+
+flowux_build_api_runtime() {
+  npm run build -w @flowux/shared >/dev/null
+  npm run build -w @flowux/api >/dev/null
+}
+
+flowux_node_api() {
+  node "$FLOWUX_ROOT/apps/api/dist/server.js"
+}

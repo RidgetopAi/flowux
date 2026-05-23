@@ -5,8 +5,8 @@
   "description": "Spatial AI thread workspace MVP.",
   "type": "module",
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @flowux/api\" \"npm run dev -w @flowux/web\"",
@@ -14,6 +14,7 @@
     "dev:api:qwen": "scripts/dev-api-qwen.sh",
     "start:api:grok": "scripts/start-api-detached.sh grok",
     "start:api:qwen": "scripts/start-api-detached.sh qwen",
+    "start:api": "npm run start -w @flowux/api",
     "dev:api": "npm run dev -w @flowux/api",
     "dev:web": "npm run dev -w @flowux/web",
     "health": "scripts/flowux-health.sh",
