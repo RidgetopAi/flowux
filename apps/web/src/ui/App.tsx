@@ -50,6 +50,7 @@ export function App() {
   const [prompt, setPrompt] = useState("");
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
+  const [focusedFrame, setFocusedFrame] = useState<FocusFrame>();
   const [importCanvasId, setImportCanvasId] = useState("");
   const [contextBundleId, setContextBundleId] = useState("");
   const [childCanvasId, setChildCanvasId] = useState("");
@@ -65,6 +66,7 @@ export function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setFocusedMrpId(undefined);
+      setFocusedFrame(undefined);
       window.requestAnimationFrame(() => snapBackToVisibleWidth());
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -129,6 +131,7 @@ export function App() {
 
   const resetView = () => {
     setFocusedMrpId(undefined);
+    setFocusedFrame(undefined);
     setViewport({ x: 0, y: 0, zoom: 1 });
   };
 
@@ -201,6 +204,10 @@ export function App() {
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     void snapBack({ layoutWidth, layoutLeft, layoutTop, rowHeight });
   };
+  const focusMrp = (mrpId: string) => {
+    setFocusedMrpId(mrpId);
+    setFocusedFrame(getFocusFrame(workspaceRef.current, viewport));
+  };
   const importSelectedRefs = () => {
     if (!importCanvasId) return;
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
@@ -252,7 +259,7 @@ export function App() {
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     setPrompt("");
     void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, ({ placement }) => {
-      setFocusedMrpId(placement.mrpId);
+      focusMrp(placement.mrpId);
     });
   };
 
@@ -475,8 +482,8 @@ export function App() {
                 blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
                 zoom={viewport.zoom}
                 focused={focusedMrpId === mrp.id}
-                focusFrame={focusedMrpId === mrp.id ? getFocusFrame(workspaceRef.current, viewport) : undefined}
-                onFocus={() => setFocusedMrpId(mrp.id)}
+                focusFrame={focusedMrpId === mrp.id ? focusedFrame : undefined}
+                onFocus={() => focusMrp(mrp.id)}
                 onPatch={patchPlacement}
               />
             );
