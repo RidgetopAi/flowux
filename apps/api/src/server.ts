@@ -26,6 +26,14 @@ import { createHarnessAdapter } from "./harness/index.js";
 
 const config = loadConfig();
 const app = Fastify({ logger: true });
+const activePromptRuns = new Map<
+  string,
+  {
+    abortController: AbortController;
+    mrpId?: string;
+    startedAt: string;
+  }
+>();
 
 await app.register(cors, {
   origin: true,
@@ -157,6 +165,18 @@ app.patch<{
   return placement;
 });
 
+app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/prompts/cancel", async (request, reply) => {
+  const activeRun = activePromptRuns.get(request.params.canvasId);
+  if (!activeRun) return reply.code(404).send({ error: "no_active_prompt" });
+  activeRun.abortController.abort();
+  return {
+    cancelled: true,
+    canvasId: request.params.canvasId,
+    mrpId: activeRun.mrpId,
+    startedAt: activeRun.startedAt
+  };
+});
+
 app.patch<{ Params: { canvasId: string }; Body: { selectedForContext?: boolean } }>(
   "/api/canvases/:canvasId/placements",
   async (request) => {
@@ -188,6 +208,9 @@ app.post<{
   async (request, reply) => {
     const prompt = request.body?.prompt?.trim();
     if (!prompt) return reply.code(400).send({ error: "prompt_required" });
+    if (activePromptRuns.has(request.params.canvasId)) {
+      return reply.code(409).send({ error: "prompt_already_running" });
+    }
 
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -196,6 +219,10 @@ app.post<{
     });
 
     const abortController = new AbortController();
+    activePromptRuns.set(request.params.canvasId, {
+      abortController,
+      startedAt: new Date().toISOString()
+    });
     let streamClosed = false;
     reply.raw.on("close", () => {
       if (!streamClosed) abortController.abort();
@@ -215,6 +242,11 @@ app.post<{
         layoutLeft: request.body?.layoutLeft,
         layoutTop: request.body?.layoutTop,
         rowHeight: request.body?.rowHeight
+      });
+      activePromptRuns.set(request.params.canvasId, {
+        abortController,
+        mrpId: created.mrp.id,
+        startedAt: created.modelRun.startedAt
       });
       send("created", created);
 
@@ -363,6 +395,11 @@ app.post<{
       }
       streamClosed = true;
       reply.raw.end();
+    } finally {
+      const activeRun = activePromptRuns.get(request.params.canvasId);
+      if (activeRun?.abortController === abortController) {
+        activePromptRuns.delete(request.params.canvasId);
+      }
     }
   }
 );

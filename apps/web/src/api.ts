@@ -111,6 +111,12 @@ export async function snapBack(canvasId: string, layout?: LayoutRequest): Promis
   });
 }
 
+export async function cancelPrompt(canvasId: string): Promise<{ cancelled: boolean; mrpId?: string }> {
+  return fetchJson(`/api/canvases/${canvasId}/prompts/cancel`, {
+    method: "POST"
+  });
+}
+
 export async function streamPrompt(
   canvasId: string,
   prompt: string,

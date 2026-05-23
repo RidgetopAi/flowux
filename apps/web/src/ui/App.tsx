@@ -17,6 +17,7 @@ import {
   Save,
   Scan,
   Sparkles,
+  Square,
   Trash2,
   ZoomIn,
   ZoomOut
@@ -31,6 +32,7 @@ export function App() {
     snapshot,
     canvases,
     loading,
+    promptRunning,
     error,
     loadInitial,
     switchCanvas,
@@ -43,6 +45,7 @@ export function App() {
     applyContextBundle,
     deleteContextBundle,
     submitPrompt,
+    cancelActivePrompt,
     patchPlacement,
     setAllContextSelection,
     snapBack
@@ -293,8 +296,14 @@ export function App() {
             <span>{snapshot?.mrps.length ?? 0} MRPs</span>
             <span>{selectedCount} checked</span>
             <span>{snapshot?.contextBundles.length ?? 0} sets</span>
+            <span>{promptRunning ? "running" : "ready"}</span>
+            <span>desktop pi-mono</span>
             <span>{snapshot?.canvas.status ?? "loading"}</span>
           </div>
+          <button className="hud-button" onClick={() => void cancelActivePrompt()} disabled={!promptRunning} title="Cancel active model run">
+            <Square size={15} />
+            Cancel
+          </button>
           <button
             className="hud-button"
             onClick={() => void setAllContextSelection(true)}

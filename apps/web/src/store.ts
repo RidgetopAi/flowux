@@ -8,6 +8,7 @@ interface FlowuxState {
   snapshot?: CanvasSnapshot;
   canvases: CanvasThread[];
   loading: boolean;
+  promptRunning: boolean;
   error?: string;
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
@@ -25,6 +26,7 @@ interface FlowuxState {
     layout?: api.LayoutRequest,
     onCreated?: (payload: CreatePromptResponse) => void
   ) => Promise<void>;
+  cancelActivePrompt: () => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
   setAllContextSelection: (selectedForContext: boolean) => Promise<void>;
   snapBack: (layout?: api.LayoutRequest) => Promise<void>;
@@ -33,6 +35,7 @@ interface FlowuxState {
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   canvases: [],
   loading: false,
+  promptRunning: false,
 
   async loadInitial() {
     set({ loading: true, error: undefined });
@@ -213,6 +216,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
 
+    set({ promptRunning: true, error: undefined });
     await api.streamPrompt(canvasId, prompt, layout, {
       onCreated(payload) {
         onCreated?.(payload);
@@ -251,6 +255,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       },
       onComplete(payload) {
         set((state) => ({
+          promptRunning: false,
           snapshot:
             state.snapshot?.canvas.id === canvasId
               ? {
@@ -265,6 +270,17 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
         set({ error: message });
       }
     });
+    set({ promptRunning: false });
+  },
+
+  async cancelActivePrompt() {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    try {
+      await api.cancelPrompt(canvasId);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to cancel prompt" });
+    }
   },
 
   async patchPlacement(mrpId, patch) {
