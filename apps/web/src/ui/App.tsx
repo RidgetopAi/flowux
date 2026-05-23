@@ -302,6 +302,10 @@ export function App() {
   const sendPrompt = () => {
     const value = prompt.trim();
     if (!value && !pendingAttachments.length) return;
+    if (pendingAttachments.some((attachment) => attachment.type === "image")) {
+      window.alert("Images are stored and rendered in Flowux, but the current Pi adapter cannot send image pixels to the model yet. Remove the image or use a text/code file for model context.");
+      return;
+    }
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     setPrompt("");
     const attachments = pendingAttachments;

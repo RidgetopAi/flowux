@@ -70,11 +70,19 @@ app.get<{ Querystring: { q?: string; limit?: string } }>("/api/search", async (r
 
 app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?: string[] } }>(
   "/api/canvases/:canvasId/context-estimate",
-  async (request) => {
+  async (request, reply) => {
     const attachmentIds = Array.from(new Set(request.body?.attachmentIds ?? []));
     const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
+    const unsupportedImages = attachments.filter((attachment) => attachment.type === "image");
+    if (unsupportedImages.length && config.harnessMode === "pi_mono") {
+      return reply.code(400).send({
+        error: "image_model_input_not_supported",
+        message:
+          "Image upload/rendering is wired, but the current Pi-Mono RPC adapter sends text prompts only. Remove image attachments or use text/code files until multimodal Pi messages are implemented."
+      });
+    }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     const attachmentPrompt = formatAttachmentsForPrompt(attachments);
     const modelPrompt = [prompt, attachmentPrompt].filter(Boolean).join("\n\n");
@@ -283,6 +291,13 @@ app.post<{
     const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
+    if (attachments.some((attachment) => attachment.type === "image") && config.harnessMode === "pi_mono") {
+      return reply.code(400).send({
+        error: "image_model_input_not_supported",
+        message:
+          "Image upload/rendering is wired, but the current Pi-Mono RPC adapter sends text prompts only. Remove image attachments or use text/code files until multimodal Pi messages are implemented."
+      });
+    }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     if (!prompt) return reply.code(400).send({ error: "prompt_required" });
     const attachmentPrompt = formatAttachmentsForPrompt(attachments);
