@@ -47,6 +47,8 @@ export interface HealthStatus {
   modelMaxTokens: number;
   piMonoRemoteHost: string;
   piMonoRemoteCwd: string;
+  piMonoProvider: string;
+  piMonoModel: string;
   executionContext: ExecutionContext;
 }
 

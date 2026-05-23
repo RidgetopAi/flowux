@@ -16,7 +16,7 @@ export function getExecutionContext(config: FlowuxConfig): ExecutionContext {
 }
 
 function getExecutionHostLabel(config: FlowuxConfig) {
-  if (config.harnessMode === "pi_mono") return config.piMonoRemoteHost;
+  if (config.harnessMode === "pi_mono") return `${config.piMonoProvider}/${config.piMonoModel} @ ${config.piMonoRemoteHost}`;
   if (config.harnessMode === "direct_model") return "local api";
   return config.harnessMode;
 }

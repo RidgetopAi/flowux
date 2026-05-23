@@ -605,7 +605,11 @@ function formatCanvasTime(value: string) {
 
 function formatExecutionLabel(context: import("@flowux/shared").ExecutionContext | undefined) {
   if (!context) return "runtime unknown";
-  const host = context.hostLabel ? context.hostLabel.replace(/^.*@/, "") : context.harness;
+  const host = context.hostLabel?.includes(" @ ")
+    ? context.hostLabel.split(" @ ")[0]
+    : context.hostLabel
+      ? context.hostLabel.replace(/^.*@/, "")
+      : context.harness;
   return `${context.harness.replace("_", " ")} · ${host}`;
 }
 
