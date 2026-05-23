@@ -101,4 +101,20 @@ describe("mapPiMonoEvent", () => {
       { type: "error", message: "Pi-Mono RPC event stream timed out", raw: expect.any(Object) }
     ]);
   });
+
+  test("maps assistant provider errors on message end once", () => {
+    expect(
+      mapPiMonoEvent({
+        type: "message_start",
+        message: { role: "assistant", errorMessage: "400 image too small" }
+      })
+    ).toEqual([{ type: "raw_event", eventType: "message_start", raw: expect.any(Object) }]);
+
+    expect(
+      mapPiMonoEvent({
+        type: "message_end",
+        message: { role: "assistant", errorMessage: "400 image too small" }
+      })
+    ).toEqual([{ type: "error", message: "400 image too small", raw: expect.any(Object) }]);
+  });
 });

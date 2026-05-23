@@ -20,6 +20,10 @@ export function mapPiMonoEvent(raw: PiRpcEvent): FlowuxTurnEvent[] {
     return [{ type: "error", message: stringValue(raw.reason) ?? "pi_mono_rpc_error", raw }];
   }
 
+  if (raw.type === "message_end" && isAssistantErrorMessage(raw.message)) {
+    return [{ type: "error", message: raw.message.errorMessage, raw }];
+  }
+
   if (raw.type === "message_update") {
     const assistantEvent = raw.assistantMessageEvent as Record<string, unknown> | undefined;
     if (!assistantEvent || typeof assistantEvent.type !== "string") {
@@ -102,7 +106,7 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
       if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
       await session.start();
       if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
-      await session.prompt(formatPiPrompt(input));
+      await session.prompt(formatPiPrompt(input), input.images);
 
       for await (const raw of session.events()) {
         if (input.signal?.aborted) throw new Error("Pi-Mono request aborted");
@@ -166,11 +170,11 @@ class PiRpcProcess {
     }
   }
 
-  async prompt(message: string): Promise<void> {
+  async prompt(message: string, images: HarnessTurnInput["images"] = []): Promise<void> {
     const process = this.requireProcess();
     const requestId = `flowux-${crypto.randomUUID()}`;
     const preAckEvents: PiRpcEvent[] = [];
-    process.stdin.write(`${JSON.stringify({ id: requestId, type: "prompt", message })}\n`);
+    process.stdin.write(`${JSON.stringify({ id: requestId, type: "prompt", message, ...(images?.length ? { images } : {}) })}\n`);
 
     while (true) {
       const raw = await this.nextEvent(PI_PROMPT_ACK_TIMEOUT_MS, "Pi-Mono prompt acknowledgement timed out");
@@ -349,6 +353,12 @@ function piToolResult(event: Record<string, unknown>): FlowuxToolResult {
     result: event.partialResult ?? event.result,
     isError: event.isError === true
   };
+}
+
+function isAssistantErrorMessage(value: unknown): value is { role: "assistant"; errorMessage: string } {
+  if (!value || typeof value !== "object") return false;
+  const message = value as Record<string, unknown>;
+  return message.role === "assistant" && typeof message.errorMessage === "string" && message.errorMessage.length > 0;
 }
 
 function stringValue(value: unknown): string | undefined {

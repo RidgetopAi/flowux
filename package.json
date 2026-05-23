@@ -19,6 +19,7 @@
     "health": "scripts/flowux-health.sh",
     "smoke:api": "node scripts/api-smoke.mjs",
     "smoke:pi": "scripts/desktop-pi-smoke.sh",
+    "smoke:uploads": "node scripts/upload-smoke.mjs",
     "inspect:db": "node scripts/inspect-db.mjs",
     "build": "npm run build -ws --if-present",
     "test": "npm run test -ws --if-present",

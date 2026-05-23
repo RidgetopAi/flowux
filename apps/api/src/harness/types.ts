@@ -1,4 +1,5 @@
 import type { ContextMessage, ExecutionContext, FlowuxTurnEvent, HarnessMode, ModelProvider } from "@flowux/shared";
+import type { HarnessImageInput } from "../services/attachmentDelivery.js";
 
 export interface HarnessTurnInput {
   messages: ContextMessage[];
@@ -7,6 +8,7 @@ export interface HarnessTurnInput {
   mrpId: string;
   modelRunId: string;
   executionContext?: ExecutionContext;
+  images?: HarnessImageInput[];
   signal?: AbortSignal;
 }
 

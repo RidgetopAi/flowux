@@ -54,8 +54,13 @@ export async function readUploadBytes(id: string) {
   if (!upload) return undefined;
   return {
     upload,
-    buffer: await readFile(path.join(ROOT_DIR, upload.storedName))
+    filePath: getUploadFilePath(upload.storedName),
+    buffer: await readFile(getUploadFilePath(upload.storedName))
   };
+}
+
+export function getUploadFilePath(storedName: string) {
+  return path.join(ROOT_DIR, storedName);
 }
 
 export function formatAttachmentsForPrompt(attachments: UploadedAttachment[]) {

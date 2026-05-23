@@ -28,7 +28,8 @@ import {
   updatePlacement
 } from "./services/flowuxRepository.js";
 import { createHarnessAdapter } from "./harness/index.js";
-import { formatAttachmentsForPrompt, loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
+import { prepareAttachmentDelivery, supportsImageInputs } from "./services/attachmentDelivery.js";
+import { loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
 
 const config = loadConfig();
 const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
@@ -76,16 +77,16 @@ app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
     const unsupportedImages = attachments.filter((attachment) => attachment.type === "image");
-    if (unsupportedImages.length && config.harnessMode === "pi_mono") {
+    if (unsupportedImages.length && !supportsImageInputs(config)) {
       return reply.code(400).send({
         error: "image_model_input_not_supported",
         message:
-          "Image upload/rendering is wired, but the current Pi-Mono RPC adapter sends text prompts only. Remove image attachments or use text/code files until multimodal Pi messages are implemented."
+          "This model adapter does not currently accept image pixels. Use Grok through Pi-Mono for image inputs, or remove image attachments."
       });
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
-    const attachmentPrompt = formatAttachmentsForPrompt(attachments);
-    const modelPrompt = [prompt, attachmentPrompt].filter(Boolean).join("\n\n");
+    const delivery = await prepareAttachmentDelivery(config, attachments, { stageRemote: false, includeImageData: false });
+    const modelPrompt = [prompt, delivery.promptText].filter(Boolean).join("\n\n");
     return {
       canvasId: request.params.canvasId,
       prompt,
@@ -291,20 +292,20 @@ app.post<{
     const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
-    if (attachments.some((attachment) => attachment.type === "image") && config.harnessMode === "pi_mono") {
+    if (attachments.some((attachment) => attachment.type === "image") && !supportsImageInputs(config)) {
       return reply.code(400).send({
         error: "image_model_input_not_supported",
         message:
-          "Image upload/rendering is wired, but the current Pi-Mono RPC adapter sends text prompts only. Remove image attachments or use text/code files until multimodal Pi messages are implemented."
+          "This model adapter does not currently accept image pixels. Use Grok through Pi-Mono for image inputs, or remove image attachments."
       });
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     if (!prompt) return reply.code(400).send({ error: "prompt_required" });
-    const attachmentPrompt = formatAttachmentsForPrompt(attachments);
-    const modelPrompt = [prompt, attachmentPrompt].filter(Boolean).join("\n\n");
     if (activePromptRuns.has(request.params.canvasId)) {
       return reply.code(409).send({ error: "prompt_already_running" });
     }
+    const delivery = await prepareAttachmentDelivery(config, attachments, { stageRemote: true, includeImageData: true });
+    const modelPrompt = [prompt, delivery.promptText].filter(Boolean).join("\n\n");
 
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -379,7 +380,16 @@ app.post<{
         model: adapter.model,
         harnessMode: adapter.mode,
         capabilities: adapter.capabilities,
-        contextBudget
+        contextBudget,
+        attachmentDelivery: delivery.items.map(({ attachment, modelDelivery, remotePath }) => ({
+          id: attachment.id,
+          name: attachment.name,
+          type: attachment.type,
+          mimeType: attachment.mimeType,
+          modelDelivery,
+          remotePath
+        })),
+        imageInputs: delivery.images.length
       });
 
       for await (const event of adapter.generate({
@@ -389,6 +399,7 @@ app.post<{
         mrpId: created.mrp.id,
         modelRunId: created.modelRun.id,
         executionContext: getExecutionContext(config),
+        images: delivery.images,
         signal: abortController.signal
       })) {
         if (event.type === "thinking_delta") {

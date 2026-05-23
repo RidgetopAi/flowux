@@ -12,6 +12,7 @@ export interface FlowuxConfig {
   modelContextWindow: number;
   piMonoRemoteHost: string;
   piMonoRemoteCwd: string;
+  piMonoRemoteUploadDir: string;
   piMonoCommand: string;
   piMonoProvider: string;
   piMonoModel: string;
@@ -59,6 +60,7 @@ export function loadConfig(): FlowuxConfig {
     modelContextWindow: Number(process.env.FLOWUX_MODEL_CONTEXT_WINDOW ?? getDefaultContextWindow(piMonoProvider, piMonoModel)),
     piMonoRemoteHost: process.env.FLOWUX_PI_MONO_REMOTE_HOST ?? "ridgetop@ridgetop-desktop",
     piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects",
+    piMonoRemoteUploadDir: process.env.FLOWUX_PI_MONO_REMOTE_UPLOAD_DIR ?? "/home/ridgetop/.flowux/uploads",
     piMonoCommand,
     piMonoProvider,
     piMonoModel
