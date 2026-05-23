@@ -3,6 +3,7 @@ import type { HarnessMode } from "@flowux/shared";
 export interface FlowuxConfig {
   port: number;
   databasePath: string;
+  uploadDir: string;
   harnessMode: HarnessMode;
   modelMode: "mock" | "llama_cpp";
   modelBaseUrl: string;
@@ -47,6 +48,7 @@ export function loadConfig(): FlowuxConfig {
   return {
     port: Number(process.env.FLOWUX_API_PORT ?? 5174),
     databasePath: process.env.FLOWUX_DB_PATH ?? "./flowux.db",
+    uploadDir: process.env.FLOWUX_UPLOAD_DIR ?? "./apps/api/uploads",
     harnessMode,
     modelMode: process.env.FLOWUX_MODEL_MODE === "llama_cpp" ? "llama_cpp" : "mock",
     modelBaseUrl: process.env.FLOWUX_MODEL_BASE_URL ?? "http://127.0.0.1:5005",

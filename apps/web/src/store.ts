@@ -5,7 +5,8 @@ import type {
   CreatePromptResponse,
   ExecutionContext,
   Mrp,
-  SearchResult
+  SearchResult,
+  UploadedAttachment
 } from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
@@ -37,6 +38,7 @@ interface FlowuxState {
   submitPrompt: (
     prompt: string,
     layout?: api.LayoutRequest,
+    attachments?: UploadedAttachment[],
     onCreated?: (payload: CreatePromptResponse) => void
   ) => Promise<void>;
   cancelActivePrompt: () => Promise<void>;
@@ -242,12 +244,12 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
-  async submitPrompt(prompt, layout = {}, onCreated) {
+  async submitPrompt(prompt, layout = {}, attachments = [], onCreated) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
 
     set({ promptRunning: true, error: undefined });
-    await api.streamPrompt(canvasId, prompt, layout, {
+    await api.streamPrompt(canvasId, prompt, layout, attachments.map((attachment) => attachment.id), {
       onCreated(payload) {
         onCreated?.(payload);
         set((state) => ({
@@ -343,7 +345,8 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
             modelRuns: mergeById(state.snapshot.modelRuns, details.modelRuns),
             sections: mergeById(state.snapshot.sections, details.sections),
             blocks: mergeById(state.snapshot.blocks, details.blocks),
-            events: mergeById(state.snapshot.events, details.events)
+            events: mergeById(state.snapshot.events, details.events),
+            artifacts: mergeById(state.snapshot.artifacts, details.artifacts)
           }
         };
       });

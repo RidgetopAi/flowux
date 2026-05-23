@@ -11,6 +11,7 @@ import {
   Loader2,
   Maximize2,
   Move,
+  Paperclip,
   Pencil,
   Plus,
   RotateCcw,
@@ -20,12 +21,14 @@ import {
   Sparkles,
   Square,
   Trash2,
+  X,
   ZoomIn,
   ZoomOut
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { Tldraw } from "tldraw";
-import type { CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind } from "@flowux/shared";
+import type { Artifact, CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind, UploadedAttachment } from "@flowux/shared";
+import * as api from "../api.js";
 import { findPlacement, useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -58,6 +61,8 @@ export function App() {
   } = useFlowuxStore();
   const [prompt, setPrompt] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<UploadedAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [pendingFocusMrpId, setPendingFocusMrpId] = useState<string>();
   const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
   const [focusedMrpId, setFocusedMrpId] = useState<string>();
@@ -67,6 +72,7 @@ export function App() {
   const [childCanvasId, setChildCanvasId] = useState("");
   const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
   const workspaceRef = useRef<HTMLElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void loadInitial();
@@ -286,12 +292,27 @@ export function App() {
   };
   const sendPrompt = () => {
     const value = prompt.trim();
-    if (!value) return;
+    if (!value && !pendingAttachments.length) return;
     const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
     setPrompt("");
-    void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, ({ placement }) => {
+    const attachments = pendingAttachments;
+    setPendingAttachments([]);
+    void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, attachments, ({ placement }) => {
       focusMrp(placement.mrpId);
     });
+  };
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      const uploaded = await Promise.all(Array.from(files).map((file) => api.uploadAttachment(file)));
+      setPendingAttachments((current) => [...current, ...uploaded]);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -544,6 +565,7 @@ export function App() {
                 modelRun={snapshot.modelRuns.find((modelRun) => modelRun.mrpId === mrp.id)}
                 sections={snapshot.sections.filter((section) => section.mrpId === mrp.id)}
                 blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
+                artifacts={snapshot.artifacts.filter((artifact) => artifact.mrpId === mrp.id)}
                 zoom={viewport.zoom}
                 focused={focusedMrpId === mrp.id}
                 focusFrame={focusedMrpId === mrp.id ? focusedFrame : undefined}
@@ -573,21 +595,48 @@ export function App() {
             sendPrompt();
           }}
         >
-          <button type="button" className="icon-button" title="New prompt">
-            <Plus size={18} />
-          </button>
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                sendPrompt();
-              }
-            }}
-            placeholder="Prompt this canvas thread..."
-            rows={2}
+          <input
+            ref={fileInputRef}
+            className="file-input"
+            type="file"
+            multiple
+            accept="image/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.css,.html,.py,.ps1,.sh,.sql,.yaml,.yml,.toml,.pdf"
+            onChange={(event) => void uploadFiles(event.target.files)}
           />
+          <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach image or file">
+            {uploading ? <Loader2 className="spin" size={18} /> : <Paperclip size={18} />}
+          </button>
+          <div className="prompt-compose">
+            {pendingAttachments.length > 0 && (
+              <div className="attachment-strip">
+                {pendingAttachments.map((attachment) => (
+                  <span key={attachment.id} className="attachment-pill" title={attachment.name}>
+                    {attachment.type}
+                    <strong>{attachment.name}</strong>
+                    <button
+                      type="button"
+                      onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                      title="Remove attachment"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <textarea
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  sendPrompt();
+                }
+              }}
+              placeholder="Prompt this canvas thread..."
+              rows={2}
+            />
+          </div>
           <button type="submit" className="hud-button hud-button-primary">
             Send
           </button>
@@ -652,6 +701,7 @@ function MrpCard({
   modelRun,
   sections,
   blocks,
+  artifacts,
   zoom,
   focused,
   focusFrame,
@@ -664,6 +714,7 @@ function MrpCard({
   modelRun?: ModelRun;
   sections: MrpSection[];
   blocks: MrpBlock[];
+  artifacts: Artifact[];
   zoom: number;
   focused: boolean;
   focusFrame?: FocusFrame;
@@ -802,6 +853,20 @@ function MrpCard({
                     section={section}
                     blocks={blocks.filter((block) => block.sectionId === section.id)}
                   />
+                ))}
+              </div>
+            </section>
+          )}
+          {artifacts.length > 0 && (
+            <section className="mrp-artifacts">
+              <p className="hud-label">Attachments</p>
+              <div className="artifact-list">
+                {artifacts.map((artifact) => (
+                  <a key={artifact.id} href={artifact.uri} target="_blank" rel="noreferrer" className="artifact-item" data-no-card-drag>
+                    {artifact.type === "image" && <img src={artifact.uri} alt={artifact.name} />}
+                    <span>{artifact.type}</span>
+                    <strong>{artifact.name}</strong>
+                  </a>
                 ))}
               </div>
             </section>

@@ -8,7 +8,8 @@ import type {
   HealthStatus,
   ImportExternalMrpsResponse,
   MrpDetails,
-  SearchResponse
+  SearchResponse,
+  UploadedAttachment
 } from "@flowux/shared";
 
 export async function getHealth(): Promise<HealthStatus> {
@@ -60,6 +61,18 @@ export async function getMrpDetails(canvasId: string, mrpId: string): Promise<Mr
 export async function searchWorkspace(query: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query });
   return fetchJson(`/api/search?${params.toString()}`);
+}
+
+export async function uploadAttachment(file: File): Promise<UploadedAttachment> {
+  return fetchJson("/api/uploads", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      name: file.name,
+      mimeType: file.type || undefined,
+      dataBase64: await fileToBase64(file)
+    })
+  });
 }
 
 export async function createChildCanvas(canvasId: string): Promise<CreateChildCanvasResponse> {
@@ -145,6 +158,7 @@ export async function streamPrompt(
   canvasId: string,
   prompt: string,
   layout: LayoutRequest,
+  attachmentIds: string[],
   handlers: {
     onCreated: (payload: CreatePromptResponse) => void;
     onToken: (payload: { mrpId: string; token: string }) => void;
@@ -155,7 +169,7 @@ export async function streamPrompt(
   const response = await fetch(`/api/canvases/${canvasId}/prompts/stream`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, ...layout })
+    body: JSON.stringify({ prompt, attachmentIds, ...layout })
   });
 
   if (!response.ok || !response.body) {
@@ -185,6 +199,18 @@ export async function streamPrompt(
       if (eventName === "error") handlers.onError((payload as { message?: string }).message ?? "Stream error");
     }
   }
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result ?? "");
+      resolve(value.includes(",") ? value.split(",").pop() ?? "" : value);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {

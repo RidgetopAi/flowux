@@ -19,7 +19,8 @@ import {
   type MrpEvent,
   type MrpSection,
   type MrpSectionKind,
-  type SearchResponse
+  type SearchResponse,
+  type UploadedAttachment
 } from "@flowux/shared";
 import { db } from "../db/client.js";
 import {
@@ -169,6 +170,7 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
       ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
       : [];
   const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
+  const artifactRows = mrpIds.length ? await db.select().from(artifacts).where(inArray(artifacts.mrpId, mrpIds)) : [];
   const branchRows = await db
     .select()
     .from(branches)
@@ -187,6 +189,7 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     sections: sections.map(toMrpSection),
     blocks: blocks.map(toMrpBlock),
     events: events.map(toMrpEvent),
+    artifacts: artifactRows.map(toArtifact),
     branches: [...branchRows, ...parentBranchRows].map(toBranch),
     contextBundles: bundleRows.map(toContextBundle)
   };
@@ -203,13 +206,15 @@ export async function getMrpDetails(canvasId: string, mrpId: string): Promise<Mr
   const sections = await db.select().from(mrpSections).where(eq(mrpSections.mrpId, mrpId)).orderBy(mrpSections.sequence);
   const blocks = await db.select().from(mrpBlocks).where(eq(mrpBlocks.mrpId, mrpId)).orderBy(mrpBlocks.sequence);
   const events = await db.select().from(mrpEvents).where(eq(mrpEvents.mrpId, mrpId)).orderBy(mrpEvents.sequence);
+  const artifactRows = await db.select().from(artifacts).where(eq(artifacts.mrpId, mrpId));
 
   return {
     mrpId,
     modelRuns: runs.map(toModelRun),
     sections: sections.map(toMrpSection),
     blocks: blocks.map(toMrpBlock),
-    events: events.map(toMrpEvent)
+    events: events.map(toMrpEvent),
+    artifacts: artifactRows.map(toArtifact)
   };
 }
 
@@ -555,7 +560,8 @@ export async function snapBack(
 export async function createPromptMrp(
   canvasId: string,
   prompt: string,
-  layout: LayoutMetrics = {}
+  layout: LayoutMetrics = {},
+  attachments: UploadedAttachment[] = []
 ): Promise<CreatePromptResponse> {
   const timestamp = now();
   const [sequenceRow] = await db
@@ -622,11 +628,42 @@ export async function createPromptMrp(
     selectable: true,
     contextDefault: "include"
   });
+  if (attachments.length) {
+    const artifactValues = attachments.map((attachment) => ({
+      id: id(),
+      mrpId: mrp.id,
+      type: attachment.type,
+      name: attachment.name,
+      uri: attachment.uri,
+      mimeType: attachment.mimeType,
+      metadata: {
+        uploadId: attachment.id,
+        size: attachment.size,
+        textPreview: attachment.textPreview
+      },
+      createdAt: timestamp
+    }));
+    await db.insert(artifacts).values(artifactValues);
+    await createSectionWithBlock(
+      mrp.id,
+      "artifacts",
+      "Attachments",
+      2,
+      "artifact",
+      { attachments },
+      {
+        collapsedByDefault: false,
+        selectable: true,
+        contextDefault: "include",
+        summary: `${attachments.length} attachment${attachments.length === 1 ? "" : "s"}`
+      }
+    );
+  }
   await createSectionWithBlock(
     mrp.id,
     "context_sent",
     "Context Sent",
-    2,
+    attachments.length ? 3 : 2,
     "event",
     { inputMrpIds, mode: "full_mrp", ordering: "canonical_sequence" },
     {
@@ -1105,6 +1142,19 @@ function toContextBundle(row: typeof contextBundles.$inferSelect): ContextBundle
     modeByMrpId: row.modeByMrpId as Record<string, ContextMode>,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
+  };
+}
+
+function toArtifact(row: typeof artifacts.$inferSelect) {
+  return {
+    id: row.id,
+    mrpId: row.mrpId,
+    type: row.type,
+    name: row.name,
+    uri: row.uri,
+    ...(row.mimeType ? { mimeType: row.mimeType } : {}),
+    ...(row.metadata ? { metadata: row.metadata } : {}),
+    createdAt: row.createdAt
   };
 }
 

@@ -27,9 +27,10 @@ import {
   updatePlacement
 } from "./services/flowuxRepository.js";
 import { createHarnessAdapter } from "./harness/index.js";
+import { formatAttachmentsForPrompt, loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
 
 const config = loadConfig();
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 16 * 1024 * 1024 });
 const activePromptRuns = new Map<
   string,
   {
@@ -63,6 +64,27 @@ app.get("/api/canvases", async () => listCanvases());
 app.get<{ Querystring: { q?: string; limit?: string } }>("/api/search", async (request) =>
   searchWorkspace(request.query.q ?? "", Number(request.query.limit ?? 30))
 );
+
+app.post<{ Body: { name?: string; mimeType?: string; dataBase64?: string } }>("/api/uploads", async (request, reply) => {
+  try {
+    return await saveUpload({
+      name: request.body?.name ?? "",
+      mimeType: request.body?.mimeType,
+      dataBase64: request.body?.dataBase64 ?? ""
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "upload_failed";
+    return reply.code(message === "upload_too_large" ? 413 : 400).send({ error: message });
+  }
+});
+
+app.get<{ Params: { uploadId: string; fileName: string } }>("/api/uploads/:uploadId/:fileName", async (request, reply) => {
+  const loaded = await readUploadBytes(request.params.uploadId);
+  if (!loaded) return reply.code(404).send({ error: "upload_not_found" });
+  if (loaded.upload.mimeType) reply.header("content-type", loaded.upload.mimeType);
+  reply.header("content-disposition", `inline; filename="${loaded.upload.name.replace(/"/g, "'")}"`);
+  return reply.send(loaded.buffer);
+});
 
 app.post<{ Body: { title?: string } }>("/api/canvases", async (request) => {
   return createCanvas(request.body?.title);
@@ -225,12 +247,25 @@ app.post<{
 
 app.post<{
   Params: { canvasId: string };
-  Body: { prompt: string; layoutWidth?: number; layoutLeft?: number; layoutTop?: number; rowHeight?: number };
+  Body: {
+    prompt?: string;
+    attachmentIds?: string[];
+    layoutWidth?: number;
+    layoutLeft?: number;
+    layoutTop?: number;
+    rowHeight?: number;
+  };
 }>(
   "/api/canvases/:canvasId/prompts/stream",
   async (request, reply) => {
-    const prompt = request.body?.prompt?.trim();
+    const attachmentIds = Array.from(new Set(request.body?.attachmentIds ?? []));
+    const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
+      (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
+    );
+    const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     if (!prompt) return reply.code(400).send({ error: "prompt_required" });
+    const attachmentPrompt = formatAttachmentsForPrompt(attachments);
+    const modelPrompt = [prompt, attachmentPrompt].filter(Boolean).join("\n\n");
     if (activePromptRuns.has(request.params.canvasId)) {
       return reply.code(409).send({ error: "prompt_already_running" });
     }
@@ -259,13 +294,18 @@ app.post<{
 
     let created: Awaited<ReturnType<typeof createPromptMrp>> | undefined;
     try {
-      const messages = await buildMessagesForPrompt(request.params.canvasId, prompt);
-      created = await createPromptMrp(request.params.canvasId, prompt, {
-        layoutWidth: request.body?.layoutWidth,
-        layoutLeft: request.body?.layoutLeft,
-        layoutTop: request.body?.layoutTop,
-        rowHeight: request.body?.rowHeight
-      });
+      const messages = await buildMessagesForPrompt(request.params.canvasId, modelPrompt);
+      created = await createPromptMrp(
+        request.params.canvasId,
+        prompt,
+        {
+          layoutWidth: request.body?.layoutWidth,
+          layoutLeft: request.body?.layoutLeft,
+          layoutTop: request.body?.layoutTop,
+          rowHeight: request.body?.rowHeight
+        },
+        attachments
+      );
       activePromptRuns.set(request.params.canvasId, {
         abortController,
         mrpId: created.mrp.id,
@@ -300,7 +340,7 @@ app.post<{
 
       for await (const event of adapter.generate({
         messages,
-        prompt,
+        prompt: modelPrompt,
         canvasId: request.params.canvasId,
         mrpId: created.mrp.id,
         modelRunId: created.modelRun.id,

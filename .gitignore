@@ -6,4 +6,5 @@ dist
 *.db-shm
 *.db-wal
 coverage
-
+apps/api/uploads
+apps/uploads

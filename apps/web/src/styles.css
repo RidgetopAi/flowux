@@ -574,7 +574,18 @@ select { font: inherit; }
   align-items: end;
 }
 
+.file-input {
+  display: none;
+}
+
+.prompt-compose {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
 .prompt-dock textarea {
+  width: 100%;
   min-height: 42px;
   max-height: 120px;
   resize: vertical;
@@ -584,6 +595,92 @@ select { font: inherit; }
   color: var(--hud-ink);
   padding: 10px 12px;
   outline: none;
+}
+
+.attachment-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.attachment-pill {
+  max-width: 210px;
+  min-height: 28px;
+  border: 1px solid var(--hud-line);
+  border-radius: var(--hud-radius-pill);
+  background: rgba(0,0,0,.28);
+  color: var(--hud-muted);
+  padding: 0 4px 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 9px/1 var(--hud-mono);
+  text-transform: uppercase;
+}
+
+.attachment-pill strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hud-soft);
+  font-size: 10px;
+}
+
+.attachment-pill button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--hud-radius-pill);
+  background: rgba(255,255,255,.06);
+  color: var(--hud-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.artifact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.artifact-item {
+  min-width: 0;
+  border: 1px solid var(--hud-line);
+  border-radius: var(--hud-radius-sm);
+  background: rgba(0,0,0,.22);
+  color: var(--hud-soft);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  text-decoration: none;
+}
+
+.artifact-item img {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(0,0,0,.28);
+}
+
+.artifact-item span {
+  color: var(--hud-cyan);
+  font: 9px/1 var(--hud-mono);
+  text-transform: uppercase;
+}
+
+.artifact-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--hud-ink);
+  font-size: 12px;
 }
 
 .empty-state, .error-banner {

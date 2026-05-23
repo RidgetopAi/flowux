@@ -165,6 +165,17 @@ export interface Artifact {
   createdAt: string;
 }
 
+export interface UploadedAttachment {
+  id: string;
+  type: Extract<ArtifactType, "image" | "file" | "code">;
+  name: string;
+  uri: string;
+  mimeType?: string;
+  size: number;
+  textPreview?: string;
+  createdAt: string;
+}
+
 export interface ModelRun {
   id: string;
   canvasId: string;
@@ -233,6 +244,7 @@ export interface CanvasSnapshot {
   sections: MrpSection[];
   blocks: MrpBlock[];
   events: MrpEvent[];
+  artifacts: Artifact[];
   branches: Branch[];
   contextBundles: ContextBundle[];
 }
@@ -243,6 +255,7 @@ export interface MrpDetails {
   sections: MrpSection[];
   blocks: MrpBlock[];
   events: MrpEvent[];
+  artifacts: Artifact[];
 }
 
 export type SearchResultKind = "canvas" | "mrp" | "artifact";
