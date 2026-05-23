@@ -5,6 +5,7 @@ import type {
   ContextBundle,
   CreateChildCanvasResponse,
   CreatePromptResponse,
+  ContextEstimateResponse,
   HealthStatus,
   ImportExternalMrpsResponse,
   MrpDetails,
@@ -61,6 +62,14 @@ export async function getMrpDetails(canvasId: string, mrpId: string): Promise<Mr
 export async function searchWorkspace(query: string): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query });
   return fetchJson(`/api/search?${params.toString()}`);
+}
+
+export async function estimateContext(canvasId: string, prompt: string, attachmentIds: string[]): Promise<ContextEstimateResponse> {
+  return fetchJson(`/api/canvases/${canvasId}/context-estimate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt, attachmentIds })
+  });
 }
 
 export async function uploadAttachment(file: File): Promise<UploadedAttachment> {

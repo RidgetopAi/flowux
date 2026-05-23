@@ -38,6 +38,19 @@ export interface ExecutionContext {
   warning?: string;
 }
 
+export interface ContextBudget {
+  estimatedTokens: number;
+  contextWindow: number;
+  maxOutputTokens: number;
+  availableInputTokens: number;
+  percentOfWindow: number;
+  percentOfInputBudget: number;
+  messageCount: number;
+  mrpCount: number;
+  currentPromptTokens: number;
+  warning?: "ok" | "high" | "over";
+}
+
 export interface HealthStatus {
   ok: boolean;
   harnessMode: HarnessMode;
@@ -49,6 +62,8 @@ export interface HealthStatus {
   piMonoRemoteCwd: string;
   piMonoProvider: string;
   piMonoModel: string;
+  contextWindow: number;
+  maxOutputTokens: number;
   executionContext: ExecutionContext;
 }
 
@@ -295,10 +310,17 @@ export interface CreatePromptResponse {
   mrp: Mrp;
   placement: CanvasPlacement;
   modelRun: ModelRun;
+  contextBudget?: ContextBudget;
 }
 
 export interface ContextMessage {
   role: "system" | "user" | "assistant";
   content: string;
   mrpId?: string;
+}
+
+export interface ContextEstimateResponse {
+  canvasId: string;
+  prompt: string;
+  budget: ContextBudget;
 }

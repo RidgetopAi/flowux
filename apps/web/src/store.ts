@@ -3,6 +3,7 @@ import type {
   CanvasSnapshot,
   CanvasThread,
   CreatePromptResponse,
+  ContextBudget,
   ExecutionContext,
   Mrp,
   SearchResult,
@@ -18,6 +19,7 @@ interface FlowuxState {
   canvases: CanvasThread[];
   loading: boolean;
   promptRunning: boolean;
+  contextBudget?: ContextBudget;
   searchResults: SearchResult[];
   executionContext?: ExecutionContext;
   error?: string;
@@ -29,6 +31,7 @@ interface FlowuxState {
   saveCurrentCanvas: () => Promise<void>;
   deleteCurrentCanvas: () => Promise<void>;
   searchWorkspace: (query: string) => Promise<void>;
+  refreshContextBudget: (prompt: string, attachments?: UploadedAttachment[]) => Promise<void>;
   loadMrpDetails: (mrpId: string) => Promise<void>;
   createChildCanvasFromSelection: () => Promise<void>;
   importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
@@ -253,6 +256,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       onCreated(payload) {
         onCreated?.(payload);
         set((state) => ({
+          contextBudget: payload.contextBudget,
           snapshot:
             state.snapshot?.canvas.id === payload.mrp.canvasId
               ? {
@@ -326,6 +330,17 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       set({ searchResults: response.results, error: undefined });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Search failed" });
+    }
+  },
+
+  async refreshContextBudget(prompt, attachments = []) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    try {
+      const response = await api.estimateContext(canvasId, prompt, attachments.map((attachment) => attachment.id));
+      set({ contextBudget: response.budget });
+    } catch {
+      // Budget visibility should never block composing or sending a prompt.
     }
   },
 

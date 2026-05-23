@@ -9,6 +9,7 @@ export interface FlowuxConfig {
   modelBaseUrl: string;
   modelName: string;
   modelMaxTokens: number;
+  modelContextWindow: number;
   piMonoRemoteHost: string;
   piMonoRemoteCwd: string;
   piMonoCommand: string;
@@ -54,12 +55,19 @@ export function loadConfig(): FlowuxConfig {
     modelBaseUrl: process.env.FLOWUX_MODEL_BASE_URL ?? "http://127.0.0.1:5005",
     modelName: process.env.FLOWUX_MODEL_NAME ?? "qwen3.6-35b",
     modelMaxTokens: Number(process.env.FLOWUX_MODEL_MAX_TOKENS ?? 2048),
+    modelContextWindow: Number(process.env.FLOWUX_MODEL_CONTEXT_WINDOW ?? getDefaultContextWindow(piMonoProvider, piMonoModel)),
     piMonoRemoteHost: process.env.FLOWUX_PI_MONO_REMOTE_HOST ?? "ridgetop@ridgetop-desktop",
     piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects/flowux",
     piMonoCommand,
     piMonoProvider,
     piMonoModel
   };
+}
+
+function getDefaultContextWindow(provider: string, model: string) {
+  if (provider === "xai" && /^grok-4\.3/i.test(model)) return 131_072;
+  if (provider.startsWith("local-") && /qwen3\.6-35b/i.test(model)) return 140_000;
+  return 128_000;
 }
 
 function shellArg(value: string) {

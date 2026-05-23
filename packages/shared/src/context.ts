@@ -1,4 +1,4 @@
-import type { ContextMessage, ContextMode, Mrp } from "./types.js";
+import type { ContextBudget, ContextMessage, ContextMode, Mrp } from "./types.js";
 
 export interface BuildContextInput {
   mrps: Mrp[];
@@ -50,3 +50,33 @@ export function buildContextMessages(input: BuildContextInput): ContextMessage[]
   return messages;
 }
 
+export function estimateContextBudget(input: {
+  messages: ContextMessage[];
+  contextWindow: number;
+  maxOutputTokens: number;
+  currentPrompt?: string;
+}): ContextBudget {
+  const estimatedTokens = input.messages.reduce((sum, message) => sum + estimateTokens(message.content) + 4, 0);
+  const currentPromptTokens = estimateTokens(input.currentPrompt ?? input.messages.at(-1)?.content ?? "");
+  const availableInputTokens = Math.max(0, input.contextWindow - input.maxOutputTokens);
+  const percentOfWindow = input.contextWindow > 0 ? Math.round((estimatedTokens / input.contextWindow) * 1000) / 10 : 0;
+  const percentOfInputBudget = availableInputTokens > 0 ? Math.round((estimatedTokens / availableInputTokens) * 1000) / 10 : 0;
+  return {
+    estimatedTokens,
+    contextWindow: input.contextWindow,
+    maxOutputTokens: input.maxOutputTokens,
+    availableInputTokens,
+    percentOfWindow,
+    percentOfInputBudget,
+    messageCount: input.messages.length,
+    mrpCount: new Set(input.messages.map((message) => message.mrpId).filter(Boolean)).size,
+    currentPromptTokens,
+    warning: percentOfInputBudget >= 100 ? "over" : percentOfInputBudget >= 80 ? "high" : "ok"
+  };
+}
+
+export function estimateTokens(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  return Math.ceil(trimmed.length / 4);
+}

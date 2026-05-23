@@ -2,12 +2,14 @@ import { and, desc, eq, inArray, max, ne } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import {
   buildContextMessages,
+  estimateContextBudget,
   type Branch,
   type CanvasPlacement,
   type CanvasSnapshot,
   type CanvasThread,
   type ContextMode,
   type ContextBundle,
+  type ContextBudget,
   type CreateChildCanvasResponse,
   type CreatePromptResponse,
   type ImportExternalMrpsResponse,
@@ -561,7 +563,8 @@ export async function createPromptMrp(
   canvasId: string,
   prompt: string,
   layout: LayoutMetrics = {},
-  attachments: UploadedAttachment[] = []
+  attachments: UploadedAttachment[] = [],
+  contextBudget?: ContextBudget
 ): Promise<CreatePromptResponse> {
   const timestamp = now();
   const [sequenceRow] = await db
@@ -670,7 +673,7 @@ export async function createPromptMrp(
       collapsedByDefault: true,
       selectable: true,
       contextDefault: "exclude",
-      summary: `${inputMrpIds.length} selected MRP${inputMrpIds.length === 1 ? "" : "s"}`
+      summary: `${inputMrpIds.length} selected MRP${inputMrpIds.length === 1 ? "" : "s"} · ${contextBudget?.estimatedTokens.toLocaleString() ?? "?"} est tokens`
     }
   );
   await appendMrpEvent(mrp.id, modelRun.id, "turn_started", {
@@ -678,7 +681,8 @@ export async function createPromptMrp(
     model: modelRun.model,
     harnessMode: adapter.mode,
     capabilities: adapter.capabilities,
-    inputMrpIds
+    inputMrpIds,
+    contextBudget
   });
   await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
 
@@ -1043,6 +1047,16 @@ export async function buildMessagesForPrompt(canvasId: string, prompt: string) {
     systemPrompt: "You are Flowux, a spatial AI workspace assistant. Preserve project reasoning and answer concisely.",
     currentPrompt: prompt
   });
+}
+
+export async function buildPromptContextBudget(
+  canvasId: string,
+  prompt: string,
+  contextWindow: number,
+  maxOutputTokens: number
+): Promise<ContextBudget> {
+  const messages = await buildMessagesForPrompt(canvasId, prompt);
+  return estimateContextBudget({ messages, contextWindow, maxOutputTokens, currentPrompt: prompt });
 }
 
 async function getPromptContextMrpIds(canvasId: string) {

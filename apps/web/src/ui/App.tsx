@@ -38,6 +38,7 @@ export function App() {
     loading,
     promptRunning,
     searchResults,
+    contextBudget,
     executionContext,
     error,
     loadInitial,
@@ -54,6 +55,7 @@ export function App() {
     submitPrompt,
     cancelActivePrompt,
     searchWorkspace,
+    refreshContextBudget,
     loadMrpDetails,
     patchPlacement,
     setAllContextSelection,
@@ -84,6 +86,13 @@ export function App() {
     }, 180);
     return () => window.clearTimeout(handle);
   }, [searchQuery, searchWorkspace]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void refreshContextBudget(prompt, pendingAttachments);
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [prompt, pendingAttachments, refreshContextBudget, snapshot?.canvas.id]);
 
   useEffect(() => {
     if (!focusedMrpId) return;
@@ -369,6 +378,7 @@ export function App() {
             <span>{selectedCount} checked</span>
             <span>{snapshot?.contextBundles.length ?? 0} sets</span>
             <span>{promptRunning ? "running" : "ready"}</span>
+            <span title={formatContextTitle(contextBudget)}>{formatContextLabel(contextBudget)}</span>
             <span title={formatExecutionTitle(executionContext)}>{formatExecutionLabel(executionContext)}</span>
             <span>{snapshot?.canvas.status ?? "loading"}</span>
           </div>
@@ -624,6 +634,15 @@ export function App() {
                 ))}
               </div>
             )}
+            {contextBudget && (
+              <div className={`context-meter context-${contextBudget.warning ?? "ok"}`} title={formatContextTitle(contextBudget)}>
+                <span>{formatTokenCount(contextBudget.estimatedTokens)}</span>
+                <div>
+                  <i style={{ width: `${Math.min(100, contextBudget.percentOfInputBudget)}%` }} />
+                </div>
+                <span>{contextBudget.percentOfInputBudget.toFixed(1)}%</span>
+              </div>
+            )}
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
@@ -650,6 +669,28 @@ function formatCanvasTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "unknown";
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatContextLabel(context: import("@flowux/shared").ContextBudget | undefined) {
+  if (!context) return "context ?";
+  return `${formatTokenCount(context.estimatedTokens)} / ${formatTokenCount(context.availableInputTokens)}`;
+}
+
+function formatContextTitle(context: import("@flowux/shared").ContextBudget | undefined) {
+  if (!context) return "Context estimate unavailable.";
+  return [
+    `Estimated input: ${context.estimatedTokens.toLocaleString()} tokens`,
+    `Available input budget: ${context.availableInputTokens.toLocaleString()} tokens`,
+    `Context window: ${context.contextWindow.toLocaleString()} tokens`,
+    `Reserved output: ${context.maxOutputTokens.toLocaleString()} tokens`,
+    `Messages: ${context.messageCount}`,
+    `MRPs included: ${context.mrpCount}`
+  ].join("\n");
+}
+
+function formatTokenCount(value: number) {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
+  return value.toLocaleString();
 }
 
 function formatExecutionLabel(context: import("@flowux/shared").ExecutionContext | undefined) {

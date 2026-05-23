@@ -7,6 +7,7 @@ import {
   appendMrpEvent,
   applyContextBundle,
   buildMessagesForPrompt,
+  buildPromptContextBudget,
   completePromptMrp,
   createCanvas,
   createChildCanvasFromSelection,
@@ -52,6 +53,8 @@ app.get("/api/health", async () => ({
   modelBaseUrl: config.modelBaseUrl,
   modelName: config.modelName,
   modelMaxTokens: config.modelMaxTokens,
+  contextWindow: config.modelContextWindow,
+  maxOutputTokens: config.modelMaxTokens,
   piMonoRemoteHost: config.piMonoRemoteHost,
   piMonoRemoteCwd: config.piMonoRemoteCwd,
   piMonoProvider: config.piMonoProvider,
@@ -63,6 +66,24 @@ app.get("/api/canvases", async () => listCanvases());
 
 app.get<{ Querystring: { q?: string; limit?: string } }>("/api/search", async (request) =>
   searchWorkspace(request.query.q ?? "", Number(request.query.limit ?? 30))
+);
+
+app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?: string[] } }>(
+  "/api/canvases/:canvasId/context-estimate",
+  async (request) => {
+    const attachmentIds = Array.from(new Set(request.body?.attachmentIds ?? []));
+    const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
+      (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
+    );
+    const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
+    const attachmentPrompt = formatAttachmentsForPrompt(attachments);
+    const modelPrompt = [prompt, attachmentPrompt].filter(Boolean).join("\n\n");
+    return {
+      canvasId: request.params.canvasId,
+      prompt,
+      budget: await buildPromptContextBudget(request.params.canvasId, modelPrompt, config.modelContextWindow, config.modelMaxTokens)
+    };
+  }
 );
 
 app.post<{ Body: { name?: string; mimeType?: string; dataBase64?: string } }>("/api/uploads", async (request, reply) => {
@@ -295,6 +316,12 @@ app.post<{
     let created: Awaited<ReturnType<typeof createPromptMrp>> | undefined;
     try {
       const messages = await buildMessagesForPrompt(request.params.canvasId, modelPrompt);
+      const contextBudget = await buildPromptContextBudget(
+        request.params.canvasId,
+        modelPrompt,
+        config.modelContextWindow,
+        config.modelMaxTokens
+      );
       created = await createPromptMrp(
         request.params.canvasId,
         prompt,
@@ -304,14 +331,15 @@ app.post<{
           layoutTop: request.body?.layoutTop,
           rowHeight: request.body?.rowHeight
         },
-        attachments
+        attachments,
+        contextBudget
       );
       activePromptRuns.set(request.params.canvasId, {
         abortController,
         mrpId: created.mrp.id,
         startedAt: created.modelRun.startedAt
       });
-      send("created", created);
+      send("created", { ...created, contextBudget });
 
       const adapter = createHarnessAdapter();
       let responseText = "";
@@ -335,7 +363,8 @@ app.post<{
         provider: adapter.provider,
         model: adapter.model,
         harnessMode: adapter.mode,
-        capabilities: adapter.capabilities
+        capabilities: adapter.capabilities,
+        contextBudget
       });
 
       for await (const event of adapter.generate({

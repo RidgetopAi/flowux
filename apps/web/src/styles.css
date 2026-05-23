@@ -641,6 +641,39 @@ select { font: inherit; }
   cursor: pointer;
 }
 
+.context-meter {
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--hud-muted);
+  font: 10px/1 var(--hud-mono);
+  text-transform: uppercase;
+}
+
+.context-meter div {
+  height: 5px;
+  border-radius: var(--hud-radius-pill);
+  background: rgba(255,255,255,.08);
+  overflow: hidden;
+}
+
+.context-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hud-cyan);
+}
+
+.context-meter.context-high i {
+  background: var(--hud-amber);
+}
+
+.context-meter.context-over i {
+  background: var(--hud-red);
+}
+
 .artifact-list {
   display: grid;
   gap: 8px;
