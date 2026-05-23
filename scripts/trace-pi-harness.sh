@@ -18,8 +18,8 @@ FLOWUX_DB_PATH="$DB_PATH" \
   FLOWUX_API_PORT="$API_PORT" \
   FLOWUX_HARNESS_MODE=pi_mono \
   FLOWUX_PI_MONO_REMOTE_HOST="${FLOWUX_PI_MONO_REMOTE_HOST:-ridgetop@ridgetop-desktop}" \
-  FLOWUX_PI_MONO_REMOTE_CWD="${FLOWUX_PI_MONO_REMOTE_CWD:-/home/ridgetop/projects/flowux}" \
-  FLOWUX_PI_MONO_COMMAND="${FLOWUX_PI_MONO_COMMAND:-PATH=/home/ridgetop/.local/flowux/node-v22.22.3-linux-x64/bin:\$PATH PI_OFFLINE=1 node /home/ridgetop/projects/pi-mono/packages/coding-agent/dist/cli.js --mode rpc --provider local-qwen --model qwen3.6-35b --no-session --no-tools --thinking minimal}" \
+  FLOWUX_PI_MONO_REMOTE_CWD="${FLOWUX_PI_MONO_REMOTE_CWD:-/home/ridgetop/projects}" \
+  FLOWUX_PI_MONO_COMMAND="${FLOWUX_PI_MONO_COMMAND:-PATH=/home/ridgetop/.local/flowux/node-v22.22.3-linux-x64/bin:\$PATH PI_OFFLINE=1 node /home/ridgetop/projects/pi-mono/packages/coding-agent/dist/cli.js --mode rpc --provider local-qwen --model qwen3.6-35b --no-session --no-context-files --no-tools --thinking minimal}" \
   npx tsx apps/api/src/server.ts >"$LOG_PATH" 2>&1 &
 API_PID=$!
 

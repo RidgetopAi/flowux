@@ -41,6 +41,7 @@ export function loadConfig(): FlowuxConfig {
       `--provider ${shellArg(piMonoProvider)}`,
       `--model ${shellArg(piMonoModel)}`,
       "--no-session",
+      "--no-context-files",
       `--thinking ${shellArg(piMonoThinking)}`
     ]
       .filter(Boolean)
@@ -57,7 +58,7 @@ export function loadConfig(): FlowuxConfig {
     modelMaxTokens: Number(process.env.FLOWUX_MODEL_MAX_TOKENS ?? 2048),
     modelContextWindow: Number(process.env.FLOWUX_MODEL_CONTEXT_WINDOW ?? getDefaultContextWindow(piMonoProvider, piMonoModel)),
     piMonoRemoteHost: process.env.FLOWUX_PI_MONO_REMOTE_HOST ?? "ridgetop@ridgetop-desktop",
-    piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects/flowux",
+    piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects",
     piMonoCommand,
     piMonoProvider,
     piMonoModel
