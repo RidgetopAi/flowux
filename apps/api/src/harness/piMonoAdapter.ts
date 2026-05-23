@@ -169,6 +169,7 @@ class PiRpcProcess {
   async prompt(message: string): Promise<void> {
     const process = this.requireProcess();
     const requestId = `flowux-${crypto.randomUUID()}`;
+    const preAckEvents: PiRpcEvent[] = [];
     process.stdin.write(`${JSON.stringify({ id: requestId, type: "prompt", message })}\n`);
 
     while (true) {
@@ -178,12 +179,13 @@ class PiRpcProcess {
         throw new Error(`${stringValue(raw.reason) ?? "Pi-Mono prompt failed"}. stderr: ${this.stderr.trim()}`);
       }
       if (raw.type !== "response" || raw.id !== requestId) {
-        this.pushEvent(raw);
+        preAckEvents.push(raw);
         continue;
       }
       if (raw.success === false) {
         throw new Error(`Pi-Mono prompt rejected: ${stringValue(raw.error) ?? "unknown_error"}`);
       }
+      this.eventsQueue.unshift(...preAckEvents);
       return;
     }
   }
