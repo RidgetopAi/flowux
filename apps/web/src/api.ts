@@ -5,8 +5,13 @@ import type {
   ContextBundle,
   CreateChildCanvasResponse,
   CreatePromptResponse,
+  HealthStatus,
   ImportExternalMrpsResponse
 } from "@flowux/shared";
+
+export async function getHealth(): Promise<HealthStatus> {
+  return fetchJson("/api/health");
+}
 
 export async function listCanvases(): Promise<CanvasThread[]> {
   return fetchJson("/api/canvases");

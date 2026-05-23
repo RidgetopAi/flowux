@@ -29,6 +29,27 @@ export type MrpBlockKind =
   | "event";
 export type ContextDefault = "include" | "exclude" | "summarize";
 
+export interface ExecutionContext {
+  harness: HarnessMode;
+  hostLabel?: string;
+  workspaceLabel?: string;
+  filesystemScope?: string;
+  toolCapabilities: string[];
+  warning?: string;
+}
+
+export interface HealthStatus {
+  ok: boolean;
+  harnessMode: HarnessMode;
+  modelMode: "mock" | "llama_cpp";
+  modelBaseUrl: string;
+  modelName: string;
+  modelMaxTokens: number;
+  piMonoRemoteHost: string;
+  piMonoRemoteCwd: string;
+  executionContext: ExecutionContext;
+}
+
 export interface CanvasThread {
   id: string;
   title: string;

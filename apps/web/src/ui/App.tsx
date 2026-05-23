@@ -33,6 +33,7 @@ export function App() {
     canvases,
     loading,
     promptRunning,
+    executionContext,
     error,
     loadInitial,
     switchCanvas,
@@ -297,7 +298,7 @@ export function App() {
             <span>{selectedCount} checked</span>
             <span>{snapshot?.contextBundles.length ?? 0} sets</span>
             <span>{promptRunning ? "running" : "ready"}</span>
-            <span>desktop pi-mono</span>
+            <span title={formatExecutionTitle(executionContext)}>{formatExecutionLabel(executionContext)}</span>
             <span>{snapshot?.canvas.status ?? "loading"}</span>
           </div>
           <button className="hud-button" onClick={() => void cancelActivePrompt()} disabled={!promptRunning} title="Cancel active model run">
@@ -545,6 +546,25 @@ function formatCanvasTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "unknown";
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatExecutionLabel(context: import("@flowux/shared").ExecutionContext | undefined) {
+  if (!context) return "runtime unknown";
+  const host = context.hostLabel ? context.hostLabel.replace(/^.*@/, "") : context.harness;
+  return `${context.harness.replace("_", " ")} · ${host}`;
+}
+
+function formatExecutionTitle(context: import("@flowux/shared").ExecutionContext | undefined) {
+  if (!context) return "Runtime context has not loaded yet.";
+  return [
+    `Harness: ${context.harness}`,
+    context.hostLabel ? `Host: ${context.hostLabel}` : undefined,
+    context.workspaceLabel ? `Workspace: ${context.workspaceLabel}` : undefined,
+    context.toolCapabilities.length ? `Tools: ${context.toolCapabilities.join(", ")}` : undefined,
+    context.warning
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 interface FocusFrame {

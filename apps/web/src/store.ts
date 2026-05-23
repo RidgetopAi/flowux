@@ -1,4 +1,4 @@
-import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreatePromptResponse, Mrp } from "@flowux/shared";
+import type { CanvasPlacement, CanvasSnapshot, CanvasThread, CreatePromptResponse, ExecutionContext, Mrp } from "@flowux/shared";
 import { create } from "zustand";
 import * as api from "./api.js";
 
@@ -9,6 +9,7 @@ interface FlowuxState {
   canvases: CanvasThread[];
   loading: boolean;
   promptRunning: boolean;
+  executionContext?: ExecutionContext;
   error?: string;
   loadInitial: () => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
@@ -41,13 +42,14 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     set({ loading: true, error: undefined });
     try {
       const canvases = await api.listCanvases();
+      const health = await api.getHealth();
       const storedCanvasId = window.localStorage.getItem(activeCanvasStorageKey);
       const canvas =
         canvases.find((item) => item.id === storedCanvasId) ?? canvases[0] ?? (await api.createCanvas("Flowux MVP Canvas"));
       const nextCanvases = canvases.some((item) => item.id === canvas.id) ? canvases : [canvas, ...canvases];
       const snapshot = await api.getCanvas(canvas.id);
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
-      set({ canvases: nextCanvases, snapshot, loading: false });
+      set({ canvases: nextCanvases, snapshot, executionContext: health.executionContext, loading: false });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to load Flowux", loading: false });
     }

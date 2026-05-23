@@ -48,7 +48,18 @@ app.get("/api/health", async () => ({
   modelName: config.modelName,
   modelMaxTokens: config.modelMaxTokens,
   piMonoRemoteHost: config.piMonoRemoteHost,
-  piMonoRemoteCwd: config.piMonoRemoteCwd
+  piMonoRemoteCwd: config.piMonoRemoteCwd,
+  executionContext: {
+    harness: config.harnessMode,
+    hostLabel: getExecutionHostLabel(),
+    workspaceLabel: getExecutionWorkspaceLabel(),
+    filesystemScope: getExecutionWorkspaceLabel(),
+    toolCapabilities: getToolCapabilities(),
+    warning:
+      config.harnessMode === "pi_mono"
+        ? "Tools run on the configured remote host, not necessarily on the Flowux UI machine."
+        : undefined
+  }
 }));
 
 app.get("/api/canvases", async () => listCanvases());
@@ -405,3 +416,20 @@ app.post<{
 );
 
 await app.listen({ port: config.port, host: "0.0.0.0" });
+
+function getExecutionHostLabel() {
+  if (config.harnessMode === "pi_mono") return config.piMonoRemoteHost;
+  if (config.harnessMode === "direct_model") return "local api";
+  return config.harnessMode;
+}
+
+function getExecutionWorkspaceLabel() {
+  if (config.harnessMode === "pi_mono") return config.piMonoRemoteCwd;
+  return process.cwd();
+}
+
+function getToolCapabilities() {
+  if (config.harnessMode === "pi_mono") return ["filesystem", "shell", "tools"];
+  if (config.harnessMode === "direct_model") return config.modelMode === "llama_cpp" ? ["model"] : ["mock"];
+  return ["tools"];
+}
