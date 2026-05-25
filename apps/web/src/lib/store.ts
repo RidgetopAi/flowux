@@ -1,5 +1,18 @@
+import type { CanvasSnapshot } from "@flowux/shared";
 import { create } from "zustand";
+import { snapshotToCanvasObjects } from "./canvasAdapter";
 import { arrangeGrid, nextGridSlot } from "./layout";
+
+/** External hook for sending a prompt + staged attachments. When set on
+ *  the store (e.g. by App.tsx after wiring apps/api), FloatingDock's
+ *  send button calls this instead of the mock addMRP. Must return a
+ *  synchronous id used for image anchor chaining and immediate
+ *  setExpanded/revealMRP — the handler is free to kick off async work
+ *  (POST stream, SSE, snapshot reload) in the background. */
+export type SubmitPromptHandler = (input: {
+  prompt: string;
+  attachments: DockAttachment[];
+}) => string;
 
 export type MRPStatus = "idle" | "pending" | "active" | "complete" | "error";
 
@@ -233,8 +246,16 @@ type State = {
 
   // Layout
   loadFixtures: (objects: CanvasObject[]) => void;
+  /** Hydrate the canvas from a real apps/api CanvasSnapshot. Replaces the
+   *  objects array via the snapshot adapter. Unlike loadFixtures, does
+   *  NOT re-flow into a grid — persisted placements come with x/y. */
+  loadFromSnapshot: (snapshot: CanvasSnapshot) => void;
   arrangeAll: () => void;
   setViewportRect: (left: number, top: number, width: number, height: number) => void;
+
+  // External integration hooks
+  submitPromptHandler: SubmitPromptHandler | null;
+  setSubmitPromptHandler: (handler: SubmitPromptHandler | null) => void;
 };
 
 let seq = 0;
@@ -594,6 +615,17 @@ export const useCanvas = create<State>((set, get) => ({
     set({ objects: arranged, expandedId: null, cursorId: null });
   },
 
+  loadFromSnapshot: (snapshot) => {
+    const next = snapshotToCanvasObjects(snapshot);
+    // Preserve UI-only state across snapshot refreshes; only swap objects.
+    set((s) => ({
+      objects: next,
+      // If the expanded MRP is no longer in the snapshot, drop the overlay.
+      expandedId: s.expandedId && next.some((o) => o.id === s.expandedId) ? s.expandedId : null,
+      cursorId: s.cursorId && next.some((o) => o.id === s.cursorId) ? s.cursorId : null,
+    }));
+  },
+
   arrangeAll: () => {
     const state = get();
     const positions = arrangeGrid({
@@ -611,6 +643,9 @@ export const useCanvas = create<State>((set, get) => ({
 
   setViewportRect: (left, top, width, height) =>
     set((s) => ({ viewport: { ...s.viewport, left, top, width, height } })),
+
+  submitPromptHandler: null,
+  setSubmitPromptHandler: (handler) => set({ submitPromptHandler: handler }),
 
   revealMRP: (id) => {
     const state = get();

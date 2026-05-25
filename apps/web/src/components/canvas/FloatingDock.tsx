@@ -58,6 +58,7 @@ function FloatingDock() {
   const closeDock = useCanvas((s) => s.closeDock);
   const addMRP = useCanvas((s) => s.addMRP);
   const patchMRP = useCanvas((s) => s.patchMRP);
+  const submitPromptHandler = useCanvas((s) => s.submitPromptHandler);
   const setExpanded = useCanvas((s) => s.setExpanded);
   const revealMRP = useCanvas((s) => s.revealMRP);
   const promptHistory = useCanvas((s) => s.promptHistory);
@@ -174,12 +175,18 @@ function FloatingDock() {
     // Allow send when there's either a prompt OR staged attachments
     // (image-only "look at this" is a valid turn).
     if (!prompt && dockAttachments.length === 0) return;
-    const id = addMRP({
-      prompt: prompt || "(image attached)",
-      response: "",
-      status: "pending",
-      tokens: 0,
-    });
+    // External handler (apps/api-bound) takes over when registered. The
+    // sync addMRP fallback is used in playground/standalone mode where
+    // there is no backend; it returns an id immediately for the image
+    // anchor chain below.
+    const id = submitPromptHandler
+      ? submitPromptHandler({ prompt: prompt || "(image attached)", attachments: dockAttachments })
+      : addMRP({
+          prompt: prompt || "(image attached)",
+          response: "",
+          status: "pending",
+          tokens: 0,
+        });
     if (prompt) pushPromptHistory(prompt);
     setDraft("");
     setHistoryIndex(null);
@@ -205,16 +212,19 @@ function FloatingDock() {
      * not a one-shot input. */
     setExpanded(id);
     revealMRP(id);
-    /* "Thinking" beat — gives the expanded view a moment to land, then
-     * the response fills in. Mocked here; the real call would stream. */
-    window.setTimeout(() => {
-      patchMRP(id, {
-        status: "complete",
-        response:
-          STUB_RESPONSES[Math.floor(Math.random() * STUB_RESPONSES.length)],
-        tokens: 240 + Math.floor(Math.random() * 1200),
-      });
-    }, 700);
+    /* Standalone-mode "thinking" beat (no real backend). With an external
+     * submitPromptHandler the real apps/api stream patches the snapshot
+     * and loadFromSnapshot keeps the canvas in sync — no local stub. */
+    if (!submitPromptHandler) {
+      window.setTimeout(() => {
+        patchMRP(id, {
+          status: "complete",
+          response:
+            STUB_RESPONSES[Math.floor(Math.random() * STUB_RESPONSES.length)],
+          tokens: 240 + Math.floor(Math.random() * 1200),
+        });
+      }, 700);
+    }
   };
 
   const onTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
