@@ -236,6 +236,11 @@ type State = {
 
   // Overlay + dock state
   setExpanded: (id: string | null) => void;
+  /** Optional query string highlighted inside the expanded MRP overlay
+   *  when it was opened from a search result. Cleared when the overlay
+   *  closes. null = no highlight (default reading mode). */
+  expandedHighlight: string | null;
+  setExpandedHighlight: (query: string | null) => void;
   setDragging: (id: string | null) => void;
   setCursor: (id: string | null) => void;
   openDock: () => void;
@@ -304,6 +309,7 @@ export const useCanvas = create<State>((set, get) => ({
   promptHistory: [],
   dockLockAnchor: null,
   dockAttachments: [],
+  expandedHighlight: null,
 
   bundleCount: () => get().objects.filter((o) => o.checked).length,
 
@@ -464,7 +470,15 @@ export const useCanvas = create<State>((set, get) => ({
       cursorId: s.cursorId === id ? null : s.cursorId,
     })),
 
-  setExpanded: (id) => set({ expandedId: id }),
+  setExpanded: (id) =>
+    // Clear any sticky search highlight when the overlay closes so the next
+    // unrelated expand (click on a card, not a search result) doesn't show
+    // stale marks.
+    set((s) => ({
+      expandedId: id,
+      expandedHighlight: id === null ? null : s.expandedHighlight,
+    })),
+  setExpandedHighlight: (query) => set({ expandedHighlight: query?.trim() || null }),
   setDragging: (id) => set({ draggingId: id }),
   setCursor: (id) => set({ cursorId: id }),
   openDock: () => set({ dockOpen: true }),

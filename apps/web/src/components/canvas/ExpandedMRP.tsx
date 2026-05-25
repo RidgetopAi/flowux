@@ -53,6 +53,7 @@ export function ExpandedMRPLayer() {
 
 function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
   const telemetry = mockTelemetry(mrp);
+  const highlight = useCanvas((s) => s.expandedHighlight);
 
   return (
     <div className="xmrp-portal">
@@ -113,7 +114,9 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
                 <Label size="micro" tone="amber">PROMPT</Label>
                 <BrailleBand length={24} density={0.45} tone="amber" seed={mrp.sequence} />
               </div>
-              <p className="xmrp__msg-text">{mrp.prompt}</p>
+              <p className="xmrp__msg-text">
+                <HighlightedText text={mrp.prompt} query={highlight} />
+              </p>
             </section>
 
             <section className="xmrp__msg xmrp__msg--assistant">
@@ -121,7 +124,13 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
                 <Label size="micro" tone="cyan">RESPONSE</Label>
                 <BrailleBand length={24} density={0.55} tone="cyan" seed={mrp.sequence + 100} />
               </div>
-              <p className="xmrp__msg-text">{mrp.response || "(no response yet)"}</p>
+              <p className="xmrp__msg-text">
+                {mrp.response ? (
+                  <HighlightedText text={mrp.response} query={highlight} />
+                ) : (
+                  "(no response yet)"
+                )}
+              </p>
             </section>
           </div>
 
@@ -158,6 +167,32 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
         </footer>
       </motion.div>
     </div>
+  );
+}
+
+/* ── Highlighted text ─────────────────────────────────────────────────── */
+/** Wraps every case-insensitive occurrence of `query` in `text` with a
+ *  styled <mark>. Returns the original text unchanged when query is empty
+ *  or doesn't match. Escapes regex metachars so user search like "(a+b)"
+ *  doesn't blow up. */
+function HighlightedText({ text, query }: { text: string; query: string | null }) {
+  if (!query) return <>{text}</>;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(${escaped})`, "gi");
+  const parts = text.split(re);
+  if (parts.length <= 1) return <>{text}</>;
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark key={i} className="xmrp__match">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 

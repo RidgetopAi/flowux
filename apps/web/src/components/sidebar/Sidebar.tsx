@@ -92,6 +92,7 @@ function SearchPanel() {
   const currentCanvasId = useFlowuxStore((s) => s.snapshot?.canvas.id);
   const revealMRP = useCanvas((s) => s.revealMRP);
   const setExpanded = useCanvas((s) => s.setExpanded);
+  const setExpandedHighlight = useCanvas((s) => s.setExpandedHighlight);
 
   // Debounce the query → API call. 220ms feels responsive without spamming
   // the API on every keystroke.
@@ -107,12 +108,14 @@ function SearchPanel() {
     if (!mrpId) return;
     // After switch (or no-op), wait for the snapshot to settle so the new
     // canvas's placements are queryable, then locate placement.id by mrpId
-    // and ask Canvas to expand + center.
+    // and ask Canvas to expand + center. Stash the active query so the
+    // overlay can highlight matched spans inside prompt/response.
     requestAnimationFrame(() => {
       const placement = useFlowuxStore
         .getState()
         .snapshot?.placements.find((p) => p.mrpId === mrpId);
       if (!placement) return;
+      setExpandedHighlight(query);
       setExpanded(placement.id);
       revealMRP(placement.id);
     });
