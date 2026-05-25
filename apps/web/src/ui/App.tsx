@@ -2,6 +2,7 @@ import type { CanvasPlacement, CanvasSnapshot } from "@flowux/shared";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Canvas } from "../components/canvas/Canvas";
+import { Sidebar } from "../components/sidebar/Sidebar";
 import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
@@ -192,13 +193,16 @@ export function App() {
       {error && <div className="flowux-error">{error}</div>}
 
       <div className="flowux-stage">
-        {loading && !snapshot && (
-          <div className="flowux-loading">
-            <Loader2 className="spin" size={18} />
-            <span>Loading Flowux…</span>
-          </div>
-        )}
-        <Canvas />
+        <Sidebar />
+        <div className="flowux-canvas-host">
+          {loading && !snapshot && (
+            <div className="flowux-loading">
+              <Loader2 className="spin" size={18} />
+              <span>Loading Flowux…</span>
+            </div>
+          )}
+          <Canvas />
+        </div>
       </div>
     </main>
   );
