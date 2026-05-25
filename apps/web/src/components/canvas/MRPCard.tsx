@@ -200,21 +200,26 @@ export function MRPCard({ mrp }: Props) {
 
   // Fork (branch from this card or the whole bundle). Acts on the bundle if
   // multiple cards are checked — otherwise just this single card. The actual
-  // "new conversation with this context" happens in flowux proper; here we
-  // just log the intent so the UI gesture can be tuned in isolation.
+  // "new conversation with this context" is handled by useCanvas.forkHandler,
+  // which the host app (App.tsx) wires up to call apps/api's branch endpoint
+  // with the source MRP ids resolved from the canvas objects.
   const onForkClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const all = useCanvas.getState().objects;
     const checkedIds = all.filter((o) => o.checked).map((o) => o.id);
-    const bundleAct =
-      checkedIds.length > 1 && checkedIds.includes(mrp.id);
+    const bundleAct = checkedIds.length > 1 && checkedIds.includes(mrp.id);
     const sourceIds = bundleAct ? checkedIds : [mrp.id];
-    // eslint-disable-next-line no-console
-    console.log(
-      bundleAct
-        ? `[fork] from bundle (${sourceIds.length} cards): ${sourceIds.join(", ")}`
-        : `[fork] from single card: ${sourceIds[0]}`,
-    );
+    const fork = useCanvas.getState().forkHandler;
+    if (fork) {
+      fork(sourceIds);
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(
+        bundleAct
+          ? `[fork] from bundle (${sourceIds.length} cards): ${sourceIds.join(", ")}`
+          : `[fork] from single card: ${sourceIds[0]}`,
+      );
+    }
   };
 
   // Two-layer motion structure:
@@ -308,6 +313,11 @@ export function MRPCard({ mrp }: Props) {
           {mrp.tokens > 0 && <Pill>{formatTokens(mrp.tokens)} tok</Pill>}
           <Pill>{formatTime(mrp.timestamp)}</Pill>
           {mrp.parentId && <Pill tone="violet">branched</Pill>}
+          {mrp.branchOutCount && (
+            <Pill tone="violet" emphasis>
+              forked ×{mrp.branchOutCount}
+            </Pill>
+          )}
         </Card.Meta>
 
         {mrp.response && (

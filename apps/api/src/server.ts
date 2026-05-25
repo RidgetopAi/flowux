@@ -147,9 +147,15 @@ app.delete<{ Params: { canvasId: string } }>("/api/canvases/:canvasId", async (r
   }
 });
 
-app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/branches", async (request, reply) => {
+app.post<{
+  Params: { canvasId: string };
+  Body: { sourceMrpIds?: string[] } | undefined;
+}>("/api/canvases/:canvasId/branches", async (request, reply) => {
   try {
-    return await createChildCanvasFromSelection(request.params.canvasId);
+    const explicit = Array.isArray(request.body?.sourceMrpIds)
+      ? request.body!.sourceMrpIds!.filter((id) => typeof id === "string" && id.length > 0)
+      : undefined;
+    return await createChildCanvasFromSelection(request.params.canvasId, explicit);
   } catch (error) {
     const message = error instanceof Error ? error.message : "branch_create_failed";
     if (message === "parent_canvas_not_found") return reply.code(404).send({ error: message });

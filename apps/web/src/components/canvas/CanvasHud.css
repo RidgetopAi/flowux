@@ -40,6 +40,45 @@
   white-space: nowrap;
 }
 
+/* Parent canvas chip — only shown when current canvas has a parentCanvasId.
+   Clickable; violet-glow on hover to signal cross-canvas navigation. */
+.canvas-hud__parent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(199, 189, 255, 0.22);
+  background: rgba(199, 189, 255, 0.06);
+  border-radius: var(--r-pill);
+  color: var(--soft);
+  cursor: pointer;
+  white-space: nowrap;
+  font: 12px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  max-width: 240px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-quart),
+    background var(--dur-fast) var(--ease-out-quart),
+    box-shadow var(--dur-fast) var(--ease-out-quart);
+}
+
+.canvas-hud__parent:hover {
+  border-color: rgba(199, 189, 255, 0.44);
+  background: rgba(199, 189, 255, 0.12);
+  box-shadow: 0 0 16px rgba(199, 189, 255, 0.16);
+}
+
+.canvas-hud__parent .canvas-hud__icon {
+  color: var(--violet-dim);
+}
+
+.canvas-hud__parent-title {
+  color: var(--ink);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .canvas-hud__icon {
   color: var(--cyan-dim);
   flex: 0 0 auto;

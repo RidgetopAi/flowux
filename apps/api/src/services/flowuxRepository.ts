@@ -287,18 +287,34 @@ export async function searchWorkspace(query: string, limit = 30): Promise<Search
   };
 }
 
-export async function createChildCanvasFromSelection(parentCanvasId: string): Promise<CreateChildCanvasResponse> {
+export async function createChildCanvasFromSelection(
+  parentCanvasId: string,
+  explicitSourceMrpIds?: string[],
+): Promise<CreateChildCanvasResponse> {
   const timestamp = now();
   const [parentCanvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, parentCanvasId));
   if (!parentCanvas) throw new Error("parent_canvas_not_found");
 
-  const selectedPlacements = await db
-    .select()
-    .from(canvasPlacements)
-    .where(and(eq(canvasPlacements.canvasId, parentCanvasId), eq(canvasPlacements.selectedForContext, true)));
-  if (!selectedPlacements.length) throw new Error("selected_mrps_required");
+  let selectedMrpIds: string[];
+  if (explicitSourceMrpIds && explicitSourceMrpIds.length > 0) {
+    // Caller-supplied MRP ids — validate they belong to this canvas before forking.
+    const placements = await db
+      .select()
+      .from(canvasPlacements)
+      .where(and(eq(canvasPlacements.canvasId, parentCanvasId), inArray(canvasPlacements.mrpId, explicitSourceMrpIds)));
+    if (!placements.length) throw new Error("selected_mrps_required");
+    selectedMrpIds = placements.map((placement) => placement.mrpId);
+  } else {
+    // Fallback to the canvas's currently-checked placements (used by the sidebar
+    // Branch button which doesn't ship explicit ids).
+    const selectedPlacements = await db
+      .select()
+      .from(canvasPlacements)
+      .where(and(eq(canvasPlacements.canvasId, parentCanvasId), eq(canvasPlacements.selectedForContext, true)));
+    if (!selectedPlacements.length) throw new Error("selected_mrps_required");
+    selectedMrpIds = selectedPlacements.map((placement) => placement.mrpId);
+  }
 
-  const selectedMrpIds = selectedPlacements.map((placement) => placement.mrpId);
   const selectedMrps = await db.select().from(mrps).where(inArray(mrps.id, selectedMrpIds)).orderBy(mrps.sequence);
   const selectedById = new Map(selectedMrps.map((mrp) => [mrp.id, mrp]));
   const orderedMrpIds = selectedMrpIds

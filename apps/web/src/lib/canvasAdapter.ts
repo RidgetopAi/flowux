@@ -30,12 +30,24 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
   const mrpById = new Map(snapshot.mrps.map((m) => [m.id, m]));
   const runByMrpId = new Map(snapshot.modelRuns.map((r) => [r.mrpId, r]));
 
+  // Tally how many child canvases each MRP has seeded on THIS canvas. Used
+  // to render the "branched" badge on MRP cards that were fork sources.
+  const branchOutCountByMrpId = new Map<string, number>();
+  for (const branch of snapshot.branches ?? []) {
+    if (branch.parentCanvasId !== snapshot.canvas.id) continue;
+    for (const mrpId of branch.sourceMrpIds) {
+      branchOutCountByMrpId.set(mrpId, (branchOutCountByMrpId.get(mrpId) ?? 0) + 1);
+    }
+  }
+
   const objects: CanvasObject[] = [];
 
   for (const placement of snapshot.placements) {
     const mrp = mrpById.get(placement.mrpId);
     if (!mrp) continue;
-    objects.push(toMRPObject(placement, mrp, runByMrpId.get(mrp.id)));
+    objects.push(
+      toMRPObject(placement, mrp, runByMrpId.get(mrp.id), branchOutCountByMrpId.get(mrp.id)),
+    );
   }
 
   for (const artifact of snapshot.artifacts) {
@@ -51,7 +63,8 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
 export function toMRPObject(
   placement: CanvasPlacement,
   mrp: Mrp,
-  modelRun: ModelRun | undefined
+  modelRun: ModelRun | undefined,
+  branchOutCount?: number
 ): MRPObject {
   return {
     type: "mrp",
@@ -68,7 +81,8 @@ export function toMRPObject(
     model: modelRun?.model ?? "unknown",
     tokens: modelRun?.totalTokens ?? 0,
     timestamp: mrp.createdAt,
-    external: placement.isExternalReference ? true : undefined
+    external: placement.isExternalReference ? true : undefined,
+    branchOutCount: branchOutCount && branchOutCount > 0 ? branchOutCount : undefined
   };
 }
 

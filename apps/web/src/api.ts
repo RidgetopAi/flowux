@@ -84,9 +84,15 @@ export async function uploadAttachment(file: File): Promise<UploadedAttachment> 
   });
 }
 
-export async function createChildCanvas(canvasId: string): Promise<CreateChildCanvasResponse> {
+export async function createChildCanvas(
+  canvasId: string,
+  sourceMrpIds?: string[]
+): Promise<CreateChildCanvasResponse> {
+  const hasSources = sourceMrpIds && sourceMrpIds.length > 0;
   return fetchJson(`/api/canvases/${canvasId}/branches`, {
-    method: "POST"
+    method: "POST",
+    headers: hasSources ? { "content-type": "application/json" } : undefined,
+    body: hasSources ? JSON.stringify({ sourceMrpIds }) : undefined
   });
 }
 

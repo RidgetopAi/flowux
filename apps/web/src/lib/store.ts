@@ -21,6 +21,12 @@ export type SubmitPromptHandler = (input: {
  *  — failures should be handled by the handler, not propagated. */
 export type MovePersistHandler = (objectId: string, x: number, y: number) => void;
 
+/** Called when the user clicks a fork button on an MRP card (or bundle).
+ *  Receives the CanvasObject ids that should seed the new child canvas.
+ *  Real apps wire this to a backend-driven branch creation; playground/
+ *  mock stores can no-op or log. */
+export type ForkHandler = (sourceObjectIds: string[]) => void;
+
 export type MRPStatus = "idle" | "pending" | "active" | "complete" | "error";
 
 /** Directions the keyboard cursor can move on the canvas.
@@ -75,6 +81,9 @@ export type MRPObject = ObjectBase & {
   external?: boolean;
   /** ID of the MRP this branched from. */
   parentId?: string;
+  /** Number of child canvases this MRP seeded. 0/undefined when this card
+   *  has never been used as a fork source. Renders as a small badge. */
+  branchOutCount?: number;
 };
 
 export type ImageObject = ObjectBase & {
@@ -265,6 +274,8 @@ type State = {
   setSubmitPromptHandler: (handler: SubmitPromptHandler | null) => void;
   movePersistHandler: MovePersistHandler | null;
   setMovePersistHandler: (handler: MovePersistHandler | null) => void;
+  forkHandler: ForkHandler | null;
+  setForkHandler: (handler: ForkHandler | null) => void;
 };
 
 let seq = 0;
@@ -663,6 +674,9 @@ export const useCanvas = create<State>((set, get) => ({
 
   movePersistHandler: null,
   setMovePersistHandler: (handler) => set({ movePersistHandler: handler }),
+
+  forkHandler: null,
+  setForkHandler: (handler) => set({ forkHandler: handler }),
 
   revealMRP: (id) => {
     const state = get();

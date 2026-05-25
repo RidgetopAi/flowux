@@ -8,7 +8,7 @@ import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
 import { Pill } from "../components/primitives/Pill";
 import { arrangeGrid } from "../lib/layout";
-import { useCanvas, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
+import { useCanvas, type ForkHandler, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
 import { useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -28,6 +28,10 @@ export function App() {
   const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
   const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
   const setMovePersistHandler = useCanvas((s) => s.setMovePersistHandler);
+  const setForkHandler = useCanvas((s) => s.setForkHandler);
+  const createChildCanvasFromSelection = useFlowuxStore(
+    (s) => s.createChildCanvasFromSelection,
+  );
 
   // After a dock send, apps/api confirms the new placement via the
   // submitPrompt onCreated callback. We stash that real placement id
@@ -91,6 +95,22 @@ export function App() {
     setMovePersistHandler(handler);
     return () => setMovePersistHandler(null);
   }, [patchPlacement, setMovePersistHandler]);
+
+  // Bundle-fork from an MRP card's fork button. MRPCard ships CanvasObject
+  // ids (= placement.ids per canvasAdapter); resolve them to the underlying
+  // mrpIds via the current snapshot before posting the branch request.
+  useEffect(() => {
+    const handler: ForkHandler = (objectIds) => {
+      const placements = useFlowuxStore.getState().snapshot?.placements ?? [];
+      const mrpIds = objectIds
+        .map((oid) => placements.find((p) => p.id === oid)?.mrpId)
+        .filter((id): id is string => Boolean(id));
+      if (mrpIds.length === 0) return;
+      void createChildCanvasFromSelection(mrpIds);
+    };
+    setForkHandler(handler);
+    return () => setForkHandler(null);
+  }, [createChildCanvasFromSelection, setForkHandler]);
 
   const createNamedCanvas = () => {
     const name = window.prompt("Name this canvas", "New Canvas");

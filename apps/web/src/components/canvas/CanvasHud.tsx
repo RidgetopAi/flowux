@@ -1,4 +1,4 @@
-import { Cpu, Gauge, Square } from "lucide-react";
+import { CornerUpLeft, Cpu, Gauge, Square } from "lucide-react";
 import { useFlowuxStore } from "../../store.js";
 import { Button } from "../primitives/Button";
 import { Label } from "../primitives/Label";
@@ -20,11 +20,35 @@ export function CanvasHud() {
   const budget = useFlowuxStore((s) => s.contextBudget);
   const running = useFlowuxStore((s) => s.promptRunning);
   const cancelActivePrompt = useFlowuxStore((s) => s.cancelActivePrompt);
+  const parentCanvasId = useFlowuxStore((s) => s.snapshot?.canvas.parentCanvasId);
+  const parentCanvas = useFlowuxStore((s) =>
+    parentCanvasId ? s.canvases.find((c) => c.id === parentCanvasId) : undefined,
+  );
+  const switchCanvas = useFlowuxStore((s) => s.switchCanvas);
 
-  if (!exec && !budget && !running) return null;
+  if (!exec && !budget && !running && !parentCanvas) return null;
 
   return (
     <div className="canvas-hud" aria-label="Runtime status">
+      {parentCanvas && (
+        <button
+          type="button"
+          className="canvas-hud__parent"
+          onClick={() => void switchCanvas(parentCanvas.id)}
+          title={`Open parent canvas: ${parentCanvas.title}`}
+        >
+          <CornerUpLeft size={13} className="canvas-hud__icon" aria-hidden="true" />
+          <Label size="micro" tone="violet">
+            BRANCH
+          </Label>
+          <span className="canvas-hud__parent-title">{parentCanvas.title}</span>
+        </button>
+      )}
+
+      {parentCanvas && (exec || budget || running) && (
+        <div className="canvas-hud__divider" />
+      )}
+
       {exec && (
         <div
           className="canvas-hud__chip"

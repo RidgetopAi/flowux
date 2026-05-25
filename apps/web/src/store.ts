@@ -33,7 +33,7 @@ interface FlowuxState {
   searchWorkspace: (query: string) => Promise<void>;
   refreshContextBudget: (prompt: string, attachments?: UploadedAttachment[]) => Promise<void>;
   loadMrpDetails: (mrpId: string) => Promise<void>;
-  createChildCanvasFromSelection: () => Promise<void>;
+  createChildCanvasFromSelection: (sourceMrpIds?: string[]) => Promise<void>;
   importSelectedFromCanvas: (sourceCanvasId: string, layout?: api.LayoutRequest) => Promise<void>;
   saveSelectedContextBundle: (name?: string) => Promise<void>;
   applyContextBundle: (bundleId: string) => Promise<void>;
@@ -159,12 +159,12 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     }
   },
 
-  async createChildCanvasFromSelection() {
+  async createChildCanvasFromSelection(sourceMrpIds) {
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
     set({ loading: true, error: undefined });
     try {
-      const child = await api.createChildCanvas(canvasId);
+      const child = await api.createChildCanvas(canvasId, sourceMrpIds);
       const snapshot = await api.getCanvas(child.canvas.id, { summary: true });
       const canvases = await api.listCanvases();
       window.localStorage.setItem(activeCanvasStorageKey, child.canvas.id);
