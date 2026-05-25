@@ -7,6 +7,10 @@ if [ -d "$FLOWUX_NODE_BIN" ]; then
   export PATH="$FLOWUX_NODE_BIN:$PATH"
 fi
 
+if [ -z "${TMPDIR:-}" ] || [[ "$TMPDIR" == /mnt/* ]]; then
+  export TMPDIR="/tmp"
+fi
+
 export FLOWUX_DB_PATH="${FLOWUX_DB_PATH:-apps/api/flowux.db}"
 export FLOWUX_API_PORT="${FLOWUX_API_PORT:-5174}"
 export FLOWUX_API_URL="${FLOWUX_API_URL:-http://127.0.0.1:$FLOWUX_API_PORT}"

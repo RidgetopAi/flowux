@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH="$HOME/.nvm/versions/node/v22.18.0/bin:$PATH"
+source "$(dirname "$0")/lib/flowux-env.sh"
+flowux_cd_root
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DB_PATH="${FLOWUX_TRACE_DB_PATH:-/tmp/flowux-pi-harness-trace.db}"
 API_PORT="${FLOWUX_TRACE_API_PORT:-6181}"
 LOG_PATH="${FLOWUX_TRACE_LOG_PATH:-/tmp/flowux-pi-harness-api.log}"
 
 rm -f "$DB_PATH" "$DB_PATH"-* "$LOG_PATH"
-
-cd "$ROOT_DIR"
 
 FLOWUX_DB_PATH="$DB_PATH" npm run db:migrate >/tmp/flowux-pi-harness-migrate.log 2>&1
 
