@@ -1,0 +1,239 @@
+/* ─── FLOATING DOCK ─────────────────────────────────────────────────────
+   The compose surface. Borrows visual language from ExpandedMRP — same
+   glass, same chroma header, same border-glow — but in dock form:
+   stays parked on canvas, doesn't take a backdrop, doesn't block
+   interaction with cards behind it. The user can keep working on
+   the canvas while the dock is open. */
+
+.dock-layer {
+  /* Sits between CanvasControls (~50) and ExpandedMRP overlay (200) so
+     the expanded view always wins z-order when both happen. */
+  pointer-events: none;
+}
+
+.dock {
+  /* Re-enable pointer events on the dock itself; the wrapper is
+     pass-through so canvas clicks land beneath the dock's bounds. */
+  pointer-events: auto;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid rgba(168, 255, 241, 0.36);
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 140px),
+    linear-gradient(180deg, rgba(168, 255, 241, 0.04), transparent 280px),
+    var(--glass-deep);
+  box-shadow:
+    0 0 0 1px rgba(168, 255, 241, 0.12),
+    0 0 64px rgba(168, 255, 241, 0.18),
+    0 32px 84px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  overflow: hidden;
+  color: var(--ink);
+}
+
+/* ── Header ────────────────────────────────────────────────────────────
+   Draggable area. Cursor flips to grab/grabbing to telegraph that the
+   user can pick the dock up and reposition it. */
+.dock__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 40px;
+  cursor: grab;
+  user-select: none;
+}
+
+.dock__head:active {
+  cursor: grabbing;
+}
+
+.dock__head-l,
+.dock__head-r {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dock__head-l {
+  flex: 1;
+  min-width: 0;
+}
+
+.dock__head-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+}
+
+.dock__head-l .braille-band {
+  flex: 1;
+  min-width: 0;
+  max-width: 220px;
+  opacity: 0.45;
+}
+
+.dock__grip {
+  display: inline-flex;
+  align-items: center;
+  color: var(--faint);
+  flex: 0 0 auto;
+}
+
+.dock__grip svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Pin button lights up when the dock is locked to the canvas world coords.
+   Cyan tone + soft halation signals "anchored — pan/zoom moves me." */
+.dock__pin--on,
+.dock__pin--on:hover {
+  color: var(--cyan-bright);
+  border-color: rgba(168, 255, 241, 0.42);
+  background: rgba(168, 255, 241, 0.10);
+  box-shadow: 0 0 14px rgba(168, 255, 241, 0.16);
+}
+
+/* ── Body — the spacious textarea ──────────────────────────────────────
+   Roomy padding + body text scale + line-height matching ExpandedMRP's
+   __msg-text so the input feels like the same surface the response will
+   render into. */
+.dock__body {
+  padding: 14px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Staged attachments row ───────────────────────────────────────────────
+   Sits above the textarea, shows pasted images as thumb chips. Each chip
+   has the same visual language as a small canvas tile (border + glass +
+   subtle halation) so it feels of-a-piece with what the image will become
+   when send fires. */
+.dock__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.dock-att {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--line-warm);
+  border-radius: var(--r-md);
+  background: rgba(168, 255, 241, 0.05);
+  max-width: 220px;
+}
+
+.dock-att__thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+  flex: 0 0 auto;
+}
+
+.dock-att__name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  color: var(--soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dock-att__remove {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    color var(--dur-fast) var(--ease-out-quart),
+    border-color var(--dur-fast) var(--ease-out-quart),
+    background-color var(--dur-fast) var(--ease-out-quart);
+}
+
+.dock-att__remove svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.2;
+}
+
+.dock-att__remove:hover {
+  color: var(--red);
+  border-color: rgba(255, 116, 116, 0.42);
+  background: rgba(255, 116, 116, 0.10);
+}
+
+.dock__input {
+  width: 100%;
+  min-height: 112px; /* ~4 lines at 17px / 1.65 line-height */
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-left-color: rgba(244, 208, 117, 0.4); /* amber: prompt-side */
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 16px 18px;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--ink);
+  letter-spacing: var(--tracking-tight);
+  outline: none;
+  transition:
+    border-color var(--dur-base) var(--ease-out-quart),
+    box-shadow var(--dur-base) var(--ease-out-quart);
+}
+
+.dock__input::placeholder {
+  color: var(--faint);
+  font-style: italic;
+}
+
+.dock__input:focus {
+  border-color: rgba(168, 255, 241, 0.42);
+  border-left-color: rgba(168, 255, 241, 0.6);
+  box-shadow: 0 0 0 1px rgba(168, 255, 241, 0.16),
+              0 0 28px rgba(168, 255, 241, 0.10);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────── */
+.dock__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 38px;
+}
+
+/* ── Responsive — keep the dock from running off small viewports ────── */
+@media (max-width: 800px) {
+  .dock-layer {
+    /* Component still positions via fixed left/top; CSS just keeps a
+       safety clamp so the dock isn't wider than the viewport. */
+  }
+}

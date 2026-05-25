@@ -26,7 +26,7 @@ import {
   ZoomOut
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
-import { Tldraw } from "tldraw";
+import { Canvas } from "../components/canvas/Canvas";
 import type { Artifact, CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind, UploadedAttachment } from "@flowux/shared";
 import * as api from "../api.js";
 import { findPlacement, useFlowuxStore } from "../store.js";
@@ -529,8 +529,8 @@ export function App() {
         onPointerUp={finishPan}
         onPointerCancel={finishPan}
       >
-        <div className="tldraw-layer" aria-hidden="true">
-          <Tldraw persistenceKey="flowux-underlay" hideUi />
+        <div className="playground-canvas-mount">
+          <Canvas />
         </div>
 
         <div className="canvas-controls hud-panel" onWheel={(event) => event.stopPropagation()}>

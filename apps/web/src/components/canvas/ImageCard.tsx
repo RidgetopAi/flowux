@@ -1,0 +1,200 @@
+import { useEffect, useRef } from "react";
+import { motion, useMotionValue, type PanInfo } from "motion/react";
+import { Check } from "lucide-react";
+import { useCanvas, type ImageObject } from "../../lib/store";
+import { cn } from "../../lib/cn";
+import "./ImageCard.css";
+
+type Props = { image: ImageObject };
+
+/**
+ * Renders one ImageObject as a draggable canvas tile.
+ *
+ * Mirrors MRPCard's two-layer motion structure (outer = position +
+ * hover lift, inner = drag + picked-up visuals) so selection halation,
+ * cursor outline, and group-drag follower sync all behave identically
+ * across object variants. The DOM-direct group-drag in MRPCard queries
+ * `[data-object-id="..."]` — both variants set that attribute on their
+ * wrap div, so a mixed bundle (MRPs + images) group-drags as one.
+ *
+ * Variant-specific bits live inside the inner layer: just the image
+ * itself plus a small checkbox overlay top-left for bundle toggling.
+ */
+export function ImageCard({ image }: Props) {
+  const draggingId = useCanvas((s) => s.draggingId);
+  const cursorId = useCanvas((s) => s.cursorId);
+  const moveObject = useCanvas((s) => s.moveObject);
+  const setDragging = useCanvas((s) => s.setDragging);
+  const setCursor = useCanvas((s) => s.setCursor);
+  const toggleCheck = useCanvas((s) => s.toggleCheck);
+
+  const isDragging = draggingId === image.id;
+  const isCursor = cursorId === image.id;
+
+  // Motion values: 0 at rest, drift during drag, reset on dragEnd.
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  // Group-drag follower capture — same DOM-direct pattern as MRPCard.
+  // When this tile is bundled, every other bundled object's wrap el
+  // gets an imperative `translate` matching the leader's offset (no
+  // React re-renders per pointer frame). Commits once on dragEnd.
+  const groupDragRef = useRef<{
+    followers: Array<{
+      id: string;
+      el: HTMLElement;
+      startX: number;
+      startY: number;
+    }>;
+  } | null>(null);
+
+  // Cleanup-safety (no tap-timer here since images don't expand).
+  useEffect(() => () => undefined, []);
+
+  const onDragStart = () => {
+    setDragging(image.id);
+    setCursor(image.id);
+
+    if (image.checked) {
+      const allObjects = useCanvas.getState().objects;
+      const bundleFollowers = allObjects.filter(
+        (o) => o.checked && o.id !== image.id,
+      );
+      const captured: typeof groupDragRef.current = { followers: [] };
+      for (const f of bundleFollowers) {
+        const el = document.querySelector<HTMLElement>(
+          `[data-object-id="${f.id}"]`,
+        );
+        if (!el) continue;
+        captured.followers.push({
+          id: f.id,
+          el,
+          startX: f.x,
+          startY: f.y,
+        });
+      }
+      if (captured.followers.length > 0) {
+        for (const f of captured.followers) {
+          f.el.style.transition = "translate 140ms cubic-bezier(0.16, 1, 0.3, 1)";
+        }
+        groupDragRef.current = captured;
+      }
+    }
+  };
+
+  const onDrag = (_e: PointerEvent | TouchEvent | MouseEvent, info: PanInfo) => {
+    const groupDrag = groupDragRef.current;
+    if (!groupDrag) return;
+    const dx = `${info.offset.x}px`;
+    const dy = `${info.offset.y}px`;
+    for (const f of groupDrag.followers) {
+      f.el.style.translate = `${dx} ${dy}`;
+    }
+  };
+
+  const onDragEnd = (_e: PointerEvent, info: PanInfo) => {
+    moveObject(image.id, image.x + info.offset.x, image.y + info.offset.y);
+    x.set(0);
+    y.set(0);
+    setDragging(null);
+
+    const groupDrag = groupDragRef.current;
+    if (groupDrag) {
+      const updates = new Map<string, { x: number; y: number }>(
+        groupDrag.followers.map((f) => [
+          f.id,
+          { x: f.startX + info.offset.x, y: f.startY + info.offset.y },
+        ]),
+      );
+      useCanvas.setState((s) => ({
+        objects: s.objects.map((o) => {
+          const u = updates.get(o.id);
+          return u ? { ...o, x: u.x, y: u.y } : o;
+        }),
+      }));
+      const followers = groupDrag.followers;
+      requestAnimationFrame(() => {
+        for (const f of followers) {
+          f.el.style.transition = "";
+          f.el.style.translate = "";
+        }
+      });
+    }
+    groupDragRef.current = null;
+  };
+
+  const onTap = () => {
+    // Single tap moves the cursor here — keeps keyboard nav consistent
+    // with how MRPCards behave. No double-tap action (no expanded view
+    // for images yet).
+    setCursor(image.id);
+  };
+
+  const onCheckClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleCheck(image.id);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={!isDragging
+        ? { y: -3, transition: { duration: 0.18, ease: "easeOut" } }
+        : undefined}
+      style={{
+        position: "absolute",
+        left: image.x,
+        top: image.y,
+        width: image.width,
+        height: image.height,
+        zIndex: isDragging ? 30 : 5,
+      }}
+      data-checked={image.checked ? "true" : undefined}
+      data-object-id={image.id}
+      // Reuses the wrap class from MRPCard so the bundle halation +
+      // dragging cursor styles apply uniformly. Variant chrome lives
+      // in ImageCard.css below.
+      className={cn("mrp-card-wrap", isDragging && "is-dragging")}
+    >
+      <motion.div
+        data-canvas-card
+        data-dragging={isDragging ? "true" : undefined}
+        data-cursor={isCursor ? "true" : undefined}
+        drag
+        dragMomentum={false}
+        dragElastic={0}
+        onDragStart={onDragStart}
+        onDrag={onDrag}
+        onDragEnd={onDragEnd}
+        onTap={onTap}
+        whileDrag={{
+          scale: 1.025,
+          rotate: -0.6,
+          transition: { duration: 0.14, ease: "easeOut" },
+        }}
+        style={{ x, y, width: image.width, height: image.height }}
+        className="mrp-card-drag-layer img-card-frame"
+      >
+        <div className="img-card">
+          <button
+            type="button"
+            className={cn("img-card-check", image.checked && "img-card-check--on")}
+            onClick={onCheckClick}
+            aria-label={image.checked ? "Remove from bundle" : "Add to bundle"}
+            aria-pressed={image.checked}
+          >
+            {image.checked && <Check />}
+          </button>
+          <img
+            src={image.src}
+            alt={image.alt ?? ""}
+            className="img-card-img"
+            draggable={false}
+          />
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}

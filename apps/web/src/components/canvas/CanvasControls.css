@@ -1,0 +1,74 @@
+/* ─── CANVAS CONTROLS ─────────────────────────────────────────────────── */
+
+.canvas-controls {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--glass-deep);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-panel);
+  pointer-events: auto;
+}
+
+.canvas-controls__bundle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-controls__divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+}
+
+.canvas-controls__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-controls__zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-controls__zoom-pct {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tracking-mono);
+  min-width: 4.2ch;
+  padding: 4px 6px;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.canvas-controls__zoom-pct:hover {
+  background: rgba(168, 255, 241, 0.08);
+  border-color: var(--line);
+  color: var(--cyan);
+}
+
+.canvas-controls__zoom-pct:focus-visible {
+  outline: none;
+  border-color: var(--cyan-deep);
+  box-shadow: 0 0 0 2px rgba(168, 255, 241, 0.25);
+}

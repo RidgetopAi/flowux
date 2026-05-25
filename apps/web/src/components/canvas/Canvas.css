@@ -1,0 +1,158 @@
+/* ─── CANVAS ──────────────────────────────────────────────────────────────
+   The workspace surface. Outer = pan zone, inner = transformed layer.
+   Cards sit absolutely-positioned inside the layer, so pan moves them all.
+   The origin (0,0) is centered in the viewport at zero pan. */
+
+.canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  background: var(--bg-deep);
+  user-select: none;
+  touch-action: none;
+  /* Canvas itself is focusable (tabIndex=0). Suppress the default outline —
+     the per-card cursor visual is the real keyboard focus indicator. */
+  outline: none;
+}
+
+.canvas[data-panning="true"] {
+  cursor: grabbing;
+}
+
+/* ── Atmosphere layers (decorative, behind everything) ─────────────────── */
+.canvas__atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.canvas__wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 22% 18%, rgba(168, 255, 241, 0.07), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 82% 88%, rgba(199, 189, 255, 0.06), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 50%, rgba(168, 255, 241, 0.02), transparent 70%);
+}
+
+.canvas__noise {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    circle,
+    rgba(168, 255, 241, 0.08) 1px,
+    transparent 1.4px
+  );
+  background-size: 28px 28px;
+  background-position: 0 0;
+  opacity: 0.34;
+  mix-blend-mode: screen;
+}
+
+.canvas__sweep {
+  position: absolute;
+  inset: -50% 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 44%,
+    rgba(168, 255, 241, 0.025) 50%,
+    transparent 56%,
+    transparent 100%
+  );
+  animation: canvas-sweep 14s linear infinite;
+}
+
+@keyframes canvas-sweep {
+  0%   { transform: translateY(-50%); }
+  100% { transform: translateY(50%); }
+}
+
+/* ── Inner pan layer (origin sits at viewport center) ──────────────────── */
+.canvas__layer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  z-index: 1;
+}
+
+/* ── Origin crosshair — quiet reference mark ───────────────────────────── */
+.canvas__origin {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.canvas__origin-h, .canvas__origin-v {
+  position: absolute;
+  background: rgba(168, 255, 241, 0.18);
+}
+
+.canvas__origin-h {
+  left: -18px;
+  top: 0;
+  width: 36px;
+  height: 1px;
+}
+
+.canvas__origin-v {
+  left: 0;
+  top: -18px;
+  width: 1px;
+  height: 36px;
+}
+
+/* ── Neighbor-dim when one card is focused ─────────────────────────────── */
+/* Implemented in MRPCard.css via :not(.is-focused) selector under
+   .canvas[data-has-expanded="true"]. Cards lift their own z-index. */
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.canvas__empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px;
+  text-align: center;
+}
+
+.canvas__empty-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--cyan);
+  filter: drop-shadow(0 0 8px rgba(168, 255, 241, 0.55));
+  margin-bottom: 4px;
+}
+
+.canvas__empty-title {
+  font-family: var(--font-sans);
+  font-size: var(--fs-display);
+  color: var(--ink);
+  letter-spacing: var(--tracking-tight);
+  margin-top: 4px;
+}
+
+.canvas__empty-sub {
+  max-width: 44ch;
+  color: var(--soft);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+}
+
+.canvas__empty-band {
+  margin-top: 16px;
+  opacity: 0.5;
+}

@@ -257,15 +257,9 @@ select { font: inherit; }
   cursor: grabbing;
 }
 
-.tldraw-layer, .mrp-layer {
+.playground-canvas-mount, .mrp-layer {
   position: absolute;
   inset: 0;
-}
-
-.tldraw-layer {
-  opacity: .24;
-  filter: saturate(.55);
-  pointer-events: none;
 }
 
 .mrp-layer {
