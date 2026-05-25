@@ -97,13 +97,12 @@ export function Canvas() {
 
       // "/" opens the dock from anywhere on the page (not just when the
       // canvas surface is focused). Skip when typing or when something
-      // already owns the keyboard. We also seed the draft with `/` so
-      // the slash command palette appears immediately — `/` opening the
-      // dock + starting a command read as one continuous gesture.
+      // already owns the keyboard. The draft stays empty so the dock
+      // opens at its natural size — the slash palette only appears
+      // when the user actually types `/` into the textarea.
       if (e.key === "/") {
         if (state.dockOpen || state.expandedId || inInput) return;
         e.preventDefault();
-        state.setDockDraft("/");
         state.openDock();
         return;
       }
