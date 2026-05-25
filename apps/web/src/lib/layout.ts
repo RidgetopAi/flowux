@@ -26,8 +26,10 @@ const DEFAULTS = {
   // Sized so 4 columns fit at ~1366px viewport with tight side padding —
   // utilizes more screen real estate than the earlier 360-wide tiles.
   cardWidth: 320,
-  gap: 16,
-  // 240px card + 16px row gap = tighter rows now that height is exact.
+  // Horizontal gap between columns. Tight — user wants compact rows.
+  gap: 8,
+  // Card height (240) + a touch of row breathing room. Stays at 256 so
+  // vertical rhythm reads as deliberate even after horizontal tightening.
   slotHeight: 256,
   sidePadding: 24,
 };
