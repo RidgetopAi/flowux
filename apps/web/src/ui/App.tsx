@@ -1,5 +1,5 @@
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Canvas } from "../components/canvas/Canvas";
 import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
@@ -25,17 +25,41 @@ export function App() {
   const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
   const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
 
+  // After a dock send, apps/api confirms the new placement via the
+  // submitPrompt onCreated callback. We stash that real placement id
+  // here so the next loadFromSnapshot run can expand + reveal the new
+  // MRP — FloatingDock's own setExpanded/revealMRP fires synchronously
+  // with the placeholder id we hand back from the handler, which doesn't
+  // exist in useCanvas yet, so it silently no-ops without this bridge.
+  const pendingFocusId = useRef<string | null>(null);
+
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
 
   useEffect(() => {
-    if (snapshot) loadFromSnapshot(snapshot);
+    if (!snapshot) return;
+    loadFromSnapshot(snapshot);
+
+    const target = pendingFocusId.current;
+    if (!target) return;
+    // Confirm the target landed in the new objects array before consuming.
+    const exists = useCanvas.getState().objects.some((o) => o.id === target);
+    if (!exists) return;
+    pendingFocusId.current = null;
+    // rAF gives Canvas's ResizeObserver one tick to update viewport
+    // dimensions before revealMRP does its centering math.
+    requestAnimationFrame(() => {
+      useCanvas.setState({ expandedId: target, cursorId: target });
+      useCanvas.getState().revealMRP(target);
+    });
   }, [snapshot, loadFromSnapshot]);
 
   useEffect(() => {
     const handler: SubmitPromptHandler = ({ prompt }) => {
-      void submitPrompt(prompt);
+      void submitPrompt(prompt, undefined, undefined, ({ placement }) => {
+        pendingFocusId.current = placement.id;
+      });
       return `pending-${Date.now().toString(36)}`;
     };
     setSubmitPromptHandler(handler);
