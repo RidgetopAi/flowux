@@ -19,6 +19,13 @@ const IMAGE_ANCHOR_GAP = 24;
 const IMAGE_DEFAULT_W = 240;
 const IMAGE_DEFAULT_H = 240;
 
+// Canvas tiles are uniform per the playground design system (tokens.css
+// --mrp-canvas-w / --mrp-canvas-h). Persisted placement.width / .height
+// came from the legacy custom workspace which used a different size and
+// would otherwise overlap arrangeGrid's column math.
+const MRP_TILE_W = 320;
+const MRP_TILE_H = 240;
+
 export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[] {
   const mrpById = new Map(snapshot.mrps.map((m) => [m.id, m]));
   const runByMrpId = new Map(snapshot.modelRuns.map((r) => [r.mrpId, r]));
@@ -51,8 +58,8 @@ export function toMRPObject(
     id: placement.id,
     x: placement.x,
     y: placement.y,
-    width: placement.width,
-    height: placement.height,
+    width: MRP_TILE_W,
+    height: MRP_TILE_H,
     checked: placement.selectedForContext,
     sequence: mrp.sequence,
     status: STATUS_MAP[mrp.status],
