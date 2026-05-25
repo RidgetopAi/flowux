@@ -43,8 +43,6 @@ export function loadConfig(): FlowuxConfig {
     "--model", piMonoModel,
     "--no-session",
     "--no-context-files",
-    "--no-extensions",
-    "--no-skills",
     "--thinking", piMonoThinking
   ];
 
