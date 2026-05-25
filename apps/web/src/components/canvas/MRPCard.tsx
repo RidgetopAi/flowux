@@ -86,6 +86,13 @@ export function MRPCard({ mrp }: Props) {
     };
   }, []);
 
+  // Right-click context menu position. Declared HERE — above the
+  // `if (isExpanded) return null` guard below — so the hook count stays
+  // constant across renders (a card flipping into expanded state would
+  // otherwise unmount a useState mid-life, crashing React with
+  // "Rendered fewer hooks than expected").
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+
   // While focused, the ExpandedMRP layer takes over. Returning null lets
   // Motion's layoutId pull off the shared-element FLIP cleanly (only one
   // element per layoutId should be mounted at a time).
@@ -235,9 +242,9 @@ export function MRPCard({ mrp }: Props) {
   };
 
   // Right-click context menu — anchored to clientX/Y, portal-mounted so
-  // canvas transforms don't clip it. Items reuse existing handlers so the
-  // gesture is just a faster path to the same actions.
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  // canvas transforms don't clip it. State is declared above the
+  // isExpanded early-return; this section just wires the handler +
+  // menu items that consume it.
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setCtxMenu({ x: e.clientX, y: e.clientY });
