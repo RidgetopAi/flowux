@@ -228,11 +228,32 @@
   margin: 0 16px 8px 16px;
   border: 1px solid var(--line-warm);
   border-radius: var(--r-md);
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.85);
   overflow: hidden;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.4),
     0 8px 26px rgba(0, 0, 0, 0.45);
+}
+
+/* Popover variant — portal-mounted at viewport coords just above the
+   dock. Reset the inline margin (those siblings don't exist outside the
+   dock body) and lean on `bottom-anchored` growth so the drawer expands
+   UP as commands are added/filtered. backdrop-filter blurs whatever the
+   drawer hovers over so the canvas underneath stays calm. */
+.dock__slash--popover {
+  margin: 0;
+  background:
+    linear-gradient(180deg, rgba(168, 255, 241, 0.04), transparent 80px),
+    rgba(8, 12, 14, 0.94);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: dock-slash-rise 0.16s var(--ease-out-quart);
+  transform-origin: bottom center;
+}
+
+@keyframes dock-slash-rise {
+  from { opacity: 0; transform: translateY(6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .dock__slash-row {

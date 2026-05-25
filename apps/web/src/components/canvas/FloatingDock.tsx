@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AnimatePresence,
   motion,
@@ -597,36 +598,6 @@ function FloatingDock() {
               ))}
             </div>
           )}
-          {isSlashMode && slashMatches.length > 0 && (
-            <div className="dock__slash" role="listbox" aria-label="Slash commands">
-              {slashMatches.map((cmd, i) => {
-                const Icon = cmd.icon;
-                const active = i === slashSelected;
-                return (
-                  <button
-                    key={cmd.name}
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    className={cn("dock__slash-row", active && "dock__slash-row--active")}
-                    onMouseEnter={() => setSlashSelected(i)}
-                    onMouseDown={(e) => {
-                      // Prevent textarea blur before exec runs.
-                      e.preventDefault();
-                      execSlash(cmd);
-                    }}
-                  >
-                    <Icon size={13} className="dock__slash-icon" aria-hidden="true" />
-                    <span className="dock__slash-name">/{cmd.name}</span>
-                    <span className="dock__slash-label">{cmd.label}</span>
-                    {active && (
-                      <ChevronRight size={12} className="dock__slash-chev" aria-hidden="true" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           <textarea
             ref={textareaRef}
             className="dock__input"
@@ -669,6 +640,55 @@ function FloatingDock() {
           </Button>
         </footer>
       </motion.div>
+
+      {/* Slash palette — portal-mounted ABOVE the dock so its growth pushes
+          upward instead of stretching the dock past the viewport bottom.
+          Position is recomputed each render from `pos` (the dock's viewport
+          coords), so dragging the dock between sessions naturally moves the
+          drawer with it. z-index sits above .dock-layer's 150. */}
+      {isSlashMode && slashMatches.length > 0 &&
+        createPortal(
+          <div
+            className="dock__slash dock__slash--popover"
+            role="listbox"
+            aria-label="Slash commands"
+            style={{
+              position: "fixed",
+              left: pos.x + 16,
+              width: DOCK_WIDTH - 32,
+              bottom: window.innerHeight - pos.y + 8,
+              zIndex: 160,
+            }}
+          >
+            {slashMatches.map((cmd, i) => {
+              const Icon = cmd.icon;
+              const active = i === slashSelected;
+              return (
+                <button
+                  key={cmd.name}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={cn("dock__slash-row", active && "dock__slash-row--active")}
+                  onMouseEnter={() => setSlashSelected(i)}
+                  onMouseDown={(e) => {
+                    // Prevent textarea blur before exec runs.
+                    e.preventDefault();
+                    execSlash(cmd);
+                  }}
+                >
+                  <Icon size={13} className="dock__slash-icon" aria-hidden="true" />
+                  <span className="dock__slash-name">/{cmd.name}</span>
+                  <span className="dock__slash-label">{cmd.label}</span>
+                  {active && (
+                    <ChevronRight size={12} className="dock__slash-chev" aria-hidden="true" />
+                  )}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
     </motion.div>
   );
 }
