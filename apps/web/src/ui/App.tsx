@@ -30,6 +30,7 @@ import { Canvas } from "../components/canvas/Canvas";
 import type { Artifact, CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind, UploadedAttachment } from "@flowux/shared";
 import * as api from "../api.js";
 import { findPlacement, useFlowuxStore } from "../store.js";
+import { useCanvas, type SubmitPromptHandler } from "../lib/store";
 
 export function App() {
   const {
@@ -105,6 +106,24 @@ export function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [focusedMrpId]);
+
+  // Phase C.3 wiring: keep the playground <Canvas /> in sync with the real
+  // apps/api snapshot, and bridge the dock's send button to submitPrompt.
+  const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
+  const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
+
+  useEffect(() => {
+    if (snapshot) loadFromSnapshot(snapshot);
+  }, [snapshot, loadFromSnapshot]);
+
+  useEffect(() => {
+    const handler: SubmitPromptHandler = ({ prompt: text }) => {
+      void submitPrompt(text);
+      return `pending-${Date.now().toString(36)}`;
+    };
+    setSubmitPromptHandler(handler);
+    return () => setSubmitPromptHandler(null);
+  }, [submitPrompt, setSubmitPromptHandler]);
 
   const selectedCount = useMemo(
     () => snapshot?.placements.filter((placement) => placement.selectedForContext).length ?? 0,
