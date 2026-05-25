@@ -9,6 +9,7 @@ import { CanvasControls } from "./CanvasControls";
 import { CanvasHud } from "./CanvasHud";
 import { ExpandedMRPLayer } from "./ExpandedMRP";
 import { FloatingDockLayer } from "./FloatingDock";
+import { Minimap } from "./Minimap";
 import { Label } from "../primitives/Label";
 import { BrailleBand } from "../effects/BrailleBand";
 import "./Canvas.css";
@@ -29,6 +30,13 @@ export function Canvas() {
 
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
+  // Rubber-band selection rect in viewport (surface-relative) pixels.
+  // null when not actively dragging. Display only — world-coord selection
+  // is computed at pointerup from the raw page coords.
+  const [selectRect, setSelectRect] = useState<
+    | { left: number; top: number; width: number; height: number }
+    | null
+  >(null);
 
   // Measure the canvas surface's rect (position + dimensions) and keep
   // it current. Width drives the grid layout, height feeds revealMRP,
@@ -151,6 +159,13 @@ export function Canvas() {
         case "0":
           e.preventDefault();
           state.resetView();
+          break;
+        case "f":
+        case "F":
+          // Don't steal Cmd/Ctrl+F (browser find). Plain F = fit-to-content.
+          if (e.metaKey || e.ctrlKey) break;
+          e.preventDefault();
+          state.zoomToFit();
           break;
       }
     };
@@ -326,13 +341,15 @@ export function Canvas() {
     };
   }, []);
 
-  // Pan handler. Pointer-down on the surface (NOT on a card) starts panning.
-  // We track movement on the document so panning continues even if the cursor
-  // leaves the surface bounds mid-drag.
+  // Pointer-down on the surface (NOT on a card) starts either:
+  //   - Shift+drag → rubber-band multi-select (additive — adds to bundle)
+  //   - Plain drag → pan
+  // Both track movement on the document so the gesture continues even when
+  // the cursor leaves the surface bounds mid-drag.
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
 
-    // If the pointer is on a card (or its descendants), don't pan.
+    // If the pointer is on a card (or its descendants), don't pan/select.
     const target = e.target as HTMLElement;
     if (target.closest("[data-canvas-card]")) return;
     // If the expanded-MRP overlay is up and the pointer is inside it,
@@ -340,9 +357,74 @@ export function Canvas() {
     // click handles its own dismiss; pane scrollbars need pointer events.
     if (target.closest(".xmrp-portal")) return;
 
-    setIsPanning(true);
     setExpanded(null);
 
+    // Shift+drag → rubber-band selection (additive). We capture the start
+    // point in PAGE coords; conversion to world coords happens at pointerup
+    // using the live viewport snapshot so any pan/zoom mid-drag (none in
+    // shift-mode here, but defensive) is naturally handled.
+    if (e.shiftKey) {
+      const startPageX = e.clientX;
+      const startPageY = e.clientY;
+      const surface = surfaceRef.current?.getBoundingClientRect();
+      const surfaceLeft = surface?.left ?? 0;
+      const surfaceTop = surface?.top ?? 0;
+
+      setSelectRect({
+        left: startPageX - surfaceLeft,
+        top: startPageY - surfaceTop,
+        width: 0,
+        height: 0,
+      });
+
+      const onMove = (ev: PointerEvent) => {
+        const left = Math.min(startPageX, ev.clientX) - surfaceLeft;
+        const top = Math.min(startPageY, ev.clientY) - surfaceTop;
+        const width = Math.abs(ev.clientX - startPageX);
+        const height = Math.abs(ev.clientY - startPageY);
+        setSelectRect({ left, top, width, height });
+      };
+
+      const onUp = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        setSelectRect(null);
+
+        const { viewport } = useCanvas.getState();
+        // page → world: (page - surfaceTL - center - pan) / zoom
+        const toWorldX = (px: number) =>
+          (px - viewport.left - viewport.width / 2 - viewport.pan.x) /
+          viewport.zoom;
+        const toWorldY = (py: number) =>
+          (py - viewport.top - viewport.height / 2 - viewport.pan.y) /
+          viewport.zoom;
+
+        const x1 = toWorldX(startPageX);
+        const y1 = toWorldY(startPageY);
+        const x2 = toWorldX(ev.clientX);
+        const y2 = toWorldY(ev.clientY);
+
+        // Ignore micro-drags (likely a click that slipped) so a shift-click
+        // doesn't accidentally select objects under the cursor.
+        if (Math.abs(x2 - x1) < 3 && Math.abs(y2 - y1) < 3) return;
+
+        useCanvas.getState().checkInRect({
+          x: x1,
+          y: y1,
+          width: x2 - x1,
+          height: y2 - y1,
+        });
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+      return;
+    }
+
+    // Plain drag → pan.
+    setIsPanning(true);
     const startX = e.clientX;
     const startY = e.clientY;
     let lastX = startX;
@@ -446,11 +528,28 @@ export function Canvas() {
         </div>
       )}
 
+      {/* ── Rubber-band selection rect (overlay, surface-relative) ────── */}
+      {selectRect && (
+        <div
+          className="canvas__select-rect"
+          style={{
+            left: `${selectRect.left}px`,
+            top: `${selectRect.top}px`,
+            width: `${selectRect.width}px`,
+            height: `${selectRect.height}px`,
+          }}
+          aria-hidden="true"
+        />
+      )}
+
       {/* ── HUD: top-left runtime status (exec / budget / cancel) ───── */}
       <CanvasHud />
 
       {/* ── HUD: top-right floating controls ─────────────────────────── */}
       <CanvasControls />
+
+      {/* ── Minimap: bottom-right birds-eye + viewport tracker ────────── */}
+      <Minimap />
 
       {/* ── Floating compose dock — opens via "/" or HUD button ───────── */}
       <FloatingDockLayer />

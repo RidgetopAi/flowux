@@ -1,4 +1,4 @@
-import { MessageSquarePlus, Trash2, LayoutGrid, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, MessageSquarePlus, Trash2, LayoutGrid, ZoomIn, ZoomOut } from "lucide-react";
 import { useCanvas, ZOOM_MIN, ZOOM_MAX } from "../../lib/store";
 import { Button } from "../primitives/Button";
 import { Pill } from "../primitives/Pill";
@@ -12,6 +12,7 @@ export function CanvasControls() {
   const openDock = useCanvas((s) => s.openDock);
   const zoomBy = useCanvas((s) => s.zoomBy);
   const resetView = useCanvas((s) => s.resetView);
+  const zoomToFit = useCanvas((s) => s.zoomToFit);
   const arrangeAll = useCanvas((s) => s.arrangeAll);
   const loadFixtures = useCanvas((s) => s.loadFixtures);
 
@@ -79,6 +80,16 @@ export function CanvasControls() {
       <div className="canvas-controls__divider" />
 
       <div className="canvas-controls__actions">
+        <Button
+          variant="ghost"
+          size="md"
+          iconOnly
+          onClick={zoomToFit}
+          aria-label="Zoom to fit all cards"
+          title="Zoom to fit (F)"
+        >
+          <Maximize2 />
+        </Button>
         <Button
           variant="ghost"
           size="md"

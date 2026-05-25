@@ -201,6 +201,11 @@ type State = {
   checkAll: () => void;
   /** Clear the bundle — bound to Esc as the fast "reset working set" gesture. */
   clearBundle: () => void;
+  /** Set checked=true for every object whose world-coord bbox intersects
+   *  the given rectangle. Drives rubber-band drag-select. Rectangle is
+   *  given in world (canvas-layer) coords; bounds are normalized so the
+   *  caller doesn't have to track drag direction. */
+  checkInRect: (rect: { x: number; y: number; width: number; height: number }) => void;
   removeObject: (id: string) => void;
 
   // Actions — MRP-specific
@@ -259,6 +264,11 @@ type State = {
   setZoom: (z: number, anchor?: { x: number; y: number }) => void;
   zoomBy: (factor: number, anchor?: { x: number; y: number }) => void;
   resetView: () => void;
+  /** Pan + zoom so every object's bbox fits inside the viewport with a
+   *  small margin. No-op when the canvas is empty. Zoom is clamped to
+   *  [ZOOM_MIN, ZOOM_MAX] — for tiny single-card canvases the camera
+   *  ceiling kicks in (we don't zoom further than 2×). */
+  zoomToFit: () => void;
 
   // Layout
   loadFixtures: (objects: CanvasObject[]) => void;
@@ -425,6 +435,27 @@ export const useCanvas = create<State>((set, get) => ({
     set((s) => ({
       objects: s.objects.map((o) => (o.checked ? { ...o, checked: false } : o)),
     })),
+
+  checkInRect: (rect) => {
+    // Normalize so width/height can be passed negative (rubber-band drag in
+    // any direction). Use AABB overlap, not center-in-rect, so a brush over
+    // an object's edge still picks it up.
+    const minX = Math.min(rect.x, rect.x + rect.width);
+    const maxX = Math.max(rect.x, rect.x + rect.width);
+    const minY = Math.min(rect.y, rect.y + rect.height);
+    const maxY = Math.max(rect.y, rect.y + rect.height);
+    set((s) => ({
+      objects: s.objects.map((o) => {
+        if (o.checked) return o;
+        const ox1 = o.x;
+        const oy1 = o.y;
+        const ox2 = o.x + o.width;
+        const oy2 = o.y + o.height;
+        const intersects = ox2 >= minX && ox1 <= maxX && oy2 >= minY && oy1 <= maxY;
+        return intersects ? { ...o, checked: true } : o;
+      }),
+    }));
+  },
 
   removeObject: (id) =>
     set((s) => ({
@@ -622,6 +653,40 @@ export const useCanvas = create<State>((set, get) => ({
     set((s) => ({
       viewport: { ...s.viewport, pan: { x: 0, y: 0 }, zoom: 1 },
     })),
+
+  zoomToFit: () => {
+    const s = get();
+    if (s.objects.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const o of s.objects) {
+      if (o.x < minX) minX = o.x;
+      if (o.y < minY) minY = o.y;
+      if (o.x + o.width > maxX) maxX = o.x + o.width;
+      if (o.y + o.height > maxY) maxY = o.y + o.height;
+    }
+
+    const bboxW = Math.max(1, maxX - minX);
+    const bboxH = Math.max(1, maxY - minY);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    // 80px viewport margin total (40 each side) keeps cards from kissing
+    // the edge — leaves room for HUD chips + chrome.
+    const vw = Math.max(100, s.viewport.width - 80);
+    const vh = Math.max(100, s.viewport.height - 80);
+    const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(vw / bboxW, vh / bboxH)));
+
+    // Place bbox center at world (0,0)-equivalent screen point (the
+    // viewport center). pan = -bboxCenter * zoom.
+    set((s2) => ({
+      viewport: {
+        ...s2.viewport,
+        zoom: z,
+        pan: { x: -cx * z, y: -cy * z },
+      },
+    }));
+  },
 
   loadFixtures: (objects) => {
     // Re-flow seed objects into the auto-grid before loading. The mock
