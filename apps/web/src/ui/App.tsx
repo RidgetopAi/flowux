@@ -1,3 +1,4 @@
+import type { CanvasPlacement, CanvasSnapshot } from "@flowux/shared";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Canvas } from "../components/canvas/Canvas";
@@ -5,6 +6,7 @@ import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
 import { Pill } from "../components/primitives/Pill";
+import { arrangeGrid } from "../lib/layout";
 import { useCanvas, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
 import { useFlowuxStore } from "../store.js";
 
@@ -34,6 +36,11 @@ export function App() {
   // with the placeholder id we hand back from the handler, which doesn't
   // exist in useCanvas yet, so it silently no-ops without this bridge.
   const pendingFocusId = useRef<string | null>(null);
+  // One-shot per-canvas migration of legacy workspace-era 360×240 placements
+  // to the lean canvas's 320×240 tight grid. Tracks which canvas ids have
+  // already been migrated this session so a refetched snapshot doesn't
+  // re-trigger after the optimistic patch is in-flight.
+  const migratedCanvasIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     void loadInitial();
@@ -42,6 +49,8 @@ export function App() {
   useEffect(() => {
     if (!snapshot) return;
     loadFromSnapshot(snapshot);
+
+    maybeMigrateLegacyLayout(snapshot, migratedCanvasIds.current, patchPlacement);
 
     const target = pendingFocusId.current;
     if (!target) return;
@@ -55,7 +64,7 @@ export function App() {
       useCanvas.setState({ expandedId: target, cursorId: target });
       useCanvas.getState().revealMRP(target);
     });
-  }, [snapshot, loadFromSnapshot]);
+  }, [snapshot, loadFromSnapshot, patchPlacement]);
 
   useEffect(() => {
     const handler: SubmitPromptHandler = ({ prompt }) => {
@@ -193,4 +202,59 @@ export function App() {
       </div>
     </main>
   );
+}
+
+// Lean canvas uses 320×240 tiles in a tight 8px-gap grid. Older canvases were
+// persisted with the workspace-era 360×240 layout, so cards land overlapping
+// when adapted into the new grid. Detect those once per canvas, re-arrange,
+// and persist x/y/width/height in a single PATCH per placement so the
+// migration is idempotent on subsequent loads.
+const LEAN_TILE_W = 320;
+const LEAN_TILE_H = 240;
+
+function maybeMigrateLegacyLayout(
+  snapshot: CanvasSnapshot,
+  alreadyMigrated: Set<string>,
+  patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>,
+): void {
+  const canvasId = snapshot.canvas.id;
+  if (alreadyMigrated.has(canvasId)) return;
+
+  const isLegacy = (p: CanvasPlacement) => p.width !== LEAN_TILE_W || p.height !== LEAN_TILE_H;
+  if (!snapshot.placements.some(isLegacy)) return;
+
+  alreadyMigrated.add(canvasId);
+
+  // rAF so Canvas's ResizeObserver has set viewport.width before arrangeGrid
+  // computes the column count.
+  requestAnimationFrame(() => {
+    const viewportWidth = useCanvas.getState().viewport.width;
+    const positions = arrangeGrid({
+      count: snapshot.placements.length,
+      viewportWidth,
+    });
+
+    // canvasAdapter iterates snapshot.placements in order, then appends image
+    // artifacts. MRP objects 0..N-1 in useCanvas.objects line up with
+    // snapshot.placements 0..N-1, so positions[i] maps to objects[i].
+    useCanvas.setState((s) => ({
+      objects: s.objects.map((o, i) => {
+        const pos = positions[i];
+        if (!pos) return o;
+        return { ...o, x: pos.x, y: pos.y };
+      }),
+    }));
+
+    snapshot.placements.forEach((placement, i) => {
+      if (!isLegacy(placement)) return;
+      const pos = positions[i];
+      if (!pos) return;
+      void patchPlacement(placement.mrpId, {
+        x: pos.x,
+        y: pos.y,
+        width: LEAN_TILE_W,
+        height: LEAN_TILE_H,
+      });
+    });
+  });
 }
