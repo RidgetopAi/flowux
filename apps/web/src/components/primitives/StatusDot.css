@@ -1,0 +1,46 @@
+/* ─── STATUS DOT ──────────────────────────────────────────────────────── */
+
+.status-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.status-dot-wrap--sm .status-dot { width: 5px; height: 5px; }
+.status-dot-wrap--md .status-dot { width: 8px; height: 8px; }
+.status-dot-wrap--lg .status-dot { width: 11px; height: 11px; }
+
+.status-dot--idle    { color: var(--faint); }
+.status-dot--pending { color: var(--amber); box-shadow: var(--glow-amber-sm); }
+.status-dot--active  { color: var(--cyan);  box-shadow: var(--glow-cyan-sm); }
+.status-dot--complete{ color: var(--green); box-shadow: var(--glow-green-sm); }
+.status-dot--error   { color: var(--red);   box-shadow: var(--glow-red-sm); }
+
+.status-dot__label {
+  color: var(--soft);
+}
+
+/* ── Pulse ─────────────────────────────────────────────────────────────── */
+.status-dot--pulse::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  animation: dot-pulse 1.6s var(--ease-out-quart) infinite;
+}
+
+@keyframes dot-pulse {
+  0%   { opacity: 0.45; transform: scale(0.85); }
+  70%  { opacity: 0;    transform: scale(2.4); }
+  100% { opacity: 0;    transform: scale(2.4); }
+}

@@ -1,0 +1,71 @@
+/* ─── PANEL ───────────────────────────────────────────────────────────────
+   The base glass surface. Three variants share atmosphere, differ in scale. */
+
+.panel {
+  position: relative;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+/* ── Variants ──────────────────────────────────────────────────────────── */
+
+.panel--panel {
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    var(--glass);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.panel--shell {
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 180px),
+    linear-gradient(90deg, rgba(168, 255, 241, 0.03), transparent 34%),
+    var(--glass-deep);
+  box-shadow: var(--shadow-shell), var(--shadow-inset);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.panel--flat {
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+/* ── Tones (color wash overlays) ───────────────────────────────────────── */
+
+.panel--tone-warm {
+  background-image:
+    linear-gradient(180deg, rgba(244, 208, 117, 0.04), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+}
+
+.panel--tone-cool {
+  background-image:
+    linear-gradient(180deg, rgba(199, 189, 255, 0.05), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+}
+
+/* ── Optional textures ─────────────────────────────────────────────────── */
+
+.panel--noise::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    circle,
+    var(--braille-dot-dim) 1px,
+    transparent 1.4px
+  );
+  background-size: var(--braille-gap) var(--braille-gap);
+  opacity: 0.5;
+  mix-blend-mode: screen;
+}

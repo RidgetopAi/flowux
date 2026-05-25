@@ -1,0 +1,116 @@
+/* ─── CARD ────────────────────────────────────────────────────────────────
+   The atomic content surface. Inherits panel glass + adds structured slots.
+   States: idle | active | selected | focused | external.
+   Transitions are tuned to feel like the card "wakes up" on interaction. */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    var(--glass);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--soft);
+  overflow: hidden;
+  transition:
+    border-color var(--dur-base) var(--ease-out-quart),
+    box-shadow var(--dur-base) var(--ease-out-quart),
+    transform var(--dur-base) var(--ease-out-quart);
+}
+
+.card--draggable { cursor: grab; }
+.card--draggable:active { cursor: grabbing; }
+
+/* ── States ────────────────────────────────────────────────────────────── */
+
+.card--active {
+  border-color: rgba(168, 255, 241, 0.42);
+  box-shadow: 0 0 24px rgba(168, 255, 241, 0.10), var(--shadow-panel);
+}
+
+/* .card--checked has no styling — bundle inclusion lives at the wrap level
+   (.mrp-card-wrap[data-checked]) so it can compose cleanly with the cursor
+   outline. The state attribute stays for future variant use. */
+
+.card--focused {
+  border-color: rgba(168, 255, 241, 0.78);
+  box-shadow: 0 0 42px rgba(168, 255, 241, 0.22), 0 28px 76px rgba(0, 0, 0, 0.48);
+  transform: translateY(-2px);
+}
+
+.card--external {
+  border-color: rgba(199, 189, 255, 0.55);
+  box-shadow: 0 0 28px rgba(199, 189, 255, 0.12), var(--shadow-panel);
+}
+
+/* ── Slots ─────────────────────────────────────────────────────────────── */
+
+.card__drag {
+  height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.card__head {
+  padding: 14px 14px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card__title {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-headline);
+  line-height: var(--lh-snug);
+  font-weight: 400;
+  letter-spacing: var(--tracking-tight);
+}
+
+.card__meta {
+  padding: 10px 14px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.card__body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card__section {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--soft);
+  font-size: var(--fs-body);
+  line-height: var(--lh-base);
+}
+
+.card__section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.card__footer {
+  height: 30px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}

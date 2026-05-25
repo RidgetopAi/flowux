@@ -1,0 +1,12 @@
+.braille-band {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  display: inline-block;
+  max-width: 100%;
+  user-select: none;
+}

@@ -1,0 +1,195 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   FLOWUX · DESIGN TOKENS
+   The atomic layer. Everything visual cascades from here.
+   ──────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── SURFACE ─────────────────────────────────────────────────────────── */
+  --bg:              #050606;
+  --bg-elev:         #0a0c0b;
+  --bg-deep:         #020303;
+
+  --ink:             #e9ede8;
+  --soft:            #b7beb7;
+  --muted:           #7b847c;
+  --faint:           #4a514b;
+
+  --line:            rgba(233, 237, 232, 0.14);
+  --line-strong:     rgba(233, 237, 232, 0.34);
+  --line-warm:       rgba(168, 255, 241, 0.22);
+
+  --glass:           rgba(10, 12, 11, 0.66);
+  --glass-strong:    rgba(17, 20, 18, 0.82);
+  --glass-deep:      rgba(5, 6, 6, 0.86);
+
+  /* ── PHOSPHOR PALETTE ────────────────────────────────────────────────── */
+  /* Each accent has a dim/base/bright triplet for state work */
+  --cyan-dim:        #6fc8be;
+  --cyan:            #a8fff1;
+  --cyan-bright:     #d4fff7;
+  --cyan-deep:       #4ea89e;
+
+  --violet-dim:      #8c83c8;
+  --violet:          #c7bdff;
+  --violet-bright:   #e0d7ff;
+
+  --amber-dim:       #c69a4a;
+  --amber:           #f4d075;
+  --amber-bright:    #ffe6a0;
+
+  --green-dim:       #7fc781;
+  --green:           #b8ffba;
+  --green-bright:    #d8ffd8;
+
+  --red-dim:         #c25555;
+  --red:             #ff7474;
+  --red-bright:      #ff9b9b;
+
+  /* ── TYPOGRAPHY ──────────────────────────────────────────────────────── */
+  --font-sans:       "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-mono:       "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+
+  --fs-micro:        11px;    /* tag / chip */
+  --fs-label:        12px;    /* uppercase mono micro-label */
+  --fs-body-sm:      14px;    /* button text, dense ui */
+  --fs-body:         16px;    /* card body — anchor */
+  --fs-headline:     20px;    /* card headline */
+  --fs-display:      28px;    /* page title */
+  --fs-marquee:      40px;    /* hero numerals */
+
+  --lh-tight:        1.1;
+  --lh-snug:         1.25;
+  --lh-base:         1.45;
+
+  --tracking-mono:   0.08em;  /* used on uppercase mono labels */
+  --tracking-tight:  -0.005em;
+
+  /* ── RHYTHM ──────────────────────────────────────────────────────────── */
+  --s-0:             0px;
+  --s-1:             2px;
+  --s-2:             4px;
+  --s-3:             6px;
+  --s-4:             8px;
+  --s-5:             12px;
+  --s-6:             16px;
+  --s-7:             24px;
+  --s-8:             32px;
+  --s-9:             48px;
+  --s-10:            64px;
+
+  /* ── RADIUS ──────────────────────────────────────────────────────────── */
+  --r-xs:            4px;
+  --r-sm:            8px;
+  --r-md:            12px;
+  --r-lg:            18px;
+  --r-xl:            26px;
+  --r-pill:          999px;
+
+  /* ── CANVAS TILE ─────────────────────────────────────────────────────── */
+  /* MRP canvas tiles are uniform-size so rows stay clean and grid math
+     is exact. Variable card content lives in the expanded view; the canvas
+     card is a tile/glance, not a reader. Width is tuned so 4 cols fit on
+     typical laptops (1366+) with tight side padding. */
+  --mrp-canvas-w:    320px;
+  --mrp-canvas-h:    240px;
+
+  /* ── DEPTH ───────────────────────────────────────────────────────────── */
+  --shadow-panel:    0 18px 52px rgba(0, 0, 0, 0.28);
+  --shadow-shell:    0 28px 92px rgba(0, 0, 0, 0.72);
+  --shadow-lift:     0 8px 24px rgba(0, 0, 0, 0.42);
+  --shadow-inset:    inset 0 1px rgba(255, 255, 255, 0.04);
+
+  /* ── PHOSPHOR GLOW STACKS ────────────────────────────────────────────── */
+  /* Layered glows feel like CRT bloom, not Photoshop. Inner crisp + outer haze. */
+  --glow-cyan-sm:
+    0 0 1px rgba(168, 255, 241, 0.9),
+    0 0 6px rgba(168, 255, 241, 0.4);
+  --glow-cyan-md:
+    0 0 1px rgba(212, 255, 247, 1),
+    0 0 8px rgba(168, 255, 241, 0.55),
+    0 0 22px rgba(78, 168, 158, 0.32);
+  --glow-cyan-lg:
+    0 0 2px rgba(212, 255, 247, 1),
+    0 0 12px rgba(168, 255, 241, 0.7),
+    0 0 32px rgba(78, 168, 158, 0.42),
+    0 0 64px rgba(78, 168, 158, 0.18);
+
+  --glow-violet-sm:
+    0 0 1px rgba(199, 189, 255, 0.9),
+    0 0 6px rgba(199, 189, 255, 0.4);
+  --glow-violet-md:
+    0 0 1px rgba(224, 215, 255, 1),
+    0 0 8px rgba(199, 189, 255, 0.5),
+    0 0 22px rgba(140, 131, 200, 0.3);
+
+  --glow-amber-sm:
+    0 0 1px rgba(244, 208, 117, 0.9),
+    0 0 6px rgba(244, 208, 117, 0.4);
+  --glow-amber-md:
+    0 0 1px rgba(255, 230, 160, 1),
+    0 0 8px rgba(244, 208, 117, 0.5),
+    0 0 22px rgba(198, 154, 74, 0.3);
+
+  --glow-green-sm:
+    0 0 1px rgba(184, 255, 186, 0.9),
+    0 0 6px rgba(184, 255, 186, 0.4);
+  --glow-red-sm:
+    0 0 1px rgba(255, 116, 116, 0.9),
+    0 0 6px rgba(255, 116, 116, 0.4);
+
+  /* ── HOLOGRAPHIC CHROMA OFFSET ───────────────────────────────────────── */
+  /* RGB split distances. Used on text and outlines for "futurething" effect. */
+  --chroma-1:        1px;
+  --chroma-2:        2px;
+  --chroma-3:        3px;
+  --chroma-r:        #ff6f9c;   /* magenta-ish red channel */
+  --chroma-g:        #6fffd6;   /* mint-ish green channel */
+  --chroma-b:        #6fb8ff;   /* cyan-ish blue channel */
+
+  /* ── BRAILLE BAND ────────────────────────────────────────────────────── */
+  /* Micro-dot texture. Used as section dividers / loading skins / surface noise. */
+  --braille-dot:     rgba(168, 255, 241, 0.28);
+  --braille-dot-dim: rgba(233, 237, 232, 0.12);
+  --braille-size:    2px;
+  --braille-gap:     5px;
+
+  /* ── MOTION ──────────────────────────────────────────────────────────── */
+  /* Durations: name them by feel, not by ms. */
+  --dur-instant:     80ms;
+  --dur-fast:        160ms;
+  --dur-base:        240ms;
+  --dur-slow:        360ms;
+  --dur-lazy:        600ms;
+  --dur-glacial:     1000ms;
+
+  /* Easings: each has a job. */
+  --ease-out-expo:   cubic-bezier(0.16, 1, 0.3, 1);      /* arrivals */
+  --ease-out-back:   cubic-bezier(0.34, 1.56, 0.64, 1);  /* emphasis pops */
+  --ease-out-quart:  cubic-bezier(0.25, 1, 0.5, 1);      /* general purpose */
+  --ease-in-quart:   cubic-bezier(0.5, 0, 0.75, 0);      /* exits */
+  --ease-in-out:     cubic-bezier(0.65, 0, 0.35, 1);     /* swaps */
+  --ease-spring:     cubic-bezier(0.5, -0.5, 0.1, 1.5);  /* playful overshoot */
+
+  /* ── FOCUS RING ──────────────────────────────────────────────────────── */
+  --focus-ring:      0 0 0 1px rgba(168, 255, 241, 0.7), 0 0 12px rgba(168, 255, 241, 0.35);
+
+  /* ── BASE WIRING ─────────────────────────────────────────────────────── */
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-base);
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── ATMOSPHERE ────────────────────────────────────────────────────────── */
+/* The page-level wash. Subtle radial + diagonal — the "room" the UI sits in. */
+body {
+  background:
+    radial-gradient(ellipse 80% 60% at 18% 12%, rgba(168, 255, 241, 0.06), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 88% 92%, rgba(199, 189, 255, 0.05), transparent 60%),
+    var(--bg);
+}

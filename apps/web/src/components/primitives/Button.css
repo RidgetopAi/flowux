@@ -1,0 +1,139 @@
+/* ─── BUTTON ──────────────────────────────────────────────────────────────
+   Restrained chrome. The button is a tool, not a billboard.
+   The wow happens on hover (bloom warms) and press (snap-down). */
+
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out-quart),
+    background-color var(--dur-fast) var(--ease-out-quart),
+    color var(--dur-fast) var(--ease-out-quart),
+    transform var(--dur-instant) var(--ease-out-quart);
+}
+
+.btn__inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.btn__icon { display: inline-flex; align-items: center; }
+.btn__icon svg { width: 1em; height: 1em; }
+
+.btn__label { display: inline-flex; align-items: center; }
+
+.btn__spinner {
+  width: 1em;
+  height: 1em;
+  animation: btn-spin var(--dur-glacial) linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Sizes ─────────────────────────────────────────────────────────────── */
+.btn--sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+.btn--sm .btn__icon svg { width: 12px; height: 12px; }
+
+.btn--md {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: var(--fs-body-sm);
+}
+.btn--md .btn__icon svg { width: 14px; height: 14px; }
+
+.btn--lg {
+  min-height: 44px;
+  padding: 0 18px;
+  font-size: 12px;
+}
+.btn--lg .btn__icon svg { width: 16px; height: 16px; }
+
+/* Icon-only square sizing */
+.btn--icon-only.btn--sm { width: 28px; padding: 0; }
+.btn--icon-only.btn--md { width: 36px; padding: 0; }
+.btn--icon-only.btn--lg { width: 44px; padding: 0; }
+
+/* ── Variants ──────────────────────────────────────────────────────────── */
+
+/* default — quiet, line-defined */
+.btn--default:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: rgba(0, 0, 0, 0.34);
+}
+
+/* primary — cyan accent, bloom on hover */
+.btn--primary {
+  color: var(--cyan);
+  border-color: rgba(168, 255, 241, 0.42);
+  background: linear-gradient(90deg, rgba(168, 255, 241, 0.10), rgba(0, 0, 0, 0.16));
+}
+
+.btn--primary:hover:not(:disabled) {
+  color: var(--cyan-bright);
+  border-color: rgba(168, 255, 241, 0.72);
+  text-shadow: var(--glow-cyan-sm);
+}
+
+/* ghost — no border at rest, surfaces on hover */
+.btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--soft);
+}
+.btn--ghost:hover:not(:disabled) {
+  border-color: var(--line);
+  background: rgba(0, 0, 0, 0.24);
+  color: var(--ink);
+}
+
+/* danger — restrained red, no bloom */
+.btn--danger {
+  color: var(--red);
+  border-color: rgba(255, 116, 116, 0.38);
+}
+.btn--danger:hover:not(:disabled) {
+  color: var(--red-bright);
+  border-color: rgba(255, 116, 116, 0.7);
+  text-shadow: var(--glow-red-sm);
+}
+
+/* ── Press (tactile snap-down) ─────────────────────────────────────────── */
+.btn:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* ── Focus ring ────────────────────────────────────────────────────────── */
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ── Disabled / loading ────────────────────────────────────────────────── */
+.btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.btn[data-loading="true"] {
+  cursor: progress;
+  opacity: 0.85;
+}

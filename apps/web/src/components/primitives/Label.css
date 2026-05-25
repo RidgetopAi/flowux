@@ -1,0 +1,28 @@
+.label {
+  display: inline-block;
+}
+
+.label--muted  { color: var(--muted); }
+.label--ink    { color: var(--ink); }
+.label--soft   { color: var(--soft); }
+.label--cyan   { color: var(--cyan); text-shadow: var(--glow-cyan-sm); }
+.label--violet { color: var(--violet); text-shadow: var(--glow-violet-sm); }
+.label--amber  { color: var(--amber); text-shadow: var(--glow-amber-sm); }
+
+.label--underline {
+  position: relative;
+  padding-bottom: 4px;
+}
+
+.label--underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background-image: radial-gradient(circle, currentColor 0.6px, transparent 1.1px);
+  background-size: 4px 2px;
+  background-repeat: repeat-x;
+  opacity: 0.55;
+}

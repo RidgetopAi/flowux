@@ -1,0 +1,13 @@
+/* ─── CONNECTOR ───────────────────────────────────────────────────────── */
+
+.connector path {
+  transition: stroke var(--dur-base) var(--ease-out-quart);
+}
+
+.connector--animate path:last-child {
+  animation: dash-march 1.6s linear infinite;
+}
+
+@keyframes dash-march {
+  to { stroke-dashoffset: -14; }
+}

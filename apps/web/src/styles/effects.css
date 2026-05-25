@@ -1,0 +1,224 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   EFFECTS · the visual signature
+   Phosphor glow, holographic chroma offset, Braille bands, scan sweep,
+   halation. All utility-class-friendly so primitives stay composable.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* ── PHOSPHOR GLOW ─────────────────────────────────────────────────────── */
+/* Multi-layer text-shadow that reads as CRT bloom, not a drop shadow. */
+
+.fx-glow-cyan       { text-shadow: var(--glow-cyan-sm); }
+.fx-glow-cyan-md    { text-shadow: var(--glow-cyan-md); }
+.fx-glow-cyan-lg    { text-shadow: var(--glow-cyan-lg); }
+.fx-glow-violet     { text-shadow: var(--glow-violet-sm); }
+.fx-glow-violet-md  { text-shadow: var(--glow-violet-md); }
+.fx-glow-amber      { text-shadow: var(--glow-amber-sm); }
+.fx-glow-amber-md   { text-shadow: var(--glow-amber-md); }
+.fx-glow-green      { text-shadow: var(--glow-green-sm); }
+.fx-glow-red        { text-shadow: var(--glow-red-sm); }
+
+/* Box equivalents — for outlines and surfaces */
+.fx-aura-cyan       { box-shadow: var(--glow-cyan-md); }
+.fx-aura-cyan-lg    { box-shadow: var(--glow-cyan-lg); }
+.fx-aura-violet     { box-shadow: var(--glow-violet-md); }
+.fx-aura-amber      { box-shadow: var(--glow-amber-md); }
+
+/* ── HOLOGRAPHIC CHROMA OFFSET ─────────────────────────────────────────── */
+/* RGB-split on text via pseudo-elements. Requires data-text attr on element. */
+
+.fx-chroma-text {
+  position: relative;
+  display: inline-block;
+  color: var(--ink);
+  isolation: isolate;
+}
+
+.fx-chroma-text::before,
+.fx-chroma-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  transition: transform var(--dur-base) var(--ease-out-quart);
+}
+
+.fx-chroma-text::before {
+  color: var(--chroma-r);
+  transform: translate(calc(-1 * var(--chroma-1)), 0);
+  z-index: -1;
+}
+
+.fx-chroma-text::after {
+  color: var(--chroma-b);
+  transform: translate(var(--chroma-1), 0);
+  z-index: -1;
+}
+
+/* Intensify chroma on hover / focus — magnetic feel */
+.fx-chroma-text:hover::before,
+.fx-chroma-text[data-active="true"]::before {
+  transform: translate(calc(-1 * var(--chroma-2)), 0);
+}
+.fx-chroma-text:hover::after,
+.fx-chroma-text[data-active="true"]::after {
+  transform: translate(var(--chroma-2), 0);
+}
+
+/* Continuous shimmer variant — for hero numerals / status displays */
+@keyframes chroma-shimmer {
+  0%, 100% {
+    transform: translate(calc(-1 * var(--chroma-1)), 0);
+  }
+  50% {
+    transform: translate(calc(-1 * var(--chroma-2)), -0.5px);
+  }
+}
+@keyframes chroma-shimmer-reverse {
+  0%, 100% {
+    transform: translate(var(--chroma-1), 0);
+  }
+  50% {
+    transform: translate(var(--chroma-2), 0.5px);
+  }
+}
+
+.fx-chroma-text.fx-shimmer::before {
+  animation: chroma-shimmer 4.2s ease-in-out infinite;
+}
+.fx-chroma-text.fx-shimmer::after {
+  animation: chroma-shimmer-reverse 4.2s ease-in-out infinite;
+}
+
+/* ── BRAILLE NOISE (surface texture) ───────────────────────────────────── */
+/* CSS dot grid for big surfaces. The literal-Braille component is separate. */
+
+.fx-braille-noise {
+  background-image: radial-gradient(
+    circle,
+    var(--braille-dot-dim) 1px,
+    transparent 1.4px
+  );
+  background-size: var(--braille-gap) var(--braille-gap);
+}
+
+.fx-braille-noise-cyan {
+  background-image: radial-gradient(
+    circle,
+    var(--braille-dot) 1px,
+    transparent 1.4px
+  );
+  background-size: var(--braille-gap) var(--braille-gap);
+}
+
+/* ── SCAN SWEEP ────────────────────────────────────────────────────────── */
+/* Slow vertical light pass. Adds liveness to dormant surfaces. */
+
+.fx-scan-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.fx-scan-sweep::after {
+  content: "";
+  position: absolute;
+  inset: -50% 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 42%,
+    rgba(168, 255, 241, 0.045) 50%,
+    transparent 58%,
+    transparent 100%
+  );
+  animation: scan-sweep var(--sweep-duration, 6s) linear infinite;
+}
+
+@keyframes scan-sweep {
+  0%   { transform: translateY(-50%); }
+  100% { transform: translateY(50%); }
+}
+
+/* ── HALATION (soft outer bloom on press surfaces) ─────────────────────── */
+/* Pseudo-element bloom that wakes on hover. Used on primary actions. */
+
+.fx-halation {
+  position: relative;
+  isolation: isolate;
+}
+
+.fx-halation::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(168, 255, 241, 0.32),
+    transparent 70%
+  );
+  opacity: 0;
+  filter: blur(12px);
+  transition: opacity var(--dur-base) var(--ease-out-quart);
+}
+
+.fx-halation:hover::before,
+.fx-halation[data-active="true"]::before {
+  opacity: 1;
+}
+
+.fx-halation-violet::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(199, 189, 255, 0.32),
+    transparent 70%
+  );
+}
+
+.fx-halation-amber::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(244, 208, 117, 0.32),
+    transparent 70%
+  );
+}
+
+/* ── PHOSPHOR GHOST (subtle CRT grain on dark surfaces) ────────────────── */
+/* SVG turbulence as data URI — heavy but applied sparingly. */
+
+.fx-crt-grain {
+  position: relative;
+}
+
+.fx-crt-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/></svg>");
+}
+
+/* ── UPPERCASE MONO MICRO-LABEL UTILITY ────────────────────────────────── */
+/* The "telemetry tag" treatment used everywhere small. */
+
+.fx-mono-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  color: var(--muted);
+  line-height: 1;
+}
+
+.fx-mono-micro {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  color: var(--muted);
+  line-height: 1;
+}

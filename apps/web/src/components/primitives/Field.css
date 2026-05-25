@@ -1,0 +1,111 @@
+/* ─── FIELD (Input / Textarea shared shell) ──────────────────────────────
+   Restrained at rest. Phosphor focus state. */
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field__label {
+  color: var(--muted);
+  transition: color var(--dur-fast) var(--ease-out-quart);
+}
+
+.field:focus-within .field__label {
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan-sm);
+}
+
+.field--error .field__label {
+  color: var(--red);
+}
+
+.field__shell {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.28);
+  transition:
+    border-color var(--dur-fast) var(--ease-out-quart),
+    box-shadow var(--dur-fast) var(--ease-out-quart),
+    background-color var(--dur-fast) var(--ease-out-quart);
+}
+
+.field__shell--has-icon {
+  padding-left: 10px;
+  gap: 8px;
+  align-items: center;
+}
+
+.field__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  transition: color var(--dur-fast) var(--ease-out-quart);
+}
+.field__icon svg { width: 14px; height: 14px; }
+
+.field:focus-within .field__shell {
+  border-color: rgba(168, 255, 241, 0.58);
+  background: rgba(0, 0, 0, 0.38);
+  box-shadow: 0 0 0 1px rgba(168, 255, 241, 0.3), 0 0 16px rgba(168, 255, 241, 0.16);
+}
+
+.field:focus-within .field__icon {
+  color: var(--cyan);
+}
+
+.field--error .field__shell {
+  border-color: rgba(255, 116, 116, 0.5);
+}
+
+.field__input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-base);
+}
+
+.field__input::placeholder {
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+}
+
+.field__shell--textarea {
+  align-items: stretch;
+}
+
+.field__input--textarea {
+  min-height: 84px;
+  font-family: var(--font-sans);
+  resize: vertical;
+}
+
+.field__input--autosize {
+  resize: none;
+  overflow: hidden;
+}
+
+.field__sub {
+  color: var(--muted);
+  padding: 0 2px;
+}
+
+.field__sub--error {
+  color: var(--red);
+}
+
+.field__input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

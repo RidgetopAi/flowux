@@ -1,0 +1,39 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--soft);
+  white-space: nowrap;
+  transition: border-color var(--dur-fast) var(--ease-out-quart),
+              color var(--dur-fast) var(--ease-out-quart);
+}
+
+.pill--emphasis {
+  padding: 5px 10px;
+  color: var(--ink);
+}
+
+.pill--cyan {
+  border-color: rgba(168, 255, 241, 0.32);
+  color: var(--cyan);
+}
+.pill--violet {
+  border-color: rgba(199, 189, 255, 0.32);
+  color: var(--violet);
+}
+.pill--amber {
+  border-color: rgba(244, 208, 117, 0.32);
+  color: var(--amber);
+}
+.pill--green {
+  border-color: rgba(184, 255, 186, 0.32);
+  color: var(--green);
+}
+.pill--red {
+  border-color: rgba(255, 116, 116, 0.32);
+  color: var(--red);
+}
