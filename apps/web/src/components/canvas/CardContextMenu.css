@@ -1,0 +1,95 @@
+/* ─── CARD CONTEXT MENU ──────────────────────────────────────────────
+   Floating right-click menu, portal-mounted to document.body so it's
+   never clipped by canvas transforms. Position is set inline via
+   left/top styles. */
+
+.card-ctx-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 200px;
+  padding: 4px;
+  background: var(--glass-deep);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.45),
+    0 12px 32px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  user-select: none;
+  animation: card-ctx-menu-in 0.14s var(--ease-out-quart);
+}
+
+@keyframes card-ctx-menu-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.card-ctx-menu__row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  border-radius: var(--r-sm);
+  transition:
+    background var(--dur-fast) var(--ease-out-quart),
+    color var(--dur-fast) var(--ease-out-quart);
+}
+
+.card-ctx-menu__row:hover:not(:disabled),
+.card-ctx-menu__row:focus-visible {
+  background: rgba(168, 255, 241, 0.10);
+  color: var(--cyan);
+  outline: none;
+}
+
+.card-ctx-menu__row:disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.card-ctx-menu__row--danger {
+  color: var(--err, #ff7676);
+}
+
+.card-ctx-menu__row--danger:hover:not(:disabled) {
+  background: rgba(255, 118, 118, 0.10);
+  color: var(--err, #ff7676);
+}
+
+.card-ctx-menu__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  opacity: 0.85;
+}
+
+.card-ctx-menu__label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-ctx-menu__shortcut {
+  color: var(--muted);
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.card-ctx-menu__sep {
+  height: 1px;
+  margin: 4px 8px;
+  background: var(--line);
+}

@@ -1,11 +1,20 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, type PanInfo } from "motion/react";
-import { Check, GitFork, GripHorizontal } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  EyeOff,
+  GitFork,
+  GripHorizontal,
+  Maximize2,
+  SquareCheck,
+} from "lucide-react";
 import { useCanvas, type MRP } from "../../lib/store";
 import { Card } from "../primitives/Card";
 import { Pill } from "../primitives/Pill";
 import { StatusDot } from "../primitives/StatusDot";
 import { cn } from "../../lib/cn";
+import { CardContextMenu, type MenuItem } from "./CardContextMenu";
 import "./MRPCard.css";
 
 type Props = { mrp: MRP };
@@ -203,8 +212,7 @@ export function MRPCard({ mrp }: Props) {
   // "new conversation with this context" is handled by useCanvas.forkHandler,
   // which the host app (App.tsx) wires up to call apps/api's branch endpoint
   // with the source MRP ids resolved from the canvas objects.
-  const onForkClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const runFork = () => {
     const all = useCanvas.getState().objects;
     const checkedIds = all.filter((o) => o.checked).map((o) => o.id);
     const bundleAct = checkedIds.length > 1 && checkedIds.includes(mrp.id);
@@ -221,6 +229,71 @@ export function MRPCard({ mrp }: Props) {
       );
     }
   };
+  const onForkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    runFork();
+  };
+
+  // Right-click context menu — anchored to clientX/Y, portal-mounted so
+  // canvas transforms don't clip it. Items reuse existing handlers so the
+  // gesture is just a faster path to the same actions.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const copyMrpId = () => {
+    void navigator.clipboard.writeText(mrp.id).catch(() => {
+      // Clipboard failures (insecure context, denied permission) are silent
+      // — the menu still closes, which is the user-visible feedback.
+    });
+  };
+
+  const menuItems: MenuItem[] = [
+    {
+      kind: "action",
+      icon: <Maximize2 size={13} />,
+      label: "Open",
+      shortcut: "↵",
+      onSelect: () => {
+        setExpanded(mrp.id);
+      },
+    },
+    {
+      kind: "action",
+      icon: mrp.checked ? <SquareCheck size={13} /> : <Check size={13} />,
+      label: mrp.checked ? "Remove from bundle" : "Add to bundle",
+      shortcut: "Space",
+      onSelect: () => toggleCheck(mrp.id),
+    },
+    {
+      kind: "action",
+      icon: <GitFork size={13} />,
+      label: forkActsOnBundle
+        ? `Fork from bundle (${checkedCount})`
+        : "Fork from this card",
+      onSelect: () => runFork(),
+    },
+    { kind: "separator" },
+    {
+      kind: "action",
+      icon: <Clipboard size={13} />,
+      label: "Copy MRP id",
+      onSelect: copyMrpId,
+    },
+    {
+      kind: "action",
+      icon: <EyeOff size={13} />,
+      label: "Hide from search results",
+      disabled: true,
+      onSelect: () => {
+        // Placeholder — wired in a later iteration when the search filter
+        // grows a per-MRP exclusion list. Disabled keeps the affordance
+        // discoverable without faking behavior.
+      },
+    },
+  ];
 
   // Two-layer motion structure:
   //   OUTER — owns position (left/top from store), mount animation (fade+rise),
@@ -246,6 +319,7 @@ export function MRPCard({ mrp }: Props) {
       data-checked={mrp.checked ? "true" : undefined}
       data-object-id={mrp.id}
       className={cn("mrp-card-wrap", isDragging && "is-dragging")}
+      onContextMenu={onContextMenu}
     >
       <motion.div
         data-canvas-card
@@ -336,6 +410,14 @@ export function MRPCard({ mrp }: Props) {
         </Card.Footer>
       </Card>
       </motion.div>
+      {ctxMenu && (
+        <CardContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={menuItems}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </motion.div>
   );
 }
