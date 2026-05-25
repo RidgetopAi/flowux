@@ -169,6 +169,12 @@ export function Canvas() {
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
+      // Expanded MRP overlay is rendered inside the canvas surface, so its
+      // wheel events bubble up here. Let the browser handle native scroll
+      // inside the overlay instead of eating it for canvas pan/zoom.
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest(".xmrp-portal")) return;
+
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         const rect = el.getBoundingClientRect();
@@ -328,6 +334,10 @@ export function Canvas() {
     // If the pointer is on a card (or its descendants), don't pan.
     const target = e.target as HTMLElement;
     if (target.closest("[data-canvas-card]")) return;
+    // If the expanded-MRP overlay is up and the pointer is inside it,
+    // don't pan (and don't dismiss via setExpanded(null) below). Backdrop
+    // click handles its own dismiss; pane scrollbars need pointer events.
+    if (target.closest(".xmrp-portal")) return;
 
     setIsPanning(true);
     setExpanded(null);

@@ -44,13 +44,6 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   transition: height var(--dur-base) var(--ease-out-quart);
-}
-
-/* Coexist with the dock: reclaim only the space above the dock area
-   (height ~ viewport - top padding - dock reserve - small gap). */
-.canvas[data-has-dock="true"] .xmrp {
-  height: min(680px, calc(100vh - 24px - var(--dock-reserve, 56px) - 8px));
-}
   border: 1px solid rgba(168, 255, 241, 0.36);
   border-radius: var(--r-xl);
   background:
@@ -66,6 +59,12 @@
   overflow: hidden;
   pointer-events: auto;
   color: var(--ink);
+}
+
+/* Coexist with the dock: reclaim only the space above the dock area
+   (height ~ viewport - top padding - dock reserve - small gap). */
+.canvas[data-has-dock="true"] .xmrp {
+  height: min(680px, calc(100vh - 24px - var(--dock-reserve, 56px) - 8px));
 }
 
 .xmrp--external {
