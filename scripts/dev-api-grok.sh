@@ -17,4 +17,4 @@ if [ -z "${XAI_API_KEY:-}" ]; then
   echo "WARNING: XAI_API_KEY is not set — Pi will hang waiting for auth on xai requests."
 fi
 
-exec flowux_tsx apps/api/src/server.ts
+exec "$FLOWUX_ROOT/node_modules/.bin/tsx" apps/api/src/server.ts
