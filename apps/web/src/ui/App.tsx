@@ -5,7 +5,7 @@ import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
 import { Pill } from "../components/primitives/Pill";
-import { useCanvas, type SubmitPromptHandler } from "../lib/store";
+import { useCanvas, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
 import { useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -21,9 +21,11 @@ export function App() {
   const saveCurrentCanvas = useFlowuxStore((s) => s.saveCurrentCanvas);
   const deleteCurrentCanvas = useFlowuxStore((s) => s.deleteCurrentCanvas);
   const submitPrompt = useFlowuxStore((s) => s.submitPrompt);
+  const patchPlacement = useFlowuxStore((s) => s.patchPlacement);
 
   const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
   const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
+  const setMovePersistHandler = useCanvas((s) => s.setMovePersistHandler);
 
   // After a dock send, apps/api confirms the new placement via the
   // submitPrompt onCreated callback. We stash that real placement id
@@ -65,6 +67,21 @@ export function App() {
     setSubmitPromptHandler(handler);
     return () => setSubmitPromptHandler(null);
   }, [submitPrompt, setSubmitPromptHandler]);
+
+  // Persist drag-end + arrange-all to apps/api. CanvasObject.id IS the
+  // placement.id (per canvasAdapter), but patchPlacement keys on mrpId
+  // so look it up from the current snapshot.
+  useEffect(() => {
+    const handler: MovePersistHandler = (objectId, x, y) => {
+      const placement = useFlowuxStore
+        .getState()
+        .snapshot?.placements.find((p) => p.id === objectId);
+      if (!placement) return;
+      void patchPlacement(placement.mrpId, { x, y });
+    };
+    setMovePersistHandler(handler);
+    return () => setMovePersistHandler(null);
+  }, [patchPlacement, setMovePersistHandler]);
 
   const createNamedCanvas = () => {
     const name = window.prompt("Name this canvas", "New Canvas");

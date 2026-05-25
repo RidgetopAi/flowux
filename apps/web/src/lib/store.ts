@@ -14,6 +14,13 @@ export type SubmitPromptHandler = (input: {
   attachments: DockAttachment[];
 }) => string;
 
+/** External hook for persisting object position changes (drag-end,
+ *  arrangeAll). Fires once per moved object with the new world coords;
+ *  the handler is responsible for translating CanvasObject.id back to
+ *  whatever the backend keys placements on (e.g. mrpId). Fire-and-forget
+ *  — failures should be handled by the handler, not propagated. */
+export type MovePersistHandler = (objectId: string, x: number, y: number) => void;
+
 export type MRPStatus = "idle" | "pending" | "active" | "complete" | "error";
 
 /** Directions the keyboard cursor can move on the canvas.
@@ -256,6 +263,8 @@ type State = {
   // External integration hooks
   submitPromptHandler: SubmitPromptHandler | null;
   setSubmitPromptHandler: (handler: SubmitPromptHandler | null) => void;
+  movePersistHandler: MovePersistHandler | null;
+  setMovePersistHandler: (handler: MovePersistHandler | null) => void;
 };
 
 let seq = 0;
@@ -382,10 +391,12 @@ export const useCanvas = create<State>((set, get) => ({
     return id;
   },
 
-  moveObject: (id, x, y) =>
+  moveObject: (id, x, y) => {
     set((s) => ({
       objects: s.objects.map((o) => (o.id === id ? { ...o, x, y } : o)),
-    })),
+    }));
+    get().movePersistHandler?.(id, x, y);
+  },
 
   toggleCheck: (id) =>
     set((s) => ({
@@ -632,13 +643,16 @@ export const useCanvas = create<State>((set, get) => ({
       count: state.objects.length,
       viewportWidth: state.viewport.width,
     });
-    set({
-      objects: state.objects.map((o, i) => ({
-        ...o,
-        x: positions[i]?.x ?? o.x,
-        y: positions[i]?.y ?? o.y,
-      })),
-    });
+    const arranged = state.objects.map((o, i) => ({
+      ...o,
+      x: positions[i]?.x ?? o.x,
+      y: positions[i]?.y ?? o.y,
+    }));
+    set({ objects: arranged });
+    const persist = get().movePersistHandler;
+    if (persist) {
+      for (const o of arranged) persist(o.id, o.x, o.y);
+    }
   },
 
   setViewportRect: (left, top, width, height) =>
@@ -646,6 +660,9 @@ export const useCanvas = create<State>((set, get) => ({
 
   submitPromptHandler: null,
   setSubmitPromptHandler: (handler) => set({ submitPromptHandler: handler }),
+
+  movePersistHandler: null,
+  setMovePersistHandler: (handler) => set({ movePersistHandler: handler }),
 
   revealMRP: (id) => {
     const state = get();
