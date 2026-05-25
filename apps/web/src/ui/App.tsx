@@ -1,1090 +1,155 @@
-import {
-  Check,
-  ChevronsDown,
-  ChevronsUp,
-  Circle,
-  CornerUpLeft,
-  Eye,
-  EyeOff,
-  GitBranch,
-  Import,
-  Loader2,
-  Maximize2,
-  Move,
-  Paperclip,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Save,
-  Scan,
-  Search,
-  Sparkles,
-  Square,
-  Trash2,
-  X,
-  ZoomIn,
-  ZoomOut
-} from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
+import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { useEffect } from "react";
 import { Canvas } from "../components/canvas/Canvas";
-import type { Artifact, CanvasPlacement, ModelRun, Mrp, MrpBlock, MrpSection, MrpSectionKind, UploadedAttachment } from "@flowux/shared";
-import * as api from "../api.js";
-import { findPlacement, useFlowuxStore } from "../store.js";
+import { ChromaText } from "../components/effects/ChromaText";
+import { Button } from "../components/primitives/Button";
+import { Label } from "../components/primitives/Label";
+import { Pill } from "../components/primitives/Pill";
 import { useCanvas, type SubmitPromptHandler } from "../lib/store";
+import { useFlowuxStore } from "../store.js";
 
 export function App() {
-  const {
-    snapshot,
-    canvases,
-    loading,
-    promptRunning,
-    searchResults,
-    contextBudget,
-    executionContext,
-    error,
-    loadInitial,
-    switchCanvas,
-    createNewCanvas,
-    renameCurrentCanvas,
-    saveCurrentCanvas,
-    deleteCurrentCanvas,
-    createChildCanvasFromSelection,
-    importSelectedFromCanvas,
-    saveSelectedContextBundle,
-    applyContextBundle,
-    deleteContextBundle,
-    submitPrompt,
-    cancelActivePrompt,
-    searchWorkspace,
-    refreshContextBudget,
-    loadMrpDetails,
-    patchPlacement,
-    setAllContextSelection,
-    snapBack
-  } = useFlowuxStore();
-  const [prompt, setPrompt] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<UploadedAttachment[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [pendingFocusMrpId, setPendingFocusMrpId] = useState<string>();
-  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
-  const [focusedMrpId, setFocusedMrpId] = useState<string>();
-  const [focusedFrame, setFocusedFrame] = useState<FocusFrame>();
-  const [importCanvasId, setImportCanvasId] = useState("");
-  const [contextBundleId, setContextBundleId] = useState("");
-  const [childCanvasId, setChildCanvasId] = useState("");
-  const [pan, setPan] = useState<{ startX: number; startY: number; x: number; y: number }>();
-  const workspaceRef = useRef<HTMLElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const snapshot = useFlowuxStore((s) => s.snapshot);
+  const canvases = useFlowuxStore((s) => s.canvases);
+  const loading = useFlowuxStore((s) => s.loading);
+  const error = useFlowuxStore((s) => s.error);
+  const executionContext = useFlowuxStore((s) => s.executionContext);
+  const loadInitial = useFlowuxStore((s) => s.loadInitial);
+  const switchCanvas = useFlowuxStore((s) => s.switchCanvas);
+  const createNewCanvas = useFlowuxStore((s) => s.createNewCanvas);
+  const renameCurrentCanvas = useFlowuxStore((s) => s.renameCurrentCanvas);
+  const saveCurrentCanvas = useFlowuxStore((s) => s.saveCurrentCanvas);
+  const deleteCurrentCanvas = useFlowuxStore((s) => s.deleteCurrentCanvas);
+  const submitPrompt = useFlowuxStore((s) => s.submitPrompt);
+
+  const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
+  const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
 
   useEffect(() => {
     void loadInitial();
   }, [loadInitial]);
 
   useEffect(() => {
-    const handle = window.setTimeout(() => {
-      void searchWorkspace(searchQuery);
-    }, 180);
-    return () => window.clearTimeout(handle);
-  }, [searchQuery, searchWorkspace]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      void refreshContextBudget(prompt, pendingAttachments);
-    }, 220);
-    return () => window.clearTimeout(handle);
-  }, [prompt, pendingAttachments, refreshContextBudget, snapshot?.canvas.id]);
-
-  useEffect(() => {
-    if (!focusedMrpId) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setFocusedMrpId(undefined);
-      setFocusedFrame(undefined);
-      window.requestAnimationFrame(() => snapBackToVisibleWidth());
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusedMrpId]);
-
-  // Phase C.3 wiring: keep the playground <Canvas /> in sync with the real
-  // apps/api snapshot, and bridge the dock's send button to submitPrompt.
-  const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
-  const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
-
-  useEffect(() => {
     if (snapshot) loadFromSnapshot(snapshot);
   }, [snapshot, loadFromSnapshot]);
 
   useEffect(() => {
-    const handler: SubmitPromptHandler = ({ prompt: text }) => {
-      void submitPrompt(text);
+    const handler: SubmitPromptHandler = ({ prompt }) => {
+      void submitPrompt(prompt);
       return `pending-${Date.now().toString(36)}`;
     };
     setSubmitPromptHandler(handler);
     return () => setSubmitPromptHandler(null);
   }, [submitPrompt, setSubmitPromptHandler]);
 
-  const selectedCount = useMemo(
-    () => snapshot?.placements.filter((placement) => placement.selectedForContext).length ?? 0,
-    [snapshot?.placements]
-  );
-  const importableCanvases = useMemo(
-    () => canvases.filter((canvas) => canvas.id !== snapshot?.canvas.id),
-    [canvases, snapshot?.canvas.id]
-  );
-  const parentCanvas = useMemo(
-    () => canvases.find((canvas) => canvas.id === snapshot?.canvas.parentCanvasId),
-    [canvases, snapshot?.canvas.parentCanvasId]
-  );
-  const childCanvases = useMemo(() => {
-    const childIds = new Set(
-      (snapshot?.branches ?? [])
-        .filter((branch) => branch.parentCanvasId === snapshot?.canvas.id)
-        .map((branch) => branch.childCanvasId)
-    );
-    return canvases.filter((canvas) => childIds.has(canvas.id));
-  }, [canvases, snapshot?.branches, snapshot?.canvas.id]);
-
-  useEffect(() => {
-    if (!importableCanvases.length) {
-      setImportCanvasId("");
-      return;
-    }
-    if (!importCanvasId || !importableCanvases.some((canvas) => canvas.id === importCanvasId)) {
-      setImportCanvasId(importableCanvases[0]?.id ?? "");
-    }
-  }, [importCanvasId, importableCanvases]);
-
-  useEffect(() => {
-    const bundles = snapshot?.contextBundles ?? [];
-    if (!bundles.length) {
-      setContextBundleId("");
-      return;
-    }
-    if (!contextBundleId || !bundles.some((bundle) => bundle.id === contextBundleId)) {
-      setContextBundleId(bundles[0]?.id ?? "");
-    }
-  }, [contextBundleId, snapshot?.contextBundles]);
-
-  useEffect(() => {
-    if (!childCanvases.length) {
-      setChildCanvasId("");
-      return;
-    }
-    if (!childCanvasId || !childCanvases.some((canvas) => canvas.id === childCanvasId)) {
-      setChildCanvasId(childCanvases[0]?.id ?? "");
-    }
-  }, [childCanvasId, childCanvases]);
-
-  useEffect(() => {
-    if (!pendingFocusMrpId || !snapshot?.placements.some((placement) => placement.mrpId === pendingFocusMrpId)) return;
-    focusMrp(pendingFocusMrpId);
-    setPendingFocusMrpId(undefined);
-  }, [pendingFocusMrpId, snapshot?.canvas.id, snapshot?.placements]);
-
-  const zoomBy = (factor: number) => {
-    setViewport((current) => ({ ...current, zoom: clampZoom(current.zoom * factor) }));
-  };
-
-  const resetView = () => {
-    setFocusedMrpId(undefined);
-    setFocusedFrame(undefined);
-    setViewport({ x: 0, y: 0, zoom: 1 });
-  };
-
-  const fitThread = () => {
-    if (!snapshot?.placements.length) {
-      resetView();
-      return;
-    }
-
-    const bounds = getPlacementBounds(snapshot.placements);
-    const workspace = workspaceRef.current;
-    const width = workspace?.clientWidth ?? 1200;
-    const height = workspace?.clientHeight ?? 760;
-    const padding = 120;
-    const zoom = clampZoom(Math.min((width - padding) / bounds.width, (height - padding) / bounds.height, 1));
-
-    setViewport({
-      zoom,
-      x: (width - bounds.width * zoom) / 2 - bounds.left * zoom,
-      y: (height - bounds.height * zoom) / 2 - bounds.top * zoom
-    });
-  };
-
-  const handleWheel = (event: WheelEvent<HTMLElement>) => {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const nextZoom = clampZoom(viewport.zoom * (event.deltaY > 0 ? 0.92 : 1.08));
-    const cursorX = event.clientX - rect.left;
-    const cursorY = event.clientY - rect.top;
-    const worldX = (cursorX - viewport.x) / viewport.zoom;
-    const worldY = (cursorY - viewport.y) / viewport.zoom;
-
-    setViewport({
-      zoom: nextZoom,
-      x: cursorX - worldX * nextZoom,
-      y: cursorY - worldY * nextZoom
-    });
-  };
-
-  const handleWorkspacePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || event.target !== event.currentTarget) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setPan({ startX: event.clientX, startY: event.clientY, x: viewport.x, y: viewport.y });
-  };
-
-  const handlePanMove = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!pan) return;
-    setViewport((current) => ({
-      ...current,
-      x: pan.x + event.clientX - pan.startX,
-      y: pan.y + event.clientY - pan.startY
-    }));
-  };
-
-  const finishPan = () => setPan(undefined);
-  const getVisibleLayout = () => {
-    const workspace = workspaceRef.current;
-    const workspaceWidth = workspace?.clientWidth ?? 1260;
-    const workspaceHeight = workspace?.clientHeight ?? 760;
-    return {
-      layoutWidth: workspaceWidth / viewport.zoom,
-      layoutLeft: -viewport.x / viewport.zoom,
-      layoutTop: -viewport.y / viewport.zoom,
-      rowHeight: getVisibleCardRowHeight(workspace, viewport.zoom),
-      workspaceWidth,
-      workspaceHeight
-    };
-  };
-  const snapBackToVisibleWidth = () => {
-    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
-    void snapBack({ layoutWidth, layoutLeft, layoutTop, rowHeight });
-  };
-  const focusMrp = (mrpId: string) => {
-    void loadMrpDetails(mrpId);
-    setFocusedMrpId(mrpId);
-    setFocusedFrame(getFocusFrame(workspaceRef.current, viewport));
-  };
-  const importSelectedRefs = () => {
-    if (!importCanvasId) return;
-    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
-    void importSelectedFromCanvas(importCanvasId, { layoutWidth, layoutLeft, layoutTop, rowHeight });
-  };
-  const saveContextSet = () => {
-    if (!selectedCount) return;
-    const name = window.prompt("Name this context set", `Context set ${(snapshot?.contextBundles.length ?? 0) + 1}`);
-    if (name === null) return;
-    void saveSelectedContextBundle(name);
-  };
-  const applyContextSet = () => {
-    if (!contextBundleId) return;
-    void applyContextBundle(contextBundleId);
-  };
-  const deleteContextSet = () => {
-    const bundle = snapshot?.contextBundles.find((item) => item.id === contextBundleId);
-    if (!bundle) return;
-    const ok = window.confirm(`Delete context set "${bundle.name || "Untitled set"}"?`);
-    if (!ok) return;
-    void deleteContextBundle(bundle.id);
-  };
   const createNamedCanvas = () => {
-    const name = window.prompt("Name this canvas", "Ridgey workflow");
+    const name = window.prompt("Name this canvas", "New Canvas");
     if (name === null) return;
     void createNewCanvas(name.trim() || "Flowux Canvas");
   };
+
   const renameCanvas = () => {
     if (!snapshot) return;
     const name = window.prompt("Rename this canvas", snapshot.canvas.title);
     if (name === null) return;
     void renameCurrentCanvas(name);
   };
+
   const deleteCanvas = () => {
     if (!snapshot) return;
-    const ok = window.confirm(`Delete canvas "${snapshot.canvas.title}"? This removes the canvas and its unreferenced thread data.`);
+    const ok = window.confirm(`Delete canvas "${snapshot.canvas.title}"?`);
     if (!ok) return;
-    resetView();
     void deleteCurrentCanvas();
   };
-  const openCanvas = (canvasId: string) => {
-    if (!canvasId) return;
-    resetView();
-    void switchCanvas(canvasId);
-  };
-  const openSearchResult = (canvasId: string, mrpId?: string) => {
-    resetView();
-    setSearchQuery("");
-    if (mrpId) setPendingFocusMrpId(mrpId);
-    void switchCanvas(canvasId);
-  };
-  const sendPrompt = () => {
-    const value = prompt.trim();
-    if (!value && !pendingAttachments.length) return;
-    const { layoutWidth, layoutLeft, layoutTop, rowHeight } = getVisibleLayout();
-    setPrompt("");
-    const attachments = pendingAttachments;
-    setPendingAttachments([]);
-    void submitPrompt(value, { layoutWidth, layoutLeft, layoutTop, rowHeight }, attachments, ({ placement }) => {
-      focusMrp(placement.mrpId);
-    });
-  };
-  const uploadFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setUploading(true);
-    try {
-      const uploaded = await Promise.all(Array.from(files).map((file) => api.uploadAttachment(file)));
-      setPendingAttachments((current) => [...current, ...uploaded]);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
+
+  const canvasStatus = snapshot?.canvas.status ?? (loading ? "loading" : "—");
+  const execLabel = executionContext
+    ? `${executionContext.harness} · ${
+        executionContext.hostLabel ?? "—"
+      }`
+    : "boot";
 
   return (
     <main className="flowux-app">
-      <header className="topbar hud-panel">
-        <div>
-          <p className="hud-label">Spatial Thread</p>
-          <h1>Flowux</h1>
+      <header className="flowux-topbar">
+        <div className="flowux-brand">
+          <ChromaText as="span" className="flowux-brand__mark">
+            FLOWUX
+          </ChromaText>
+          <Label size="micro" tone="muted">
+            SPATIAL · 0.1
+          </Label>
         </div>
-        <div className="topbar-actions">
-          <label className="search-box">
-            <Search size={15} />
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search canvases and MRPs"
-            />
-            {searchResults.length > 0 && (
-              <div className="search-results hud-panel">
-                {searchResults.map((result) => (
-                  <button
-                    key={`${result.kind}-${result.id}`}
-                    type="button"
-                    onClick={() => openSearchResult(result.canvasId, result.mrpId)}
-                  >
-                    <span>{result.kind}</span>
-                    <strong>{result.title}</strong>
-                    <small>{result.snippet}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </label>
-          <label className="canvas-selector">
-            <span className="hud-label">Canvas</span>
-            <select
-              value={snapshot?.canvas.id ?? ""}
-              onChange={(event) => {
-                resetView();
-                void switchCanvas(event.target.value);
-              }}
-              disabled={!canvases.length}
-              title="Switch canvas thread"
-            >
-              {canvases.map((canvas) => (
-                <option key={canvas.id} value={canvas.id}>
-                  {canvas.title} · {formatCanvasTime(canvas.updatedAt)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="telemetry">
-            <span>{snapshot?.mrps.length ?? 0} MRPs</span>
-            <span>{selectedCount} checked</span>
-            <span>{snapshot?.contextBundles.length ?? 0} sets</span>
-            <span>{promptRunning ? "running" : "ready"}</span>
-            <span title={formatContextTitle(contextBudget)}>{formatContextLabel(contextBudget)}</span>
-            <span title={formatExecutionTitle(executionContext)}>{formatExecutionLabel(executionContext)}</span>
-            <span>{snapshot?.canvas.status ?? "loading"}</span>
-          </div>
-          <button className="hud-button" onClick={() => void cancelActivePrompt()} disabled={!promptRunning} title="Cancel active model run">
-            <Square size={15} />
-            Cancel
-          </button>
-          <button
-            className="hud-button"
-            onClick={() => void setAllContextSelection(true)}
-            disabled={!snapshot?.placements.length}
-            title="Check every MRP on this canvas"
+
+        <div className="flowux-canvas-ctl">
+          <Label size="micro" tone="muted">
+            Canvas
+          </Label>
+          <select
+            className="flowux-canvas-select"
+            value={snapshot?.canvas.id ?? ""}
+            onChange={(event) => void switchCanvas(event.target.value)}
+            disabled={!canvases.length}
+            title="Switch canvas thread"
           >
-            <Check size={15} />
-            Check all
-          </button>
-          <button
-            className="hud-button"
-            onClick={() => void setAllContextSelection(false)}
-            disabled={selectedCount === 0}
-            title="Clear checked MRPs"
-          >
-            <Circle size={15} />
-            Clear
-          </button>
-          <button
-            className="hud-button"
-            onClick={() => {
-              resetView();
-              createNamedCanvas();
-            }}
-            title="Start a new blank canvas thread"
-          >
-            <Plus size={15} />
-            New canvas
-          </button>
-          <button className="hud-button" onClick={renameCanvas} disabled={!snapshot} title="Rename current canvas">
-            <Pencil size={15} />
-            Rename
-          </button>
-          <button className="hud-button" onClick={() => void saveCurrentCanvas()} disabled={!snapshot || snapshot.canvas.status === "saved"} title="Save canvas permanently">
-            <Save size={15} />
-            Save canvas
-          </button>
-          <button className="hud-button" onClick={deleteCanvas} disabled={!snapshot} title="Delete current canvas">
-            <Trash2 size={15} />
-            Delete
-          </button>
-          <button
-            className="hud-button"
-            onClick={() => {
-              resetView();
-              void createChildCanvasFromSelection();
-            }}
-            disabled={selectedCount === 0}
-            title="Create a child canvas from checked MRPs"
-          >
-            <GitBranch size={15} />
-            Branch
-          </button>
-          <button className="hud-button" onClick={() => parentCanvas && openCanvas(parentCanvas.id)} disabled={!parentCanvas} title="Open parent canvas">
-            <CornerUpLeft size={15} />
-            Parent
-          </button>
-          <label className="canvas-selector import-selector">
-            <span className="hud-label">Child</span>
-            <select
-              value={childCanvasId}
-              onChange={(event) => setChildCanvasId(event.target.value)}
-              disabled={!childCanvases.length}
-              title="Child canvases branched from this canvas"
-            >
-              {childCanvases.map((canvas) => (
-                <option key={canvas.id} value={canvas.id}>
-                  {canvas.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="hud-button" onClick={() => openCanvas(childCanvasId)} disabled={!childCanvasId} title="Open selected child canvas">
-            <GitBranch size={15} />
-            Open child
-          </button>
-          <button className="hud-button" onClick={saveContextSet} disabled={selectedCount === 0} title="Save checked MRPs as a context set">
-            <Save size={15} />
-            Save set
-          </button>
-          <label className="canvas-selector import-selector">
-            <span className="hud-label">Set</span>
-            <select
-              value={contextBundleId}
-              onChange={(event) => setContextBundleId(event.target.value)}
-              disabled={!snapshot?.contextBundles.length}
-              title="Saved context sets for this canvas"
-            >
-              {(snapshot?.contextBundles ?? []).map((bundle) => (
-                <option key={bundle.id} value={bundle.id}>
-                  {bundle.name || "Untitled set"} · {bundle.selectedMrpIds.length}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="hud-button" onClick={applyContextSet} disabled={!contextBundleId} title="Apply selected context set">
-            <Check size={15} />
-            Apply set
-          </button>
-          <button className="hud-button" onClick={deleteContextSet} disabled={!contextBundleId} title="Delete selected context set">
-            <Trash2 size={15} />
-            Delete set
-          </button>
-          <label className="canvas-selector import-selector">
-            <span className="hud-label">Import</span>
-            <select
-              value={importCanvasId}
-              onChange={(event) => setImportCanvasId(event.target.value)}
-              disabled={!importableCanvases.length}
-              title="Source canvas for checked MRP references"
-            >
-              {importableCanvases.map((canvas) => (
-                <option key={canvas.id} value={canvas.id}>
-                  {canvas.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="hud-button"
-            onClick={importSelectedRefs}
-            disabled={!importCanvasId}
-            title="Import checked MRPs from the selected source canvas"
-          >
-            <Import size={15} />
-            Import refs
-          </button>
-          <button className="hud-button" onClick={snapBackToVisibleWidth} title="Snap cards back to chronological layout">
-            <RotateCcw size={15} />
-            Snap back
-          </button>
+            {canvases.length === 0 && <option value="">No canvases</option>}
+            {canvases.map((canvas) => (
+              <option key={canvas.id} value={canvas.id}>
+                {canvas.title}
+              </option>
+            ))}
+          </select>
+          <Button
+            iconOnly
+            size="sm"
+            icon={<Plus size={15} />}
+            onClick={createNamedCanvas}
+            title="New canvas"
+          />
+          <Button
+            iconOnly
+            size="sm"
+            icon={<Pencil size={15} />}
+            onClick={renameCanvas}
+            disabled={!snapshot}
+            title="Rename canvas"
+          />
+          <Button
+            iconOnly
+            size="sm"
+            icon={<Save size={15} />}
+            onClick={() => void saveCurrentCanvas()}
+            disabled={!snapshot || snapshot.canvas.status === "saved"}
+            title="Save canvas"
+          />
+          <Button
+            iconOnly
+            size="sm"
+            variant="danger"
+            icon={<Trash2 size={15} />}
+            onClick={deleteCanvas}
+            disabled={!snapshot}
+            title="Delete canvas"
+          />
+        </div>
+
+        <div className="flowux-status">
+          <Pill tone="cyan">{execLabel}</Pill>
+          <Pill tone="neutral">{canvasStatus}</Pill>
         </div>
       </header>
 
-      <section
-        ref={workspaceRef}
-        className={`workspace hud-shell ${pan ? "is-panning" : ""}`}
-        onWheel={handleWheel}
-        onPointerDown={handleWorkspacePointerDown}
-        onPointerMove={handlePanMove}
-        onPointerUp={finishPan}
-        onPointerCancel={finishPan}
-      >
-        <div className="playground-canvas-mount">
-          <Canvas />
-        </div>
+      {error && <div className="flowux-error">{error}</div>}
 
-        <div className="canvas-controls hud-panel" onWheel={(event) => event.stopPropagation()}>
-          <button className="icon-button" onClick={() => zoomBy(1.14)} title="Zoom in">
-            <ZoomIn size={16} />
-          </button>
-          <button className="icon-button" onClick={() => zoomBy(0.86)} title="Zoom out">
-            <ZoomOut size={16} />
-          </button>
-          <button className="icon-button" onClick={resetView} title="Reset view">
-            <Scan size={16} />
-          </button>
-          <button className="icon-button" onClick={fitThread} title="Fit thread">
-            <Maximize2 size={16} />
-          </button>
-          <span>{Math.round(viewport.zoom * 100)}%</span>
-        </div>
-
-        <div
-          className="mrp-layer"
-          style={{
-            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`
-          }}
-        >
-          {loading && (
-            <div className="empty-state hud-panel">
-              <Loader2 className="spin" size={18} />
-              Loading Flowux
-            </div>
-          )}
-
-          {error && <div className="error-banner hud-panel">{error}</div>}
-
-          {snapshot?.mrps.map((mrp) => {
-            const placement = findPlacement(snapshot, mrp);
-            if (!placement) return null;
-            return (
-              <MrpCard
-                key={mrp.id}
-                mrp={mrp}
-                placement={placement}
-                modelRun={snapshot.modelRuns.find((modelRun) => modelRun.mrpId === mrp.id)}
-                sections={snapshot.sections.filter((section) => section.mrpId === mrp.id)}
-                blocks={snapshot.blocks.filter((block) => block.mrpId === mrp.id)}
-                artifacts={snapshot.artifacts.filter((artifact) => artifact.mrpId === mrp.id)}
-                zoom={viewport.zoom}
-                focused={focusedMrpId === mrp.id}
-                focusFrame={focusedMrpId === mrp.id ? focusedFrame : undefined}
-            onFocus={() => focusMrp(mrp.id)}
-            onLoadDetails={() => void loadMrpDetails(mrp.id)}
-            onPatch={patchPlacement}
-          />
-            );
-          })}
-
-          {snapshot &&
-            snapshot.mrps.slice(1).map((mrp, index) => {
-              const previous = snapshot.mrps[index];
-              if (!previous) return null;
-              const a = findPlacement(snapshot, previous);
-              const b = findPlacement(snapshot, mrp);
-              if (!a || !b || a.connectionHidden || b.connectionHidden) return null;
-              return <Connection key={`${previous.id}-${mrp.id}`} from={a} to={b} external={a.isExternalReference || b.isExternalReference} />;
-            })}
-        </div>
-
-        <form
-          className="prompt-dock hud-panel"
-          onWheel={(event) => event.stopPropagation()}
-          onSubmit={(event) => {
-            event.preventDefault();
-            sendPrompt();
-          }}
-        >
-          <input
-            ref={fileInputRef}
-            className="file-input"
-            type="file"
-            multiple
-            accept="image/*,.txt,.md,.json,.csv,.ts,.tsx,.js,.jsx,.css,.html,.py,.ps1,.sh,.sql,.yaml,.yml,.toml,.pdf"
-            onChange={(event) => void uploadFiles(event.target.files)}
-          />
-          <button type="button" className="icon-button" onClick={() => fileInputRef.current?.click()} disabled={uploading} title="Attach image or file">
-            {uploading ? <Loader2 className="spin" size={18} /> : <Paperclip size={18} />}
-          </button>
-          <div className="prompt-compose">
-            {pendingAttachments.length > 0 && (
-              <div className="attachment-strip">
-                {pendingAttachments.map((attachment) => (
-                  <span key={attachment.id} className="attachment-pill" title={attachment.name}>
-                    {attachment.type}
-                    <strong>{attachment.name}</strong>
-                    <button
-                      type="button"
-                      onClick={() => setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id))}
-                      title="Remove attachment"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            {contextBudget && (
-              <div className={`context-meter context-${contextBudget.warning ?? "ok"}`} title={formatContextTitle(contextBudget)}>
-                <span>{formatTokenCount(contextBudget.estimatedTokens)}</span>
-                <div>
-                  <i style={{ width: `${Math.min(100, contextBudget.percentOfInputBudget)}%` }} />
-                </div>
-                <span>{contextBudget.percentOfInputBudget.toFixed(1)}%</span>
-              </div>
-            )}
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-                  event.preventDefault();
-                  sendPrompt();
-                }
-              }}
-              placeholder="Prompt this canvas thread..."
-              rows={2}
-            />
+      <div className="flowux-stage">
+        {loading && !snapshot && (
+          <div className="flowux-loading">
+            <Loader2 className="spin" size={18} />
+            <span>Loading Flowux…</span>
           </div>
-          <button type="submit" className="hud-button hud-button-primary">
-            Send
-          </button>
-        </form>
-      </section>
+        )}
+        <Canvas />
+      </div>
     </main>
   );
-}
-
-function formatCanvasTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function formatContextLabel(context: import("@flowux/shared").ContextBudget | undefined) {
-  if (!context) return "context ?";
-  return `${formatTokenCount(context.estimatedTokens)} / ${formatTokenCount(context.availableInputTokens)}`;
-}
-
-function formatContextTitle(context: import("@flowux/shared").ContextBudget | undefined) {
-  if (!context) return "Context estimate unavailable.";
-  return [
-    `Estimated input: ${context.estimatedTokens.toLocaleString()} tokens`,
-    `Available input budget: ${context.availableInputTokens.toLocaleString()} tokens`,
-    `Context window: ${context.contextWindow.toLocaleString()} tokens`,
-    `Reserved output: ${context.maxOutputTokens.toLocaleString()} tokens`,
-    `Messages: ${context.messageCount}`,
-    `MRPs included: ${context.mrpCount}`
-  ].join("\n");
-}
-
-function formatTokenCount(value: number) {
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
-  return value.toLocaleString();
-}
-
-function formatExecutionLabel(context: import("@flowux/shared").ExecutionContext | undefined) {
-  if (!context) return "runtime unknown";
-  const host = context.hostLabel?.includes(" @ ")
-    ? context.hostLabel.split(" @ ")[0]
-    : context.hostLabel
-      ? context.hostLabel.replace(/^.*@/, "")
-      : context.harness;
-  return `${context.harness.replace("_", " ")} · ${host}`;
-}
-
-function formatExecutionTitle(context: import("@flowux/shared").ExecutionContext | undefined) {
-  if (!context) return "Runtime context has not loaded yet.";
-  return [
-    `Harness: ${context.harness}`,
-    context.hostLabel ? `Host: ${context.hostLabel}` : undefined,
-    context.workspaceLabel ? `Workspace: ${context.workspaceLabel}` : undefined,
-    context.toolCapabilities.length ? `Tools: ${context.toolCapabilities.join(", ")}` : undefined,
-    context.warning
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-interface FocusFrame {
-  x: number;
-  y: number;
-  width: number;
-  scale: number;
-}
-
-function getFocusFrame(workspace: HTMLElement | null, viewport: { x: number; y: number; zoom: number }): FocusFrame | undefined {
-  if (!workspace) return undefined;
-  const screenWidth = Math.min(820, Math.max(520, workspace.clientWidth - 220));
-  const centerX = (workspace.clientWidth / 2 - viewport.x) / viewport.zoom;
-  const topY = (workspace.clientHeight * 0.12 - viewport.y) / viewport.zoom;
-  return {
-    x: centerX - screenWidth / 2,
-    y: topY,
-    width: screenWidth,
-    scale: 1 / viewport.zoom
-  };
-}
-
-function MrpCard({
-  mrp,
-  placement,
-  modelRun,
-  sections,
-  blocks,
-  artifacts,
-  zoom,
-  focused,
-  focusFrame,
-  onFocus,
-  onLoadDetails,
-  onPatch
-}: {
-  mrp: Mrp;
-  placement: CanvasPlacement;
-  modelRun?: ModelRun;
-  sections: MrpSection[];
-  blocks: MrpBlock[];
-  artifacts: Artifact[];
-  zoom: number;
-  focused: boolean;
-  focusFrame?: FocusFrame;
-  onFocus: () => void;
-  onLoadDetails: () => void;
-  onPatch: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
-}) {
-  const [position, setPosition] = useState({ x: placement.x, y: placement.y });
-  const positionRef = useRef(position);
-  const [drag, setDrag] = useState<{ startX: number; startY: number; x: number; y: number }>();
-
-  useEffect(() => {
-    if (!drag) {
-      const nextPosition = { x: placement.x, y: placement.y };
-      positionRef.current = nextPosition;
-      setPosition(nextPosition);
-    }
-  }, [drag, placement.x, placement.y]);
-
-  const finishDrag = () => {
-    if (!drag) return;
-    setDrag(undefined);
-    const finalPosition = positionRef.current;
-    if (finalPosition.x !== placement.x || finalPosition.y !== placement.y) {
-      void onPatch(mrp.id, finalPosition);
-    }
-  };
-
-  const beginDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.button !== 0 || isCardControl(event.target)) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({ startX: event.clientX, startY: event.clientY, x: positionRef.current.x, y: positionRef.current.y });
-  };
-
-  const moveDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!drag) return;
-    const nextPosition = {
-      x: drag.x + (event.clientX - drag.startX) / zoom,
-      y: drag.y + (event.clientY - drag.startY) / zoom
-    };
-    positionRef.current = nextPosition;
-    setPosition(nextPosition);
-  };
-
-  const promptText = getSectionText(sections, blocks, "prompt") || mrp.userPrompt;
-  const responseText = getSectionText(sections, blocks, "response") || mrp.assistantResponse || "Waiting for model output...";
-  const detailSections = sections
-    .filter((section) => !["prompt", "response"].includes(section.kind))
-    .sort((a, b) => a.sequence - b.sequence);
-  const runMeta = getRunMeta(modelRun, detailSections);
-
-  return (
-    <article
-      className={`mrp-card hud-panel ${drag ? "is-dragging" : ""} ${placement.selectedForContext ? "is-selected" : ""} ${
-        placement.isExternalReference ? "is-external" : ""
-      } ${focused ? "is-focused" : ""}`}
-      style={{
-        ...(focusFrame
-          ? {
-              left: focusFrame.x,
-              top: focusFrame.y,
-              width: focusFrame.width,
-              transform: `scale(${focusFrame.scale})`
-            }
-          : {
-              left: position.x,
-              top: position.y,
-              width: placement.width,
-              transform: undefined
-            }),
-        minHeight: placement.collapsed ? 124 : placement.height
-      }}
-      onPointerDown={beginDrag}
-      onPointerMove={moveDrag}
-      onPointerUp={finishDrag}
-      onPointerCancel={finishDrag}
-    >
-      <div className="mrp-drag">
-        <Move size={14} />
-        <span>MRP {mrp.sequence.toString().padStart(2, "0")}</span>
-        <span className={`status status-${mrp.status}`}>{mrp.status}</span>
-      </div>
-
-      <div className="mrp-head">
-        <button
-          data-no-card-drag
-          className="check-circle"
-          onClick={() => void onPatch(mrp.id, { selectedForContext: !placement.selectedForContext })}
-          title="Toggle active context"
-        >
-          {placement.selectedForContext ? <Check size={16} /> : <Circle size={16} />}
-        </button>
-        <h2>{mrp.title || "Untitled MRP"}</h2>
-        <button
-          data-no-card-drag
-          className="icon-button"
-          onClick={() => {
-            if (placement.collapsed) {
-              onLoadDetails();
-              onFocus();
-            }
-            void onPatch(mrp.id, { collapsed: !placement.collapsed });
-          }}
-          title={placement.collapsed ? "Expand card" : "Collapse card"}
-        >
-          {placement.collapsed ? <ChevronsDown size={16} /> : <ChevronsUp size={16} />}
-        </button>
-      </div>
-
-      <div className="mrp-meta" aria-label="Model run metadata">
-        {runMeta.map((item) => (
-          <span key={item.label} title={item.title}>
-            {item.value}
-          </span>
-        ))}
-      </div>
-
-      {!placement.collapsed && (
-        <div className="mrp-body">
-          {mrp.summary && <p className="mrp-summary">{mrp.summary}</p>}
-          <section>
-            <p className="hud-label">Prompt</p>
-            <p>{promptText}</p>
-          </section>
-          <section>
-            <p className="hud-label">Response</p>
-            <p>{responseText}</p>
-          </section>
-          {detailSections.length > 0 && (
-            <section className="mrp-internals">
-              <p className="hud-label">Internals</p>
-              <div className="mrp-section-list">
-                {detailSections.map((section) => (
-                  <MrpSectionDrawer
-                    key={section.id}
-                    section={section}
-                    blocks={blocks.filter((block) => block.sectionId === section.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-          {artifacts.length > 0 && (
-            <section className="mrp-artifacts">
-              <p className="hud-label">Attachments</p>
-              <div className="artifact-list">
-                {artifacts.map((artifact) => (
-                  <a key={artifact.id} href={artifact.uri} target="_blank" rel="noreferrer" className="artifact-item" data-no-card-drag>
-                    {artifact.type === "image" && <img src={artifact.uri} alt={artifact.name} />}
-                    <span>{artifact.type}</span>
-                    <strong>{artifact.name}</strong>
-                  </a>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
-
-      <footer>
-        <span className="mrp-provenance">
-          <GitBranch size={13} />
-          {placement.isExternalReference ? (
-            <span title={placement.originCanvasId ? `Source canvas ${placement.originCanvasId}` : "External reference"}>
-              external source {placement.originCanvasId ? shortId(placement.originCanvasId) : ""}
-            </span>
-          ) : (
-            <span>thread native</span>
-          )}
-        </span>
-        <button
-          data-no-card-drag
-          className="connection-toggle"
-          onClick={() => void onPatch(mrp.id, { connectionHidden: !placement.connectionHidden })}
-          title={placement.connectionHidden ? "Show connection lines" : "Hide connection lines"}
-        >
-          {placement.connectionHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-        </button>
-      </footer>
-    </article>
-  );
-}
-
-function MrpSectionDrawer({ section, blocks }: { section: MrpSection; blocks: MrpBlock[] }) {
-  const body = formatSectionBody(section, blocks);
-  return (
-    <details className={`mrp-section-drawer section-${section.kind}`} data-no-card-drag open={!section.collapsedByDefault}>
-      <summary>
-        <span className="section-title">
-          {section.kind === "thinking" && <Sparkles size={13} />}
-          {section.title}
-        </span>
-        <span>{section.summary || summarizeSection(section, blocks)}</span>
-      </summary>
-      <pre>{body}</pre>
-    </details>
-  );
-}
-
-function getRunMeta(modelRun: ModelRun | undefined, sections: MrpSection[]) {
-  const tools = sections
-    .filter((section) => section.kind === "tool_calls" || section.kind === "tool_results")
-    .map((section) => section.summary)
-    .filter(Boolean);
-  return [
-    modelRun ? { label: "provider", value: modelRun.provider.replace("_", " "), title: "Harness provider" } : undefined,
-    modelRun ? { label: "model", value: shortenModelName(modelRun.model), title: modelRun.model } : undefined,
-    modelRun?.totalTokens
-      ? { label: "tokens", value: `${modelRun.totalTokens.toLocaleString()} tok`, title: "Total tokens" }
-      : undefined,
-    modelRun?.timingMs ? { label: "time", value: formatDuration(modelRun.timingMs), title: "Run duration" } : undefined,
-    modelRun?.finishReason ? { label: "finish", value: modelRun.finishReason, title: "Finish reason" } : undefined,
-    tools.length ? { label: "tools", value: `${tools.length} tool sections`, title: tools.join(" / ") } : undefined
-  ].filter((item): item is { label: string; value: string; title: string } => Boolean(item));
-}
-
-function shortenModelName(value: string) {
-  return value.replace(/^.*\//, "").replace(/-?instruct/i, "");
-}
-
-function formatDuration(ms: number) {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
-}
-
-function getSectionText(sections: MrpSection[], blocks: MrpBlock[], kind: MrpSectionKind) {
-  const section = sections.find((item) => item.kind === kind);
-  if (!section) return "";
-  return blocks
-    .filter((block) => block.sectionId === section.id)
-    .map((block) => (typeof block.content.text === "string" ? block.content.text : ""))
-    .join("\n")
-    .trim();
-}
-
-function formatSectionBody(section: MrpSection, blocks: MrpBlock[]) {
-  if (!blocks.length) return section.summary || "No captured content.";
-  return blocks
-    .map((block) => {
-      if (typeof block.content.text === "string") return block.content.text;
-      return JSON.stringify(block.content, null, 2);
-    })
-    .join("\n\n");
-}
-
-function summarizeSection(section: MrpSection, blocks: MrpBlock[]) {
-  const firstBlock = blocks[0];
-  if (!firstBlock) return "empty";
-  if (typeof firstBlock.content.text === "string") {
-    return `${firstBlock.content.text.length} chars`;
-  }
-  if (section.kind === "usage" && typeof firstBlock.content.usage === "object") return "tokens";
-  return `${blocks.length} block${blocks.length === 1 ? "" : "s"}`;
-}
-
-function isCardControl(target: EventTarget) {
-  return target instanceof Element
-    ? Boolean(target.closest("button, a, input, textarea, select, [data-no-card-drag]"))
-    : false;
-}
-
-function clampZoom(value: number) {
-  return Math.min(1.8, Math.max(0.35, value));
-}
-
-function getPlacementBounds(placements: CanvasPlacement[]) {
-  const left = Math.min(...placements.map((placement) => placement.x));
-  const top = Math.min(...placements.map((placement) => placement.y));
-  const right = Math.max(...placements.map((placement) => placement.x + placement.width));
-  const bottom = Math.max(...placements.map((placement) => placement.y + placement.height));
-  return {
-    left,
-    top,
-    width: Math.max(1, right - left),
-    height: Math.max(1, bottom - top)
-  };
-}
-
-function getVisibleCardRowHeight(workspace: HTMLElement | null, zoom: number) {
-  if (!workspace) return 600;
-  const heights = Array.from(workspace.querySelectorAll<HTMLElement>(".mrp-card")).map((card) => {
-    const focusedScale = card.classList.contains("is-focused") ? 1 / zoom : 1;
-    return card.getBoundingClientRect().height / zoom / focusedScale;
-  });
-  const maxHeight = heights.length ? Math.max(...heights) : 520;
-  return Math.ceil(maxHeight + 8);
-}
-
-function Connection({ from, to, external }: { from: CanvasPlacement; to: CanvasPlacement; external?: boolean }) {
-  const x1 = from.x + from.width;
-  const y1 = from.y + 80;
-  const x2 = to.x;
-  const y2 = to.y + 80;
-  const left = Math.min(x1, x2);
-  const top = Math.min(y1, y2);
-  const width = Math.abs(x2 - x1) || 1;
-  const height = Math.abs(y2 - y1) || 1;
-
-  return (
-    <svg className={`connection ${external ? "is-external" : ""}`} style={{ left, top, width, height }} viewBox={`0 0 ${width} ${height}`}>
-      <line
-        x1={x1 < x2 ? 0 : width}
-        y1={y1 < y2 ? 0 : height}
-        x2={x1 < x2 ? width : 0}
-        y2={y1 < y2 ? height : 0}
-      />
-    </svg>
-  );
-}
-
-function shortId(value: string) {
-  return value.slice(0, 8);
 }

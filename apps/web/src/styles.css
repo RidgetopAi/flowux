@@ -32,14 +32,108 @@ select { font: inherit; }
 
 .flowux-app {
   height: 100vh;
-  padding: 18px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   background:
     radial-gradient(circle at 20% 18%, rgba(168, 255, 241, .08), transparent 24%),
     linear-gradient(135deg, rgba(199, 189, 255, .08), transparent 32%),
     var(--hud-bg);
+}
+
+/* ── Lean topbar (post Phase C.5) ───────────────────────────────────────── */
+.flowux-topbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 42%),
+    var(--glass);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(16px);
+}
+
+.flowux-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.flowux-brand__mark {
+  font: 600 18px/1 var(--font-sans);
+  letter-spacing: 0.08em;
+}
+
+.flowux-canvas-ctl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.flowux-canvas-select {
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  font: 13px/1 var(--font-sans);
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.flowux-canvas-select:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-color: var(--line-warm);
+}
+
+.flowux-canvas-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.flowux-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flowux-error {
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 116, 116, 0.4);
+  border-radius: var(--r-md);
+  background: rgba(255, 116, 116, 0.08);
+  color: var(--red-bright);
+  font: 13px/1.4 var(--font-sans);
+}
+
+.flowux-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--bg-deep);
+}
+
+.flowux-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 5;
+  color: var(--soft);
+  font: 13px/1 var(--font-sans);
+  background: rgba(2, 3, 3, 0.6);
+  backdrop-filter: blur(8px);
 }
 
 .hud-shell {
