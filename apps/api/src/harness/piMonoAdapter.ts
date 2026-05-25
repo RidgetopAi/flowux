@@ -122,9 +122,9 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
         type: "error",
         message: error instanceof Error ? error.message : "pi_mono_rpc_error",
         raw: {
-          remoteHost: this.config.piMonoRemoteHost,
-          remoteCwd: this.config.piMonoRemoteCwd,
-          command: this.config.piMonoCommand,
+          bin: this.config.piMonoBin,
+          args: this.config.piMonoArgs,
+          cwd: this.config.piMonoCwd,
           stderr: session.stderr
         }
       };
@@ -146,8 +146,8 @@ class PiRpcProcess {
   constructor(private readonly config: FlowuxConfig) {}
 
   async start(): Promise<void> {
-    const remoteCommand = `cd ${shellQuote(this.config.piMonoRemoteCwd)} && ${this.config.piMonoCommand}`;
-    this.process = spawn("ssh", [this.config.piMonoRemoteHost, remoteCommand], {
+    this.process = spawn(this.config.piMonoBin, this.config.piMonoArgs, {
+      cwd: this.config.piMonoCwd,
       stdio: ["pipe", "pipe", "pipe"]
     });
 
@@ -317,10 +317,6 @@ function formatRuntimeContext(input: HarnessTurnInput): string | undefined {
   ]
     .filter(Boolean)
     .join("\n");
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function wait(ms: number): Promise<void> {

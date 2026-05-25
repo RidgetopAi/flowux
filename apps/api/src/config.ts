@@ -1,3 +1,5 @@
+import os from "node:os";
+import path from "node:path";
 import type { HarnessMode } from "@flowux/shared";
 
 export interface FlowuxConfig {
@@ -10,10 +12,10 @@ export interface FlowuxConfig {
   modelName: string;
   modelMaxTokens: number;
   modelContextWindow: number;
-  piMonoRemoteHost: string;
-  piMonoRemoteCwd: string;
-  piMonoRemoteUploadDir: string;
-  piMonoCommand: string;
+  piMonoBin: string;
+  piMonoArgs: string[];
+  piMonoCwd: string;
+  piMonoUploadDir: string;
   piMonoProvider: string;
   piMonoModel: string;
 }
@@ -28,25 +30,28 @@ export function loadConfig(): FlowuxConfig {
       ? requestedHarnessMode
       : "direct_model";
 
-  const piMonoProvider = process.env.FLOWUX_PI_MONO_PROVIDER ?? "local-qwen";
-  const piMonoModel = process.env.FLOWUX_PI_MONO_MODEL ?? process.env.FLOWUX_MODEL_NAME ?? "qwen3.6-35b";
+  const piMonoProvider = process.env.FLOWUX_PI_MONO_PROVIDER ?? "xai";
+  const piMonoModel = process.env.FLOWUX_PI_MONO_MODEL ?? process.env.FLOWUX_MODEL_NAME ?? "grok-4.3";
   const piMonoThinking = process.env.FLOWUX_PI_MONO_THINKING ?? "minimal";
-  const piMonoOffline = process.env.FLOWUX_PI_MONO_OFFLINE ?? (piMonoProvider.startsWith("local-") ? "1" : "0");
-  const piMonoCommand =
-    process.env.FLOWUX_PI_MONO_COMMAND ??
-    [
-      "PATH=/home/ridgetop/.local/flowux/node-v22.22.3-linux-x64/bin:$PATH",
-      piMonoOffline === "1" ? "PI_OFFLINE=1" : undefined,
-      "node /home/ridgetop/projects/pi-mono/packages/coding-agent/dist/cli.js",
-      "--mode rpc",
-      `--provider ${shellArg(piMonoProvider)}`,
-      `--model ${shellArg(piMonoModel)}`,
-      "--no-session",
-      "--no-context-files",
-      `--thinking ${shellArg(piMonoThinking)}`
-    ]
-      .filter(Boolean)
-      .join(" ");
+  const piMonoBin = process.env.FLOWUX_PI_BIN ?? "pi";
+  const piMonoCwd = process.env.FLOWUX_PI_CWD ?? process.cwd();
+  const piMonoUploadDir = process.env.FLOWUX_PI_UPLOAD_DIR ?? path.join(os.homedir(), ".flowux", "uploads");
+
+  const piMonoArgs = [
+    "--mode", "rpc",
+    "--provider", piMonoProvider,
+    "--model", piMonoModel,
+    "--no-session",
+    "--no-context-files",
+    "--no-extensions",
+    "--no-skills",
+    "--thinking", piMonoThinking
+  ];
+
+  const extra = process.env.FLOWUX_PI_EXTRA_ARGS?.trim();
+  if (extra) {
+    piMonoArgs.push(...extra.split(/\s+/));
+  }
 
   return {
     port: Number(process.env.FLOWUX_API_PORT ?? 5174),
@@ -58,22 +63,18 @@ export function loadConfig(): FlowuxConfig {
     modelName: process.env.FLOWUX_MODEL_NAME ?? "qwen3.6-35b",
     modelMaxTokens: Number(process.env.FLOWUX_MODEL_MAX_TOKENS ?? 2048),
     modelContextWindow: Number(process.env.FLOWUX_MODEL_CONTEXT_WINDOW ?? getDefaultContextWindow(piMonoProvider, piMonoModel)),
-    piMonoRemoteHost: process.env.FLOWUX_PI_MONO_REMOTE_HOST ?? "ridgetop@ridgetop-desktop",
-    piMonoRemoteCwd: process.env.FLOWUX_PI_MONO_REMOTE_CWD ?? "/home/ridgetop/projects",
-    piMonoRemoteUploadDir: process.env.FLOWUX_PI_MONO_REMOTE_UPLOAD_DIR ?? "/home/ridgetop/.flowux/uploads",
-    piMonoCommand,
+    piMonoBin,
+    piMonoArgs,
+    piMonoCwd,
+    piMonoUploadDir,
     piMonoProvider,
     piMonoModel
   };
 }
 
 function getDefaultContextWindow(provider: string, model: string) {
-  if (provider === "xai" && /^grok-4\.3/i.test(model)) return 131_072;
+  if (provider === "xai" && /^grok-4\.3/i.test(model)) return 1_048_576;
+  if (provider === "xai" && /^grok-4/i.test(model)) return 262_144;
   if (provider.startsWith("local-") && /qwen3\.6-35b/i.test(model)) return 140_000;
   return 128_000;
-}
-
-function shellArg(value: string) {
-  if (/^[A-Za-z0-9._:/@+-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }

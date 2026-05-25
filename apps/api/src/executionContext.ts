@@ -10,19 +10,19 @@ export function getExecutionContext(config: FlowuxConfig): ExecutionContext {
     toolCapabilities: getToolCapabilities(config),
     warning:
       config.harnessMode === "pi_mono"
-        ? "Tools run on the configured remote host, not necessarily on the Flowux UI machine."
+        ? "Tools run on the local Pi process; filesystem access scoped to the configured Pi workspace."
         : undefined
   };
 }
 
 function getExecutionHostLabel(config: FlowuxConfig) {
-  if (config.harnessMode === "pi_mono") return `${config.piMonoProvider}/${config.piMonoModel} @ ${config.piMonoRemoteHost}`;
+  if (config.harnessMode === "pi_mono") return `${config.piMonoProvider}/${config.piMonoModel} (local pi)`;
   if (config.harnessMode === "direct_model") return "local api";
   return config.harnessMode;
 }
 
 function getExecutionWorkspaceLabel(config: FlowuxConfig) {
-  if (config.harnessMode === "pi_mono") return config.piMonoRemoteCwd;
+  if (config.harnessMode === "pi_mono") return config.piMonoCwd;
   return process.cwd();
 }
 

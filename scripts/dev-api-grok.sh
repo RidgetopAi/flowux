@@ -11,7 +11,10 @@ export FLOWUX_MODEL_NAME="${FLOWUX_MODEL_NAME:-$FLOWUX_PI_MONO_MODEL}"
 
 echo "Flowux API: $FLOWUX_API_URL"
 echo "Harness: $FLOWUX_HARNESS_MODE / $FLOWUX_PI_MONO_PROVIDER/$FLOWUX_PI_MONO_MODEL"
-echo "Pi workspace: $FLOWUX_PI_MONO_REMOTE_HOST:$FLOWUX_PI_MONO_REMOTE_CWD"
+echo "Pi (local): $FLOWUX_PI_BIN  cwd=$FLOWUX_PI_CWD"
 echo "DB: $FLOWUX_DB_PATH"
+if [ -z "${XAI_API_KEY:-}" ]; then
+  echo "WARNING: XAI_API_KEY is not set — Pi will hang waiting for auth on xai requests."
+fi
 
 exec flowux_tsx apps/api/src/server.ts

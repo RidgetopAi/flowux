@@ -56,8 +56,7 @@ app.get("/api/health", async () => ({
   modelMaxTokens: config.modelMaxTokens,
   contextWindow: config.modelContextWindow,
   maxOutputTokens: config.modelMaxTokens,
-  piMonoRemoteHost: config.piMonoRemoteHost,
-  piMonoRemoteCwd: config.piMonoRemoteCwd,
+  piMonoCwd: config.piMonoCwd,
   piMonoProvider: config.piMonoProvider,
   piMonoModel: config.piMonoModel,
   executionContext: getExecutionContext(config)

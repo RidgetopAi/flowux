@@ -12,7 +12,7 @@ fi
 echo
 
 echo "== Flowux processes =="
-ps -ef | grep -E 'apps/api/src/server|vite --host|ssh ridgetop@ridgetop-desktop cd|pi-mono/packages/coding-agent' | grep -v grep || true
+ps -ef | grep -E 'apps/api/src/server|vite --host|pi --mode rpc|pi-mono/packages/coding-agent' | grep -v grep || true
 
 echo
 echo "== Streaming MRPs =="

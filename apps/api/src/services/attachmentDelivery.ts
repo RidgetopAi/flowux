@@ -1,5 +1,5 @@
 import type { UploadedAttachment } from "@flowux/shared";
-import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { FlowuxConfig } from "../config.js";
 import { readUploadBytes } from "./uploadService.js";
@@ -44,7 +44,7 @@ export async function prepareAttachmentDelivery(
     const upload = needsBytes ? await readUploadBytes(attachment.id) : undefined;
     const remotePath =
       options.stageRemote && config.harnessMode === "pi_mono" && upload
-        ? await stageUploadOnPiHost(config, attachment, upload.buffer)
+        ? await stageUploadLocally(config, attachment, upload.buffer)
         : undefined;
 
     if (attachment.type === "image" && supportsImages && upload) {
@@ -72,11 +72,11 @@ export async function prepareAttachmentDelivery(
   };
 }
 
-async function stageUploadOnPiHost(config: FlowuxConfig, attachment: UploadedAttachment, buffer: Buffer) {
-  const remotePath = path.posix.join(config.piMonoRemoteUploadDir, `${attachment.id}-${sanitizeRemoteFileName(attachment.name)}`);
-  const remoteCommand = `mkdir -p ${shellQuote(config.piMonoRemoteUploadDir)} && cat > ${shellQuote(remotePath)}`;
-  await runSshWithInput(config.piMonoRemoteHost, remoteCommand, buffer);
-  return remotePath;
+async function stageUploadLocally(config: FlowuxConfig, attachment: UploadedAttachment, buffer: Buffer) {
+  await fs.mkdir(config.piMonoUploadDir, { recursive: true });
+  const stagedPath = path.join(config.piMonoUploadDir, `${attachment.id}-${sanitizeStagedFileName(attachment.name)}`);
+  await fs.writeFile(stagedPath, buffer);
+  return stagedPath;
 }
 
 function formatDeliveryPrompt(items: AttachmentDeliveryItem[]) {
@@ -102,32 +102,13 @@ function formatDeliveryPrompt(items: AttachmentDeliveryItem[]) {
 }
 
 function formatDeliveryLabel(delivery: AttachmentDeliveryItem["modelDelivery"]) {
-  if (delivery === "image_input") return "sent to the model as image input; also staged as a remote file when path is present";
+  if (delivery === "image_input") return "sent to the model as image input; also staged as a local file when path is present";
   if (delivery === "text_preview") return "text/code preview included in this prompt";
-  if (delivery === "remote_file") return "staged on the Pi tool host; use tools to inspect the remote path if needed";
+  if (delivery === "remote_file") return "staged on the local Pi workspace; use tools to inspect the path if needed";
   return "stored as a Flowux artifact only; model-readable bytes were not available for this adapter";
 }
 
-function runSshWithInput(host: string, command: string, input: Buffer) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn("ssh", [host, command], { stdio: ["pipe", "ignore", "pipe"] });
-    let stderr = "";
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`Failed to stage attachment on Pi host: ${stderr.trim() || `ssh exited ${code}`}`));
-    });
-    child.stdin.end(input);
-  });
-}
-
-function sanitizeRemoteFileName(value: string) {
+function sanitizeStagedFileName(value: string) {
   return path.basename(value).replace(/[^\w .@()+\-[\]]/g, "_").slice(0, 160).trim() || "upload";
 }
 
@@ -136,8 +117,4 @@ function inferImageMimeType(name: string) {
   if (/\.webp$/i.test(name)) return "image/webp";
   if (/\.gif$/i.test(name)) return "image/gif";
   return "image/png";
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
 }

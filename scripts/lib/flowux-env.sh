@@ -11,8 +11,9 @@ export FLOWUX_DB_PATH="${FLOWUX_DB_PATH:-apps/api/flowux.db}"
 export FLOWUX_API_PORT="${FLOWUX_API_PORT:-5174}"
 export FLOWUX_API_URL="${FLOWUX_API_URL:-http://127.0.0.1:$FLOWUX_API_PORT}"
 export FLOWUX_API_LOG="${FLOWUX_API_LOG:-/tmp/flowux-api-live.log}"
-export FLOWUX_PI_MONO_REMOTE_HOST="${FLOWUX_PI_MONO_REMOTE_HOST:-ridgetop@ridgetop-desktop}"
-export FLOWUX_PI_MONO_REMOTE_CWD="${FLOWUX_PI_MONO_REMOTE_CWD:-/home/ridgetop/projects}"
+export FLOWUX_PI_BIN="${FLOWUX_PI_BIN:-pi}"
+export FLOWUX_PI_CWD="${FLOWUX_PI_CWD:-$HOME/projects}"
+export FLOWUX_PI_UPLOAD_DIR="${FLOWUX_PI_UPLOAD_DIR:-$HOME/.flowux/uploads}"
 
 flowux_cd_root() {
   cd "$FLOWUX_ROOT"
