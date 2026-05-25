@@ -342,3 +342,30 @@
   align-items: center;
   gap: 6px;
 }
+
+/* ── History panel ────────────────────────────────────────────────── */
+.sidebar-history__item {
+  width: 100%;
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font: 12px/1.4 var(--font-mono);
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  transition: border-color var(--dur-fast) var(--ease-out-quart),
+              background var(--dur-fast) var(--ease-out-quart);
+}
+
+.sidebar-history__item:hover {
+  border-color: var(--line-warm);
+  background: rgba(168, 255, 241, 0.06);
+}

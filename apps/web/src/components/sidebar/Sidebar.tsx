@@ -2,6 +2,7 @@ import {
   Check,
   CornerUpLeft,
   GitBranch,
+  History,
   Import as ImportIcon,
   Layers,
   PanelLeftClose,
@@ -20,13 +21,14 @@ import { Label } from "../primitives/Label";
 import { Pill } from "../primitives/Pill";
 import "./Sidebar.css";
 
-type Tab = "search" | "bundles" | "branches" | "imports";
+type Tab = "search" | "bundles" | "branches" | "imports" | "history";
 
 const TABS: Array<{ id: Tab; icon: ReactNode; label: string }> = [
   { id: "search",   icon: <Search size={14} />,     label: "Search" },
   { id: "bundles",  icon: <Layers size={14} />,     label: "Bundles" },
   { id: "branches", icon: <GitBranch size={14} />,  label: "Branches" },
   { id: "imports",  icon: <ImportIcon size={14} />, label: "Imports" },
+  { id: "history",  icon: <History size={14} />,    label: "History" },
 ];
 
 export function Sidebar() {
@@ -73,6 +75,7 @@ export function Sidebar() {
             {tab === "bundles" && <BundlesPanel />}
             {tab === "branches" && <BranchesPanel />}
             {tab === "imports" && <ImportsPanel />}
+            {tab === "history" && <HistoryPanel />}
           </div>
         </div>
       )}
@@ -338,6 +341,46 @@ function BranchesPanel() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+/* ── History (sent prompts for this session, reusable) ───────────────── */
+function HistoryPanel() {
+  const promptHistory = useCanvas((s) => s.promptHistory);
+  const setDockDraft = useCanvas((s) => s.setDockDraft);
+  const openDock = useCanvas((s) => s.openDock);
+
+  const reuse = (text: string) => {
+    setDockDraft(text);
+    openDock();
+  };
+
+  // Render newest-first — last sent is the most recently useful.
+  const reversed = [...promptHistory].reverse();
+
+  return (
+    <div className="sidebar-section">
+      {reversed.length === 0 ? (
+        <div className="sidebar-empty sidebar-empty--block">
+          No prompts sent yet this session. Sent prompts will appear here so you
+          can re-stage them with one click.
+        </div>
+      ) : (
+        <ul className="sidebar-list sidebar-list--scroll">
+          {reversed.map((prompt, idx) => (
+            <li key={`${promptHistory.length - idx - 1}-${prompt.slice(0, 32)}`}>
+              <button
+                className="sidebar-history__item"
+                onClick={() => reuse(prompt)}
+                title="Re-stage this prompt in the dock"
+              >
+                {prompt}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
