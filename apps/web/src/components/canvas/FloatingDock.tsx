@@ -6,7 +6,19 @@ import {
   useMotionValue,
   type PanInfo,
 } from "motion/react";
-import { GripHorizontal, Pin, X } from "lucide-react";
+import {
+  ChevronRight,
+  Eraser,
+  GitBranch,
+  GripHorizontal,
+  History as HistoryIcon,
+  Layers,
+  Maximize2,
+  Pin,
+  Search,
+  X,
+} from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { cn } from "../../lib/cn";
 import { useCanvas } from "../../lib/store";
 import { useFlowuxStore } from "../../store.js";
@@ -24,6 +36,114 @@ const STUB_RESPONSES = [
   "The two-view model serves different reasoning modes. Blocked = quick scanning, grid arrangement, post-it wall feel. Flow = following a chain of reasoning, branching-aware.",
   "Selection IS the bundle. Manual checkbox click and keyboard Space both feed the same set. Esc clears it as a fast reset; explicit Save makes it a named template you can recall later.",
   "Group drag preserves spatial intent — when you sweep a set of cards to a new region, the bundle moves as one unit. Trailing delay on followers gives the cluster weight.",
+];
+
+/* ── Slash command palette ────────────────────────────────────────────
+ * Static command registry. When the draft starts with `/` and has no
+ * whitespace, the dock renders a drawer of matching commands above the
+ * textarea. Enter executes, Tab completes, Esc exits slash mode.
+ *
+ * Each command is FlowUX-native — it drives store actions directly. Pi-
+ * forwarding commands (/compact, /session, /model, …) live in a separate
+ * future iteration that pipes the slash through to the Pi RPC stream.
+ */
+type SlashCommand = {
+  name: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number }>;
+  exec: (ctx: SlashExecContext) => void;
+};
+
+type SlashExecContext = {
+  closeDock: () => void;
+  setDraft: (s: string) => void;
+  clearBundle: () => void;
+  zoomToFit: () => void;
+  setSidebarTab: (tab: "search" | "bundles" | "branches" | "imports" | "history") => void;
+  focusSidebarSearch: () => void;
+  createChildFromSelection: () => Promise<void> | void;
+  flagError: (msg: string) => void;
+};
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  {
+    name: "branch",
+    label: "Branch from checked MRPs",
+    icon: GitBranch,
+    exec: ({ createChildFromSelection, setDraft, closeDock, flagError }) => {
+      try {
+        const result = createChildFromSelection();
+        if (result && typeof (result as Promise<void>).then === "function") {
+          void (result as Promise<void>);
+        }
+        setDraft("");
+        closeDock();
+      } catch (e) {
+        flagError(e instanceof Error ? e.message : "branch failed");
+      }
+    },
+  },
+  {
+    name: "fit",
+    label: "Zoom to fit all cards",
+    icon: Maximize2,
+    exec: ({ zoomToFit, setDraft, closeDock }) => {
+      zoomToFit();
+      setDraft("");
+      closeDock();
+    },
+  },
+  {
+    name: "unlink",
+    label: "Clear bundle (uncheck all)",
+    icon: Eraser,
+    exec: ({ clearBundle, setDraft, closeDock }) => {
+      clearBundle();
+      setDraft("");
+      closeDock();
+    },
+  },
+  {
+    name: "find",
+    label: "Focus sidebar search",
+    icon: Search,
+    exec: ({ focusSidebarSearch, setDraft, closeDock }) => {
+      setDraft("");
+      closeDock();
+      // Defer one tick so the dock unmount doesn't steal focus back.
+      window.setTimeout(() => focusSidebarSearch(), 0);
+    },
+  },
+  {
+    name: "history",
+    label: "Open prompt history",
+    icon: HistoryIcon,
+    exec: ({ setSidebarTab, setDraft, closeDock }) => {
+      setSidebarTab("history");
+      setDraft("");
+      closeDock();
+    },
+  },
+  {
+    name: "bundles",
+    label: "Open saved bundles",
+    icon: Layers,
+    exec: ({ setSidebarTab, setDraft, closeDock }) => {
+      setSidebarTab("bundles");
+      setDraft("");
+      closeDock();
+    },
+  },
+  {
+    name: "branches",
+    label: "Open branch panel",
+    icon: GitBranch,
+    exec: ({ setSidebarTab, setDraft, closeDock }) => {
+      setSidebarTab("branches");
+      setDraft("");
+      closeDock();
+    },
+  },
 ];
 
 /* Render the dock with mount/exit animation managed via AnimatePresence. */
@@ -72,6 +192,13 @@ function FloatingDock() {
   const removeDockAttachment = useCanvas((s) => s.removeDockAttachment);
   const clearDockAttachments = useCanvas((s) => s.clearDockAttachments);
   const addImage = useCanvas((s) => s.addImage);
+  const clearBundle = useCanvas((s) => s.clearBundle);
+  const zoomToFit = useCanvas((s) => s.zoomToFit);
+  const setSidebarTab = useCanvas((s) => s.setSidebarTab);
+  const focusSidebarSearch = useCanvas((s) => s.focusSidebarSearch);
+  const createChildCanvasFromSelection = useFlowuxStore((s) => s.createChildCanvasFromSelection);
+  // Stable handle to push a one-shot error into the topbar status pill.
+  const flagError = (msg: string) => useFlowuxStore.setState({ error: msg });
 
   /* History navigation state. null = composing a fresh draft (textarea
    * shows dockDraft). When the user walks back with Up, historyIndex
@@ -80,6 +207,35 @@ function FloatingDock() {
    * snapshot the in-progress draft on first walk-back so it isn't lost. */
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const draftSnapshotRef = useRef<string>("");
+
+  /* Slash command palette state. Slash mode = the entire draft starts with
+   * `/` and contains no whitespace. While in slash mode, the textarea acts
+   * as a command picker — arrow keys nav matches, Enter executes, Tab
+   * completes the typed token, Esc exits slash mode by clearing the draft. */
+  const isSlashMode = draft.startsWith("/") && !/\s/.test(draft) && draft.length >= 1;
+  const slashToken = isSlashMode ? draft.slice(1).toLowerCase() : "";
+  const slashMatches = isSlashMode
+    ? SLASH_COMMANDS.filter((c) => c.name.startsWith(slashToken))
+    : [];
+  const [slashSelected, setSlashSelected] = useState(0);
+  // Clamp selection when matches list shrinks (e.g. user types another
+  // letter that filters more strictly).
+  useEffect(() => {
+    if (slashSelected >= slashMatches.length) setSlashSelected(0);
+  }, [slashMatches.length, slashSelected]);
+
+  const execSlash = (cmd: SlashCommand) => {
+    cmd.exec({
+      closeDock,
+      setDraft,
+      clearBundle,
+      zoomToFit,
+      setSidebarTab,
+      focusSidebarSearch,
+      createChildFromSelection: createChildCanvasFromSelection,
+      flagError,
+    });
+  };
 
   /* Default position — recomputed on resize ONLY when the user hasn't
    * committed an explicit drag position. Once they drag, their position
@@ -137,10 +293,17 @@ function FloatingDock() {
     dragY.set(0);
   };
 
-  /* Autofocus textarea on mount so the user can start typing immediately. */
+  /* Autofocus textarea on mount so the user can start typing immediately,
+   * and put the caret at the END of any existing draft (e.g. when "/"
+   * opened the dock and seeded "/" so the slash palette would render —
+   * the user expects to keep typing the command name from there). */
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
-    textareaRef.current?.focus();
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
   }, []);
 
   /* Publish a CSS variable so the ExpandedMRP overlay knows how much
@@ -243,6 +406,42 @@ function FloatingDock() {
   };
 
   const onTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    /* Slash command palette captures the textarea while the user is
+     * picking a command. Order matters: this must run BEFORE the regular
+     * Enter / Arrow / Esc handlers below so the drawer wins. Only takes
+     * over when there's at least one match to show. */
+    if (isSlashMode && slashMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashSelected((i) => (i + 1) % slashMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashSelected((i) => (i - 1 + slashMatches.length) % slashMatches.length);
+        return;
+      }
+      // Plain Enter executes; Cmd/Ctrl+Enter falls through to send so the
+      // user can still escape-hatch by force-submitting the literal "/foo".
+      const picked = slashMatches[slashSelected] ?? slashMatches[0];
+      if (!picked) return;
+      if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        execSlash(picked);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setDraft(`/${picked.name}`);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDraft("");
+        return;
+      }
+    }
+
     /* Cmd/Ctrl+Enter sends; plain Enter inserts a newline (chat-comfortable). */
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -398,13 +597,43 @@ function FloatingDock() {
               ))}
             </div>
           )}
+          {isSlashMode && slashMatches.length > 0 && (
+            <div className="dock__slash" role="listbox" aria-label="Slash commands">
+              {slashMatches.map((cmd, i) => {
+                const Icon = cmd.icon;
+                const active = i === slashSelected;
+                return (
+                  <button
+                    key={cmd.name}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={cn("dock__slash-row", active && "dock__slash-row--active")}
+                    onMouseEnter={() => setSlashSelected(i)}
+                    onMouseDown={(e) => {
+                      // Prevent textarea blur before exec runs.
+                      e.preventDefault();
+                      execSlash(cmd);
+                    }}
+                  >
+                    <Icon size={13} className="dock__slash-icon" aria-hidden="true" />
+                    <span className="dock__slash-name">/{cmd.name}</span>
+                    <span className="dock__slash-label">{cmd.label}</span>
+                    {active && (
+                      <ChevronRight size={12} className="dock__slash-chev" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             className="dock__input"
             value={draft}
             onChange={onTextareaChange}
             onKeyDown={onTextareaKeyDown}
-            placeholder="What's on your mind?"
+            placeholder="What's on your mind? Type / for commands."
             rows={3}
             spellCheck
             autoComplete="off"
@@ -412,12 +641,23 @@ function FloatingDock() {
         </div>
 
         <footer className="dock__foot">
-          <Label size="micro" tone="muted">
-            {draft.length} chars
-            {dockAttachments.length > 0 &&
-              ` · ${dockAttachments.length} attachment${dockAttachments.length === 1 ? "" : "s"}`}
-            {" · ⌘+Enter to send"}
-          </Label>
+          <div className="dock__foot-l">
+            <Label size="micro" tone="muted">
+              {draft.length} chars
+              {dockAttachments.length > 0 &&
+                ` · ${dockAttachments.length} attachment${dockAttachments.length === 1 ? "" : "s"}`}
+            </Label>
+            <span className="dock__hints" aria-hidden="true">
+              <kbd>⌘↵</kbd>send
+              <kbd>↵</kbd>newline
+              {promptHistory.length > 0 && (
+                <>
+                  <kbd>↑↓</kbd>history
+                </>
+              )}
+              <kbd>esc</kbd>close
+            </span>
+          </div>
           <Button
             variant="primary"
             size="md"

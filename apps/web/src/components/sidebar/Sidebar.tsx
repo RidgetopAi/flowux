@@ -12,16 +12,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
-import { useCanvas } from "../../lib/store";
+import { useCanvas, type SidebarTab as Tab } from "../../lib/store";
 import { useFlowuxStore } from "../../store.js";
 import { Button } from "../primitives/Button";
 import { Label } from "../primitives/Label";
 import { Pill } from "../primitives/Pill";
 import "./Sidebar.css";
-
-type Tab = "search" | "bundles" | "branches" | "imports" | "history";
 
 const TABS: Array<{ id: Tab; icon: ReactNode; label: string }> = [
   { id: "search",   icon: <Search size={14} />,     label: "Search" },
@@ -32,15 +30,17 @@ const TABS: Array<{ id: Tab; icon: ReactNode; label: string }> = [
 ];
 
 export function Sidebar() {
-  const [open, setOpen] = useState(true);
-  const [tab, setTab] = useState<Tab>("search");
+  const open = useCanvas((s) => s.sidebarOpen);
+  const tab = useCanvas((s) => s.sidebarTab);
+  const setOpen = useCanvas((s) => s.setSidebarOpen);
+  const setTab = useCanvas((s) => s.setSidebarTab);
 
   return (
     <aside className={cn("sidebar", open ? "sidebar--open" : "sidebar--collapsed")}>
       <nav className="sidebar__rail" aria-label="Sidebar tabs">
         <button
           className="sidebar__rail-toggle"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(!open)}
           title={open ? "Collapse sidebar" : "Open sidebar"}
           aria-label={open ? "Collapse sidebar" : "Open sidebar"}
         >
@@ -50,10 +50,7 @@ export function Sidebar() {
           <button
             key={t.id}
             className={cn("sidebar__tab", tab === t.id && "sidebar__tab--active")}
-            onClick={() => {
-              setTab(t.id);
-              if (!open) setOpen(true);
-            }}
+            onClick={() => setTab(t.id)}
             title={t.label}
             aria-label={t.label}
             aria-current={tab === t.id ? "page" : undefined}
@@ -93,6 +90,8 @@ function SearchPanel() {
   const revealMRP = useCanvas((s) => s.revealMRP);
   const setExpanded = useCanvas((s) => s.setExpanded);
   const setExpandedHighlight = useCanvas((s) => s.setExpandedHighlight);
+  const focusTick = useCanvas((s) => s.sidebarFocusTick);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Debounce the query → API call. 220ms feels responsive without spamming
   // the API on every keystroke.
@@ -100,6 +99,14 @@ function SearchPanel() {
     const id = window.setTimeout(() => void searchWorkspace(query), 220);
     return () => window.clearTimeout(id);
   }, [query, searchWorkspace]);
+
+  // Focus the search input whenever the focus tick bumps — driven by
+  // the `/find` slash command from the dock.
+  useEffect(() => {
+    if (focusTick === 0) return;
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [focusTick]);
 
   const openResult = async (canvasId: string, mrpId?: string) => {
     if (canvasId !== currentCanvasId) {
@@ -126,6 +133,7 @@ function SearchPanel() {
       <div className="sidebar-search">
         <Search size={13} className="sidebar-search__icon" aria-hidden="true" />
         <input
+          ref={inputRef}
           className="sidebar-search__input"
           type="search"
           placeholder="canvases · MRPs · artifacts"

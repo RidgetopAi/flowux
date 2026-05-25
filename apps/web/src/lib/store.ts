@@ -122,6 +122,11 @@ export function filterMRPs(objects: ReadonlyArray<CanvasObject>): MRPObject[] {
   return objects.filter((o): o is MRPObject => o.type === "mrp");
 }
 
+/** Sidebar tab identifiers — duplicated in Sidebar.tsx as a local type
+ *  union but lifted here so slash commands and other store consumers
+ *  can drive sidebar state. */
+export type SidebarTab = "search" | "bundles" | "branches" | "imports" | "history";
+
 export type Viewport = {
   pan: { x: number; y: number };
   /** Scale factor applied to the inner canvas layer.
@@ -188,6 +193,15 @@ type State = {
   /** Images staged in the dock awaiting send. Materialized into
    *  ImageObjects (anchored to the new MRP) when send fires. */
   dockAttachments: DockAttachment[];
+  /** Sidebar UI state lifted to the store so slash commands (`/find`,
+   *  `/history`) can drive the sidebar from inside the dock. Sidebar
+   *  component reads these on render. */
+  sidebarOpen: boolean;
+  sidebarTab: SidebarTab;
+  /** Optional one-shot focus signal — bumped when a command wants the
+   *  search input to grab keyboard focus the next time SearchPanel
+   *  renders. Treated as a tick (any change → focus once). */
+  sidebarFocusTick: number;
 
   // Selectors
   bundleCount: () => number;
@@ -260,6 +274,14 @@ type State = {
   addDockAttachment: (attachment: DockAttachment) => void;
   removeDockAttachment: (index: number) => void;
   clearDockAttachments: () => void;
+  /** Sidebar control — also auto-opens the sidebar when a tab is set
+   *  so `/find` and `/history` work whether the sidebar is collapsed
+   *  or not. */
+  setSidebarTab: (tab: SidebarTab) => void;
+  setSidebarOpen: (open: boolean) => void;
+  /** Bump sidebarFocusTick. Use after setSidebarTab('search') to also
+   *  focus the search input. */
+  focusSidebarSearch: () => void;
 
   // Cursor + pan + zoom
   moveCursor: (direction: CursorDirection, extend?: boolean) => void;
@@ -310,6 +332,9 @@ export const useCanvas = create<State>((set, get) => ({
   dockLockAnchor: null,
   dockAttachments: [],
   expandedHighlight: null,
+  sidebarOpen: true,
+  sidebarTab: "search",
+  sidebarFocusTick: 0,
 
   bundleCount: () => get().objects.filter((o) => o.checked).length,
 
@@ -481,6 +506,15 @@ export const useCanvas = create<State>((set, get) => ({
   setExpandedHighlight: (query) => set({ expandedHighlight: query?.trim() || null }),
   setDragging: (id) => set({ draggingId: id }),
   setCursor: (id) => set({ cursorId: id }),
+  setSidebarTab: (tab) => set({ sidebarTab: tab, sidebarOpen: true }),
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  focusSidebarSearch: () =>
+    set((s) => ({
+      sidebarTab: "search",
+      sidebarOpen: true,
+      sidebarFocusTick: s.sidebarFocusTick + 1,
+    })),
+
   openDock: () => set({ dockOpen: true }),
   closeDock: () => set({ dockOpen: false }),
   setDockPosition: (pos) => set({ dockPosition: pos }),
