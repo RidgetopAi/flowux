@@ -8,8 +8,16 @@ import { Connector } from "../primitives/Connector";
  * from" relationship), so we filter the canvas objects down to MRPs here
  * before building the pair list.
  *
- * Anchoring: picks the dominant axis between the two card centers and
- * attaches to the appropriate edges. Tile heights are now uniform
+ * Visual differentiation:
+ *   - Cyan SOLID line   = same-canvas branch (e.g. an internal fork that
+ *                         landed back as an MRP on this canvas — rare but
+ *                         honest when it happens).
+ *   - Violet DASHED line = cross-canvas branch (parent or child is an
+ *                          external reference). The dashed style + violet
+ *                          tone read as "linked from elsewhere" at a glance.
+ *
+ * Anchoring picks the dominant axis between the two card centers and
+ * attaches to the appropriate edges. Tile heights are uniform
  * (--mrp-canvas-h = 240px) so the math is exact.
  */
 export function ConnectionLayer() {
@@ -31,15 +39,17 @@ export function ConnectionLayer() {
       {pairs.map(({ parent, child }) => {
         const { from, to } = computeAnchors(parent, child);
         const dim = draggingId === parent.id || draggingId === child.id;
+        const isCrossCanvas = !!(child.external || parent.external);
         return (
           <Connector
             key={`${parent.id}->${child.id}`}
             from={from}
             to={to}
-            tone={child.external || parent.external ? "violet" : "cyan"}
+            tone={isCrossCanvas ? "violet" : "cyan"}
             curve="bezier"
-            animate={!dim}
-            width={1.4}
+            animate={!dim && isCrossCanvas}
+            dashed={isCrossCanvas}
+            width={isCrossCanvas ? 1.4 : 1.8}
           />
         );
       })}

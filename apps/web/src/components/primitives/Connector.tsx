@@ -12,6 +12,9 @@ type Props = {
   curve?: Curve;
   /** Animated dash march. */
   animate?: boolean;
+  /** When false, render a solid line instead of the dashed pattern.
+   *  Default true preserves prior behavior. */
+  dashed?: boolean;
   /** Stroke width in px. */
   width?: number;
   className?: string;
@@ -44,6 +47,7 @@ export function Connector({
   tone = "cyan",
   curve = "bezier",
   animate = true,
+  dashed = true,
   width = 1.4,
   className,
   style,
@@ -112,7 +116,7 @@ export function Connector({
         fill="none"
         stroke={TONE_STROKE[tone]}
         strokeWidth={width}
-        strokeDasharray="6 8"
+        strokeDasharray={dashed ? "6 8" : undefined}
         strokeLinecap="round"
       />
     </svg>
