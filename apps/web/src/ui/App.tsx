@@ -16,7 +16,6 @@ export function App() {
   const canvases = useFlowuxStore((s) => s.canvases);
   const loading = useFlowuxStore((s) => s.loading);
   const error = useFlowuxStore((s) => s.error);
-  const executionContext = useFlowuxStore((s) => s.executionContext);
   const loadInitial = useFlowuxStore((s) => s.loadInitial);
   const switchCanvas = useFlowuxStore((s) => s.switchCanvas);
   const createNewCanvas = useFlowuxStore((s) => s.createNewCanvas);
@@ -114,11 +113,6 @@ export function App() {
   };
 
   const canvasStatus = snapshot?.canvas.status ?? (loading ? "loading" : "—");
-  const execLabel = executionContext
-    ? `${executionContext.harness} · ${
-        executionContext.hostLabel ?? "—"
-      }`
-    : "boot";
 
   return (
     <main className="flowux-app">
@@ -185,7 +179,6 @@ export function App() {
         </div>
 
         <div className="flowux-status">
-          <Pill tone="cyan">{execLabel}</Pill>
           <Pill tone="neutral">{canvasStatus}</Pill>
         </div>
       </header>

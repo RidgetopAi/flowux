@@ -6,6 +6,7 @@ import { SEED_OBJECTS } from "../../lib/mockData";
 import { ObjectNode } from "./ObjectNode";
 import { ConnectionLayer } from "./ConnectionLayer";
 import { CanvasControls } from "./CanvasControls";
+import { CanvasHud } from "./CanvasHud";
 import { ExpandedMRPLayer } from "./ExpandedMRP";
 import { FloatingDockLayer } from "./FloatingDock";
 import { Label } from "../primitives/Label";
@@ -444,6 +445,9 @@ export function Canvas() {
           </div>
         </div>
       )}
+
+      {/* ── HUD: top-left runtime status (exec / budget / cancel) ───── */}
+      <CanvasHud />
 
       {/* ── HUD: top-right floating controls ─────────────────────────── */}
       <CanvasControls />

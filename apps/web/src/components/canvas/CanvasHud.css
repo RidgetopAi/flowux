@@ -1,0 +1,100 @@
+/* ─── CANVAS HUD (top-left runtime status) ────────────────────────────
+   Mirrors .canvas-controls (top-right). Same pill-shaped glass surface;
+   houses exec context + context-budget meter + cancel STOP button. */
+
+.canvas-hud {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--glass-deep);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--shadow-panel);
+  pointer-events: auto;
+  /* Hide overflow if extremely narrow viewports squeeze us */
+  max-width: calc(100% - 360px);
+  overflow: hidden;
+}
+
+.canvas-hud__divider {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  flex: 0 0 auto;
+}
+
+.canvas-hud__chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 12px/1 var(--font-mono);
+  color: var(--soft);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.canvas-hud__icon {
+  color: var(--cyan-dim);
+  flex: 0 0 auto;
+}
+
+.canvas-hud__exec-host {
+  color: var(--ink);
+  font: 12px/1 var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ── Budget meter ────────────────────────────────────────────────── */
+.canvas-hud__budget-tok {
+  color: var(--ink);
+}
+
+.canvas-hud__budget-sep {
+  color: var(--muted);
+}
+
+.canvas-hud__budget-cap {
+  color: var(--muted);
+}
+
+.canvas-hud__budget-bar {
+  width: 64px;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+
+.canvas-hud__budget-fill {
+  height: 100%;
+  background: var(--cyan-dim);
+  box-shadow: 0 0 10px rgba(168, 255, 241, 0.4);
+  transition:
+    width var(--dur-base) var(--ease-out-quart),
+    background var(--dur-fast) var(--ease-out-quart),
+    box-shadow var(--dur-fast) var(--ease-out-quart);
+}
+
+/* Warning states tint the bar (and on 'over', the chip's top border) */
+.canvas-hud__budget--high .canvas-hud__budget-fill {
+  background: var(--amber);
+  box-shadow: 0 0 10px rgba(244, 208, 117, 0.4);
+}
+
+.canvas-hud__budget--over .canvas-hud__budget-fill {
+  background: #ff7474;
+  box-shadow: 0 0 12px rgba(255, 116, 116, 0.55);
+}
+
+.canvas-hud__budget--over .canvas-hud__budget-tok {
+  color: #ffb4b4;
+}

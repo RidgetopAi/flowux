@@ -9,6 +9,7 @@ import {
 import { GripHorizontal, Pin, X } from "lucide-react";
 import { cn } from "../../lib/cn";
 import { useCanvas } from "../../lib/store";
+import { useFlowuxStore } from "../../store.js";
 import { Button } from "../primitives/Button";
 import { Label } from "../primitives/Label";
 import { Pill } from "../primitives/Pill";
@@ -152,6 +153,20 @@ function FloatingDock() {
       root.style.removeProperty("--dock-reserve");
     };
   }, []);
+
+  /* Refresh the canvas-HUD context-budget meter while composing. Debounced
+   * (280ms) so typing doesn't spam the estimate endpoint; also fires once
+   * on mount with the current draft so the chip is accurate the moment the
+   * dock opens. Dock-staged attachments aren't uploaded yet (no id) so they
+   * don't contribute to the estimate until send; the prompt text + already-
+   * checked MRPs are what the meter reflects during composition. */
+  const refreshContextBudget = useFlowuxStore((s) => s.refreshContextBudget);
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void refreshContextBudget(draft);
+    }, 280);
+    return () => window.clearTimeout(id);
+  }, [draft, refreshContextBudget]);
 
   /* Toggle the dock's lock-to-canvas state. Hands the store the current
    * viewport top-left so it can convert to a world anchor (lock) or just
