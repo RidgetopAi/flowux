@@ -1,4 +1,4 @@
-import { Maximize2, MessageSquarePlus, Trash2, LayoutGrid, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, MessageSquarePlus, Trash2, LayoutGrid, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCanvas, ZOOM_MIN, ZOOM_MAX } from "../../lib/store";
 import { Button } from "../primitives/Button";
 import { Pill } from "../primitives/Pill";
@@ -15,6 +15,7 @@ export function CanvasControls() {
   const zoomToFit = useCanvas((s) => s.zoomToFit);
   const arrangeAll = useCanvas((s) => s.arrangeAll);
   const loadFixtures = useCanvas((s) => s.loadFixtures);
+  const clearBundle = useCanvas((s) => s.clearBundle);
 
   const handleArrange = () => {
     arrangeAll();
@@ -39,6 +40,17 @@ export function CanvasControls() {
         <Pill tone={bundleCount > 0 ? "cyan" : "neutral"} emphasis={bundleCount > 0}>
           {bundleCount} / {objects.length}
         </Pill>
+        {bundleCount > 0 && (
+          <button
+            type="button"
+            className="canvas-controls__clear"
+            onClick={clearBundle}
+            aria-label="Clear bundle"
+            title="Clear bundle (Esc)"
+          >
+            <X size={11} />
+          </button>
+        )}
       </div>
 
       <div className="canvas-controls__divider" />

@@ -271,44 +271,63 @@ export function Canvas() {
       reader.readAsDataURL(file);
     };
 
-    // Paste — image-in-clipboard wins regardless of focus target (a
-    // textarea can't render an image, so swallowing the gesture in
-    // chat input gives the appearance of a dead Ctrl+V). When the
-    // clipboard has no image, we don't preventDefault — text paste
-    // into the dock textarea / any other input still works normally.
+    // Horizontal stacking offset for multi-image drop/paste. Each
+    // additional image past the first lands this many world-coord px
+    // further to the right so they sit side-by-side, not piled.
+    const STACK_DX = 264;
+
+    // Paste — every image in the clipboard ingests, in order. When the
+    // clipboard has no image, we don't preventDefault — text paste into
+    // the dock textarea / any other input still works normally.
     const onPaste = (e: ClipboardEvent) => {
       if (!e.clipboardData) return;
 
-      let imageFile: File | null = null;
+      const images: File[] = [];
       for (const item of Array.from(e.clipboardData.items)) {
         if (item.kind === "file" && item.type.startsWith("image/")) {
           const file = item.getAsFile();
-          if (file) {
-            imageFile = file;
-            break; // first image wins; multi-image paste lands in a later iter
-          }
+          if (file) images.push(file);
         }
       }
-
-      if (!imageFile) return; // no image → let default paste happen
+      if (images.length === 0) return;
 
       e.preventDefault();
-      // Dock-open = active composition → stage in dock so prompt + image
-      // arrive as one turn. Dock-closed = ambient paste → drop on canvas.
+      // Dock-open = active composition → stage all images in the dock so
+      // prompt + images arrive as one turn. Dock-closed = ambient paste →
+      // drop all on canvas, anchored to the most-recent MRP and stacked
+      // horizontally so they don't pile.
       const toDock = useCanvas.getState().dockOpen;
-      ingest(imageFile, { toDock });
+      if (toDock) {
+        for (const f of images) ingest(f, { toDock: true });
+        return;
+      }
+      // Canvas-side: first image uses addImage's default MRP anchor
+      // (right edge of most-recent MRP + 24px gap). Subsequent images
+      // explicitly position to the right of that base so they march
+      // across in a single row instead of piling on the same anchor.
+      const state = useCanvas.getState();
+      const mrps = state.objects.filter((o) => o.type === "mrp");
+      const anchor = mrps[mrps.length - 1];
+      const baseX = anchor ? anchor.x + anchor.width + 24 : 0;
+      const baseY = anchor ? anchor.y : 0;
+      images.forEach((f, i) => {
+        if (i === 0) {
+          ingest(f);
+        } else {
+          ingest(f, { pos: { x: baseX + i * STACK_DX, y: baseY } });
+        }
+      });
     };
 
-    // Drop — convert client coords → world coords so the image lands at
-    // the drop point regardless of pan/zoom. Falls back to MRP anchor
-    // if the world-coord math somehow fails.
+    // Drop — convert client coords → world coords so the FIRST image lands
+    // at the drop point regardless of pan/zoom. Subsequent images stack to
+    // the right of the first.
     const onDrop = (e: DragEvent) => {
       if (!e.dataTransfer) return;
       const files = Array.from(e.dataTransfer.files).filter((f) =>
         f.type.startsWith("image/"),
       );
-      const [first] = files;
-      if (!first) return;
+      if (files.length === 0) return;
       e.preventDefault();
 
       const { viewport } = useCanvas.getState();
@@ -321,10 +340,9 @@ export function Canvas() {
         (e.clientY - viewport.top - viewport.height / 2 - viewport.pan.y) /
         viewport.zoom;
 
-      // Drop is a physical gesture pointing at a canvas spot — always
-      // lands on canvas, regardless of whether the dock is open. Only
-      // first image for v1; multi-image drops can land later.
-      ingest(first, { pos: { x: worldX, y: worldY } });
+      files.forEach((f, i) => {
+        ingest(f, { pos: { x: worldX + i * STACK_DX, y: worldY } });
+      });
     };
 
     // Drag-over needs preventDefault for the drop to fire at all.
