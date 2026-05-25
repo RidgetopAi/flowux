@@ -8,3 +8,4 @@ dist
 coverage
 apps/api/uploads
 apps/uploads
+.playwright-cli
