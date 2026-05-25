@@ -97,8 +97,26 @@ export type ImageObject = ObjectBase & {
   anchoredToId?: string;
 };
 
+/** Per-tool-call canvas node. Rendered as a thin chip stacked below the
+ *  issuing MRP. Surfaces tool name + summarized args + status; clicking
+ *  expands its parent MRP. NOT selectable (excluded from bundle math). */
+export type ToolCallStatus = "started" | "streaming" | "complete" | "error";
+
+export type ToolCallObject = ObjectBase & {
+  type: "tool_call";
+  /** Lowercase tool name as reported by the model harness (e.g. "smart_search",
+   *  "Read", "Bash"). Used for both display and per-tool chrome. */
+  name: string;
+  /** One-line argument summary (e.g. file path, query text). */
+  argsSummary?: string;
+  status: ToolCallStatus;
+  /** The MRP placement.id this tool call belongs to. Used for anchoring +
+   *  for click→expand to land on the right card. */
+  anchoredToId: string;
+};
+
 /** Discriminated union — every canvas object is one of these variants. */
-export type CanvasObject = MRPObject | ImageObject;
+export type CanvasObject = MRPObject | ImageObject | ToolCallObject;
 
 /** An image staged in the dock awaiting send. Holds enough to (a) render
  *  a thumbnail preview in the dock and (b) materialize an ImageObject

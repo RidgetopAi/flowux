@@ -167,10 +167,26 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     mrpIds.length && !options.summaryOnly
       ? await db.select().from(mrpBlocks).where(inArray(mrpBlocks.mrpId, mrpIds)).orderBy(mrpBlocks.sequence)
       : [];
-  const events =
-    mrpIds.length && !options.summaryOnly
-      ? await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
-      : [];
+  // Events are heavy (one canvas can carry 1000+), so summary mode normally
+  // skips them. We DO want tool_call_started + tool_call_completed even in
+  // summary mode so the canvas adapter can project tool-call chip nodes
+  // without an N+1 fetch per MRP. Delta events are pure transport noise
+  // here — same toolCall identity is already covered by started/completed,
+  // so we drop them to keep the payload tight.
+  const events = mrpIds.length
+    ? options.summaryOnly
+      ? await db
+          .select()
+          .from(mrpEvents)
+          .where(
+            and(
+              inArray(mrpEvents.mrpId, mrpIds),
+              inArray(mrpEvents.type, ["tool_call_started", "tool_call_completed"]),
+            ),
+          )
+          .orderBy(mrpEvents.sequence)
+      : await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
+    : [];
   const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
   const artifactRows = mrpIds.length ? await db.select().from(artifacts).where(inArray(artifacts.mrpId, mrpIds)) : [];
   const branchRows = await db
