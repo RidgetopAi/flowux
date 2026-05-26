@@ -158,11 +158,13 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
               icon={<Wrench />}
               label="Tool Calls"
               items={telemetry.tools}
+              grow
             />
             <TelemetrySection
               icon={<FileText />}
               label="Files Touched"
               items={telemetry.files}
+              grow
             />
           </aside>
         </div>
@@ -223,13 +225,19 @@ function TelemetrySection({
   icon,
   label,
   items,
+  grow,
 }: {
   icon: React.ReactNode;
   label: string;
   items: TelemetryItem[];
+  /** When true, the section flex-grows to fill remaining pane height and
+   *  its inner list becomes the scroll container (instead of a fixed
+   *  220px cap). Used for the Tool Calls section, where long runs were
+   *  effectively invisible past ~2 rows. */
+  grow?: boolean;
 }) {
   return (
-    <details className="xmrp-tele" open>
+    <details className={cn("xmrp-tele", grow && "xmrp-tele--grow")} open>
       <summary className="xmrp-tele__sum">
         <span className="xmrp-tele__icon">{icon}</span>
         <Label size="micro" tone="ink">{label}</Label>

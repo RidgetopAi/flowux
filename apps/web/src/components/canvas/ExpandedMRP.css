@@ -189,6 +189,25 @@
   overflow: hidden;
 }
 
+/* Grow variant: section CAN fill remaining pane height — but only when
+   it's actually open. Collapsed sections shrink to their summary header
+   so the other open section gets all the leftover space. Click-toggling
+   <details> swaps the [open] attribute and the layout responds instantly. */
+.xmrp-tele--grow {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.xmrp-tele--grow[open] {
+  flex: 1 1 0;
+}
+.xmrp-tele--grow[open] .xmrp-tele__list {
+  max-height: none;
+  flex: 1 1 0;
+  overscroll-behavior: contain;
+}
+
 .xmrp-tele__sum {
   display: grid;
   grid-template-columns: 16px 1fr 14px auto;
