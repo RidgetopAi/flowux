@@ -164,7 +164,10 @@ const DOCK_GAP_FROM_EDGE = 24;
 /* Space the expanded overlay needs to leave at the bottom of the viewport
  * for the dock to stay visible underneath it. Sum: dock height (~256) +
  * bottom edge gap (24) + small breathing buffer (8). */
-const DOCK_RESERVE_PX = 288;
+/** Visual gap between the dock and the expanded-MRP overlay above it.
+ *  The reserve = dock height + this gap. Kept small so the overlay
+ *  uses as much vertical space as possible. */
+const DOCK_RESERVE_GAP_PX = 12;
 
 function computeDefaultPos(): { x: number; y: number } {
   const x = Math.max(16, (window.innerWidth - DOCK_WIDTH) / 2);
@@ -308,12 +311,24 @@ function FloatingDock() {
   }, []);
 
   /* Publish a CSS variable so the ExpandedMRP overlay knows how much
-   * vertical space to leave for the dock at the bottom. Cleared on
-   * unmount (when dock closes) so the overlay reclaims the space. */
+   * vertical space to leave for the dock at the bottom. Tracks the dock's
+   * actual rendered height via ResizeObserver so the overlay stays as
+   * tall as possible regardless of dock state (attachments staged,
+   * slash palette open, draft growing, etc.). Cleared on unmount. */
+  const dockSizeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const el = dockSizeRef.current;
     const root = document.documentElement;
-    root.style.setProperty("--dock-reserve", `${DOCK_RESERVE_PX}px`);
+    if (!el) return;
+    const update = () => {
+      const h = el.getBoundingClientRect().height;
+      root.style.setProperty("--dock-reserve", `${Math.ceil(h + DOCK_RESERVE_GAP_PX)}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
     return () => {
+      ro.disconnect();
       root.style.removeProperty("--dock-reserve");
     };
   }, []);
@@ -524,6 +539,7 @@ function FloatingDock() {
       }}
     >
       <motion.div
+        ref={dockSizeRef}
         className="dock"
         drag
         dragListener={false}
