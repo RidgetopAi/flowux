@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Wrench, FileText, Zap, ChevronRight } from "lucide-react";
 import { useCanvas, type MRP } from "../../lib/store";
+import { useFlowuxStore } from "../../store.js";
 import { Pill } from "../primitives/Pill";
 import { Label } from "../primitives/Label";
 import { Button } from "../primitives/Button";
 import { StatusDot } from "../primitives/StatusDot";
 import { BrailleBand } from "../effects/BrailleBand";
 import { cn } from "../../lib/cn";
+import type { MrpEvent } from "@flowux/shared";
 import "./ExpandedMRP.css";
 
 /**
@@ -52,8 +54,19 @@ export function ExpandedMRPLayer() {
 }
 
 function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
-  const telemetry = mockTelemetry(mrp);
   const highlight = useCanvas((s) => s.expandedHighlight);
+  // Pull this MRP's real events + run from the apps/api snapshot. The
+  // CanvasObject.id IS the placement.id, so we look up the placement to
+  // find the underlying server mrpId, then filter events/runs by it.
+  const events = useFlowuxStore((s) => s.snapshot?.events ?? []);
+  const modelRuns = useFlowuxStore((s) => s.snapshot?.modelRuns ?? []);
+  const placement = useFlowuxStore((s) =>
+    s.snapshot?.placements.find((p) => p.id === mrp.id),
+  );
+  const telemetry = useMemo(
+    () => realTelemetry(mrp, placement?.mrpId, events, modelRuns),
+    [mrp, placement?.mrpId, events, modelRuns],
+  );
 
   return (
     <div className="xmrp-portal">
@@ -233,49 +246,109 @@ function TelemetrySection({
   );
 }
 
-/* ── Mocked telemetry (deterministic per MRP via sequence/id) ─────────── */
-function mockTelemetry(mrp: MRP): {
+/* ── Real telemetry from snapshot.events + modelRuns ──────────────────
+   Tools list is folded from this MRP's tool_call_started events (the
+   adapter for canvas chips uses the same source, so the count here and
+   the chip count agree). Stats are pulled from the live ModelRun when
+   one exists. Files Touched stays empty until we plumb tool_result
+   paths through summary mode — clearly empty beats fake. */
+type ServerModelRun = {
+  mrpId: string;
+  model?: string;
+  totalTokens?: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  timingMs?: number;
+  finishReason?: string;
+};
+
+function realTelemetry(
+  mrp: MRP,
+  serverMrpId: string | undefined,
+  events: MrpEvent[],
+  modelRuns: ServerModelRun[],
+): {
   stats: TelemetryItem[];
   tools: TelemetryItem[];
   files: TelemetryItem[];
 } {
-  const seed = mrp.sequence;
-  const latencyMs = 240 + (seed * 73) % 800;
-  const tokIn = Math.floor(mrp.tokens * 0.35) || 240;
-  const tokOut = Math.floor(mrp.tokens * 0.65) || 600;
-  const cost = (tokIn * 0.000015 + tokOut * 0.000075).toFixed(4);
+  // Find the latest model run for this MRP (placement.mrpId, not the
+  // CanvasObject id, which is the placement id).
+  const run = serverMrpId
+    ? modelRuns.find((r) => r.mrpId === serverMrpId)
+    : undefined;
+  const tokIn = run?.promptTokens ?? Math.floor(mrp.tokens * 0.35) ?? 0;
+  const tokOut = run?.completionTokens ?? Math.floor(mrp.tokens * 0.65) ?? 0;
 
   const stats: TelemetryItem[] = [
-    { label: "model",    value: mrp.model, tone: "cyan" },
-    { label: "latency",  value: `${latencyMs}ms`, tone: "amber" },
-    { label: "tok in",   value: formatTokens(tokIn) },
-    { label: "tok out",  value: formatTokens(tokOut) },
-    { label: "cost",     value: `$${cost}` },
-    { label: "thread",   value: mrp.parentId ? "branched" : "trunk", tone: mrp.parentId ? "violet" : "muted" },
+    { label: "model", value: run?.model ?? mrp.model, tone: "cyan" },
+    ...(run?.timingMs !== undefined
+      ? [{ label: "latency", value: `${run.timingMs}ms`, tone: "amber" as const }]
+      : []),
+    { label: "tok in", value: formatTokens(tokIn) },
+    { label: "tok out", value: formatTokens(tokOut) },
+    { label: "total", value: formatTokens(run?.totalTokens ?? mrp.tokens) },
+    ...(run?.finishReason
+      ? [{ label: "finish", value: run.finishReason }]
+      : []),
   ];
 
-  // Tool calls — varies by sequence to feel realistic
-  const allTools = [
-    { label: "Read", value: "src/lib/store.ts" },
-    { label: "Edit", value: "src/components/canvas/Canvas.tsx" },
-    { label: "Bash", value: "git status" },
-    { label: "Grep", value: "MRP layoutId" },
-    { label: "Write", value: "src/lib/layout.ts" },
-  ];
-  const toolCount = (seed * 3) % 4;
-  const tools: TelemetryItem[] = allTools.slice(0, toolCount);
+  const tools: TelemetryItem[] = serverMrpId
+    ? foldToolCallsFromEvents(events, serverMrpId)
+    : [];
 
-  // Files touched
-  const allFiles = [
-    { label: "M", value: "src/lib/store.ts", tone: "amber" as const },
-    { label: "M", value: "src/components/canvas/MRPCard.tsx", tone: "amber" as const },
-    { label: "+", value: "src/lib/layout.ts", tone: "cyan" as const },
-    { label: "M", value: "src/components/canvas/Canvas.tsx", tone: "amber" as const },
-  ];
-  const fileCount = Math.max(1, (seed * 2) % 4);
-  const files: TelemetryItem[] = allFiles.slice(0, fileCount);
+  // Files Touched — empty for now. Pi tool_result events would carry
+  // file paths but summary mode strips them; deferred until a follow-up
+  // tweak adds tool_result_completed to the summary include list or we
+  // hydrate per-MRP details on expand. Empty list renders "— none —".
+  const files: TelemetryItem[] = [];
 
   return { stats, tools, files };
+}
+
+/** Fold tool_call_started events into one TelemetryItem per unique
+ *  toolCall.id. Label = tool name; value = a short args summary or the
+ *  status if no args. Pi's "tool-unknown" placeholders (from raw delta
+ *  events) get filtered the same way the chip adapter does. */
+function foldToolCallsFromEvents(
+  events: MrpEvent[],
+  mrpId: string,
+): TelemetryItem[] {
+  const seen = new Map<string, TelemetryItem>();
+  for (const ev of events) {
+    if (ev.mrpId !== mrpId) continue;
+    if (ev.type !== "tool_call_started") continue;
+    const payload = ev.payload as {
+      toolCall?: { id?: string; name?: string; args?: unknown };
+    };
+    const tc = payload.toolCall;
+    if (!tc?.id || tc.id === "tool-unknown") continue;
+    if (seen.has(tc.id)) continue;
+    seen.set(tc.id, {
+      label: tc.name ?? "tool",
+      value: summarizeArgs(tc.args) ?? "—",
+      tone: tc.name?.startsWith("mandrel_") || tc.name === "smart_search"
+        ? "violet"
+        : undefined,
+    });
+  }
+  return [...seen.values()];
+}
+
+function summarizeArgs(args: unknown): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const entries = Object.entries(args as Record<string, unknown>);
+  if (entries.length === 0) return undefined;
+  return entries
+    .slice(0, 2)
+    .map(([k, v]) => {
+      if (typeof v === "string") {
+        return `${k}=${v.length > 28 ? v.slice(0, 28) + "…" : v}`;
+      }
+      if (typeof v === "number" || typeof v === "boolean") return `${k}=${v}`;
+      return `${k}=…`;
+    })
+    .join(" ");
 }
 
 function formatTokens(n: number): string {
