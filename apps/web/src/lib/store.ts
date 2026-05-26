@@ -651,8 +651,24 @@ export const useCanvas = create<State>((set, get) => ({
           if (target) set({ cursorId: target.id });
         }
       } else {
-        // Spatial arrow — cone-based nearest neighbor across any object type.
-        const neighbor = findSpatialNeighbor(current, objects, direction);
+        // Spatial arrow — cone-based nearest neighbor, MRPs only. Earlier
+        // versions searched every object type, but anchored variants like
+        // tool-call chips and image artifacts sit between MRPs in the
+        // grid and would invisibly capture the cursor (the user reported
+        // "right-arrow past MRP-3 makes the highlight disappear"). Images
+        // / tool chips aren't selectable for the bundle anyway, so keeping
+        // arrow nav strictly on the conversation cards is consistent with
+        // Tab/Shift+Tab sequence nav.
+        const mrps = filterMRPs(objects);
+        // If the cursor somehow lives on a non-MRP (pre-fix state, a
+        // future variant), reseed to the closest MRP in sequence order
+        // for the direction so we don't get stuck.
+        const sourceMrp =
+          current.type === "mrp"
+            ? current
+            : mrps[0] ?? null;
+        if (!sourceMrp) return;
+        const neighbor = findSpatialNeighbor(sourceMrp, mrps, direction);
         if (neighbor) set({ cursorId: neighbor.id });
         // else: no candidate in that direction — cursor stays put.
       }
