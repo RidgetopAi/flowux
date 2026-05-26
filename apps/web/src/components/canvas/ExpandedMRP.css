@@ -259,10 +259,10 @@
 }
 
 .xmrp-tele__row {
-  display: grid;
-  grid-template-columns: 60px 1fr;
-  align-items: center;
-  gap: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
   padding: 6px 0;
   border-bottom: 1px dashed rgba(233, 237, 232, 0.06);
 }
@@ -273,6 +273,8 @@
 
 .xmrp-tele__label {
   color: var(--muted);
+  flex: 0 0 auto;
+  min-width: 60px;
 }
 
 .xmrp-tele__val {
@@ -280,6 +282,8 @@
   font-size: 11px;
   color: var(--soft);
   word-break: break-all;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .xmrp-tele__val--cyan   { color: var(--cyan); }

@@ -210,7 +210,14 @@ function HighlightedText({ text, query }: { text: string; query: string | null }
 }
 
 /* ── Telemetry section ────────────────────────────────────────────────── */
-type TelemetryItem = { label: string; value: string; tone?: "cyan" | "violet" | "amber" | "muted" };
+type TelemetryItem = {
+  label: string;
+  value: string;
+  tone?: "cyan" | "violet" | "amber" | "muted";
+  /** Full untruncated text shown on hover. Tool-call rows fill this with
+   *  the complete args dump so long file paths / strings are readable. */
+  title?: string;
+};
 
 function TelemetrySection({
   icon,
@@ -234,7 +241,7 @@ function TelemetrySection({
           <li className="xmrp-tele__empty fx-mono-micro">— none —</li>
         )}
         {items.map((item, i) => (
-          <li key={i} className="xmrp-tele__row">
+          <li key={i} className="xmrp-tele__row" title={item.title ?? `${item.label} = ${item.value}`}>
             <span className="xmrp-tele__label fx-mono-micro">{item.label}</span>
             <span className={cn("xmrp-tele__val", item.tone && `xmrp-tele__val--${item.tone}`)}>
               {item.value}
@@ -324,15 +331,36 @@ function foldToolCallsFromEvents(
     const tc = payload.toolCall;
     if (!tc?.id || tc.id === "tool-unknown") continue;
     if (seen.has(tc.id)) continue;
+    const fullArgs = fullArgsText(tc.args);
     seen.set(tc.id, {
       label: tc.name ?? "tool",
       value: summarizeArgs(tc.args) ?? "—",
       tone: tc.name?.startsWith("mandrel_") || tc.name === "smart_search"
         ? "violet"
         : undefined,
+      title: fullArgs ? `${tc.name ?? "tool"}\n${fullArgs}` : tc.name,
     });
   }
   return [...seen.values()];
+}
+
+/** Full args dump for hover tooltips — every key, untruncated values,
+ *  one per line. Returns undefined for missing/empty args. */
+function fullArgsText(args: unknown): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const entries = Object.entries(args as Record<string, unknown>);
+  if (entries.length === 0) return undefined;
+  return entries
+    .map(([k, v]) => {
+      if (typeof v === "string") return `${k} = ${v}`;
+      if (typeof v === "number" || typeof v === "boolean") return `${k} = ${v}`;
+      try {
+        return `${k} = ${JSON.stringify(v)}`;
+      } catch {
+        return `${k} = …`;
+      }
+    })
+    .join("\n");
 }
 
 function summarizeArgs(args: unknown): string | undefined {
