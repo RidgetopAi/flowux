@@ -112,6 +112,15 @@ export function ImageCard({ image }: Props) {
           return u ? { ...o, x: u.x, y: u.y } : o;
         }),
       }));
+      // Persist per follower so apps/api stores their new x/y. Without
+      // this, the next snapshot returns their OLD positions and they
+      // snap back to the grid.
+      const persist = useCanvas.getState().movePersistHandler;
+      if (persist) {
+        for (const [id, { x: nx, y: ny }] of updates) {
+          persist(id, nx, ny);
+        }
+      }
       const followers = groupDrag.followers;
       requestAnimationFrame(() => {
         for (const f of followers) {

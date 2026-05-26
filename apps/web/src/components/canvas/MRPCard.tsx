@@ -163,8 +163,13 @@ export function MRPCard({ mrp }: Props) {
     y.set(0);
     setDragging(null);
 
-    // Commit followers in one batched setState, then clear their inline
-    // translates so the new left/top from the re-render lands cleanly.
+    // Commit followers in one batched setState (cheap visible update in
+    // a single frame), then fire the persistence handler per follower so
+    // their new positions land in apps/api too. Without the persist call,
+    // the next snapshot from the server would return their OLD x/y and
+    // every follower would visually snap back to the grid — the exact
+    // bug the user reported as "release places the one you grabbed and
+    // then places the rest back in the grid".
     const groupDrag = groupDragRef.current;
     if (groupDrag) {
       const updates = new Map<string, { x: number; y: number }>(
@@ -179,6 +184,12 @@ export function MRPCard({ mrp }: Props) {
           return u ? { ...o, x: u.x, y: u.y } : o;
         }),
       }));
+      const persist = useCanvas.getState().movePersistHandler;
+      if (persist) {
+        for (const [id, { x: nx, y: ny }] of updates) {
+          persist(id, nx, ny);
+        }
+      }
       // Clear inline styles AFTER React commits the new left/top. If we
       // cleared translate immediately, the followers would visibly snap
       // back to their start position for a frame before the re-render
