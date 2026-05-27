@@ -312,11 +312,9 @@ function realTelemetry(
     ? foldToolCallsFromEvents(events, serverMrpId)
     : [];
 
-  // Files Touched — empty for now. Pi tool_result events would carry
-  // file paths but summary mode strips them; deferred until a follow-up
-  // tweak adds tool_result_completed to the summary include list or we
-  // hydrate per-MRP details on expand. Empty list renders "— none —".
-  const files: TelemetryItem[] = [];
+  const files: TelemetryItem[] = serverMrpId
+    ? foldFilesFromEvents(events, serverMrpId)
+    : [];
 
   return { stats, tools, files };
 }
@@ -350,6 +348,87 @@ function foldToolCallsFromEvents(
     });
   }
   return [...seen.values()];
+}
+
+/** Fold tool_result_completed events into one row per unique file path.
+ *  Joins each result back to its tool_call_started by toolCallId to get
+ *  the file path from the original args (results don't carry args). Only
+ *  file-touching tools count (read/edit/write/multiedit/notebookedit —
+ *  lowercase Pi naming, also tolerant of Claude's PascalCase). If any op
+ *  on a given path errored, the row is toned red. Multi-op paths get a
+ *  "N× tool" label so heavy editing is visible at a glance. */
+const FILE_TOOLS = new Set([
+  "read", "edit", "write", "multiedit", "notebookedit",
+]);
+
+function foldFilesFromEvents(
+  events: MrpEvent[],
+  mrpId: string,
+): TelemetryItem[] {
+  // First pass: index started calls by toolCallId so we can resolve
+  // file paths from result events (results don't carry args).
+  const startedById = new Map<string, { name: string; path: string }>();
+  for (const ev of events) {
+    if (ev.mrpId !== mrpId) continue;
+    if (ev.type !== "tool_call_started") continue;
+    const payload = ev.payload as {
+      toolCall?: { id?: string; name?: string; args?: Record<string, unknown> };
+    };
+    const tc = payload.toolCall;
+    if (!tc?.id || tc.id === "tool-unknown") continue;
+    if (!tc.name || !FILE_TOOLS.has(tc.name.toLowerCase())) continue;
+    const path = extractFilePath(tc.args);
+    if (!path) continue;
+    startedById.set(tc.id, { name: tc.name, path });
+  }
+
+  // Second pass: walk results in order, accumulate per-path stats.
+  type PerFile = { name: string; ops: number; errored: boolean };
+  const perFile = new Map<string, PerFile>();
+  for (const ev of events) {
+    if (ev.mrpId !== mrpId) continue;
+    if (ev.type !== "tool_result_completed") continue;
+    const payload = ev.payload as {
+      toolResult?: { toolCallId?: string; isError?: boolean };
+    };
+    const tr = payload.toolResult;
+    if (!tr?.toolCallId) continue;
+    const started = startedById.get(tr.toolCallId);
+    if (!started) continue;
+    const entry = perFile.get(started.path) ?? {
+      name: started.name,
+      ops: 0,
+      errored: false,
+    };
+    entry.ops += 1;
+    if (tr.isError) entry.errored = true;
+    // Latest op's tool name wins so the label reflects the most
+    // recent action (e.g. read-then-edit shows as "edit").
+    entry.name = started.name;
+    perFile.set(started.path, entry);
+  }
+
+  return [...perFile.entries()].map(([path, info]) => ({
+    label: info.ops > 1 ? `${info.ops}× ${info.name}` : info.name,
+    value: basename(path),
+    title: path,
+    tone: info.errored ? ("amber" as const) : undefined,
+  }));
+}
+
+function extractFilePath(args: unknown): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const a = args as Record<string, unknown>;
+  for (const key of ["file_path", "path", "notebook_path"]) {
+    const v = a[key];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return undefined;
+}
+
+function basename(path: string): string {
+  const last = path.split("/").filter(Boolean).pop();
+  return last ?? path;
 }
 
 /** Full args dump for hover tooltips — every key, untruncated values,

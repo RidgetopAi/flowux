@@ -170,21 +170,30 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
   // Events are heavy (one canvas can carry 1000+), so summary mode normally
   // skips them. We DO want tool_call_started + tool_call_completed even in
   // summary mode so the canvas adapter can project tool-call chip nodes
-  // without an N+1 fetch per MRP. Delta events are pure transport noise
-  // here — same toolCall identity is already covered by started/completed,
-  // so we drop them to keep the payload tight.
+  // without an N+1 fetch per MRP. tool_result_completed feeds the
+  // ExpandedMRP "Files Touched" section — included here with the heavy
+  // result.content text stripped (full text is still on the row in DB
+  // and reachable via getMrpDetails). Delta events are pure transport noise
+  // — same identity is already covered by started/completed — so we drop
+  // them to keep the payload tight.
   const events = mrpIds.length
     ? options.summaryOnly
-      ? await db
-          .select()
-          .from(mrpEvents)
-          .where(
-            and(
-              inArray(mrpEvents.mrpId, mrpIds),
-              inArray(mrpEvents.type, ["tool_call_started", "tool_call_completed"]),
-            ),
-          )
-          .orderBy(mrpEvents.sequence)
+      ? (
+          await db
+            .select()
+            .from(mrpEvents)
+            .where(
+              and(
+                inArray(mrpEvents.mrpId, mrpIds),
+                inArray(mrpEvents.type, [
+                  "tool_call_started",
+                  "tool_call_completed",
+                  "tool_result_completed",
+                ]),
+              ),
+            )
+            .orderBy(mrpEvents.sequence)
+        ).map(slimSummaryEventRow)
       : await db.select().from(mrpEvents).where(inArray(mrpEvents.mrpId, mrpIds)).orderBy(mrpEvents.sequence)
     : [];
   const runs = mrpIds.length ? await db.select().from(modelRuns).where(inArray(modelRuns.mrpId, mrpIds)) : [];
@@ -1266,4 +1275,50 @@ function toMrpEvent(row: typeof mrpEvents.$inferSelect): MrpEvent {
     payload: row.payload,
     createdAt: row.createdAt
   };
+}
+
+const SUMMARY_RESULT_PREVIEW_CHARS = 240;
+
+/** Trim heavy fields off summary-mode event rows before they ride along
+ *  in the canvas snapshot. tool_result_completed payloads carry the full
+ *  text of every Read/Bash/etc. result — a single canvas can push the
+ *  snapshot well past 1 MB if we ship them raw. We keep only what the
+ *  Files Touched section + future inline previews need:
+ *    toolCallId, toolName, isError, result.details (already small),
+ *    and a short preview of the text content.
+ *  Full text is still on the row in DB and reachable via getMrpDetails.
+ *  Returns the row shape so the standard `toMrpEvent` mapping still runs. */
+type MrpEventRow = typeof mrpEvents.$inferSelect;
+function slimSummaryEventRow(row: MrpEventRow): MrpEventRow {
+  if (row.type !== "tool_result_completed") return row;
+  const payload = row.payload as {
+    toolResult?: {
+      toolCallId?: string;
+      toolName?: string;
+      isError?: boolean;
+      result?: {
+        content?: Array<{ type?: string; text?: string }>;
+        details?: unknown;
+      };
+    };
+  };
+  const tr = payload.toolResult;
+  if (!tr) return row;
+  const firstText = tr.result?.content?.find((c) => c?.type === "text")?.text ?? "";
+  const preview =
+    firstText.length > SUMMARY_RESULT_PREVIEW_CHARS
+      ? firstText.slice(0, SUMMARY_RESULT_PREVIEW_CHARS) + "…"
+      : firstText;
+  const slimmed: Record<string, unknown> = {
+    toolResult: {
+      ...(tr.toolCallId ? { toolCallId: tr.toolCallId } : {}),
+      ...(tr.toolName ? { toolName: tr.toolName } : {}),
+      ...(typeof tr.isError === "boolean" ? { isError: tr.isError } : {}),
+      result: {
+        ...(preview ? { contentPreview: preview } : {}),
+        ...(tr.result?.details !== undefined ? { details: tr.result.details } : {}),
+      },
+    },
+  };
+  return { ...row, payload: slimmed };
 }
