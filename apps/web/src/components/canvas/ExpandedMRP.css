@@ -108,6 +108,16 @@
   min-height: 0;
 }
 
+/* When a telemetry section is popped out into the sidecar, the body
+   becomes 3-column. Sidecar gets a fixed-ish slot between conv and tele,
+   conversation pane shrinks to make room. Right pane stays where it is
+   so the active section's button breadcrumb doesn't move under the
+   user's cursor. */
+.xmrp__body[data-sidecar="tools"],
+.xmrp__body[data-sidecar="files"] {
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px) minmax(280px, 0.6fr);
+}
+
 .xmrp__pane {
   min-height: 0;
   overflow-y: auto;
@@ -315,6 +325,112 @@
   padding: 6px 0;
 }
 
+/* ── Popped-out header (sidecar active) ───────────────────────────────── */
+/* When a telemetry section has its list mirrored in the sidecar, the
+   right-pane entry collapses to a button breadcrumb. Same column slot,
+   same icon, same label, same count — just no inline list and an
+   active-glow when "popped". */
+.xmrp-tele--button {
+  flex: 0 0 auto;
+}
+
+.xmrp-tele__sum--button {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.xmrp-tele__pop {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition: transform var(--dur-fast) var(--ease-out-quart),
+              color var(--dur-fast) var(--ease-out-quart);
+}
+
+.xmrp-tele__pop--active {
+  color: var(--cyan);
+  filter: drop-shadow(0 0 4px rgba(168, 255, 241, 0.55));
+}
+
+.xmrp-tele--popped {
+  border-color: rgba(168, 255, 241, 0.42);
+  background:
+    linear-gradient(180deg, rgba(168, 255, 241, 0.06), rgba(0, 0, 0, 0.28));
+  box-shadow:
+    inset 0 0 0 1px rgba(168, 255, 241, 0.18),
+    0 0 14px rgba(168, 255, 241, 0.12);
+}
+
+.xmrp-tele--popped .xmrp-tele__sum--button {
+  color: var(--cyan);
+}
+
+/* ── Sidecar pane ─────────────────────────────────────────────────────── */
+/* Middle column inserted between conversation and right pane when a
+   telemetry section is popped out. Same phosphor-glass family as the
+   expanded MRP itself, but with a soft cyan inner edge so the eye
+   immediately reads "extracted view". */
+.xmrp__pane--sidecar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px 18px 18px;
+  border-right: 1px solid var(--line);
+  border-left: 1px solid rgba(168, 255, 241, 0.18);
+  background:
+    linear-gradient(180deg, rgba(168, 255, 241, 0.04), transparent 200px),
+    rgba(0, 0, 0, 0.32);
+  box-shadow: inset 1px 0 0 rgba(168, 255, 241, 0.06);
+}
+
+.xmrp-sidecar__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid rgba(168, 255, 241, 0.18);
+  margin-bottom: 10px;
+}
+
+.xmrp-sidecar__head .xmrp-tele__icon {
+  color: var(--cyan);
+  filter: drop-shadow(0 0 4px rgba(168, 255, 241, 0.45));
+}
+
+.xmrp-sidecar__head .xmrp-tele__count {
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.xmrp-sidecar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 255, 241, 0.3) transparent;
+}
+
+.xmrp-sidecar__list::-webkit-scrollbar { width: 6px; }
+.xmrp-sidecar__list::-webkit-scrollbar-thumb {
+  background: rgba(168, 255, 241, 0.3);
+  border-radius: 3px;
+}
+.xmrp-sidecar__list::-webkit-scrollbar-track { background: transparent; }
+
+.xmrp-sidecar__row {
+  padding: 8px 4px;
+}
+
 /* ── Footer ───────────────────────────────────────────────────────────── */
 .xmrp__foot {
   display: flex;
@@ -329,11 +445,18 @@
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 880px) {
   .xmrp-portal { padding: 16px; }
-  .xmrp__body {
+  .xmrp__body,
+  .xmrp__body[data-sidecar="tools"],
+  .xmrp__body[data-sidecar="files"] {
     grid-template-columns: 1fr;
   }
   .xmrp__pane--conv {
     border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .xmrp__pane--sidecar {
+    border-left: 0;
+    border-top: 1px solid rgba(168, 255, 241, 0.18);
     border-bottom: 1px solid var(--line);
   }
 }

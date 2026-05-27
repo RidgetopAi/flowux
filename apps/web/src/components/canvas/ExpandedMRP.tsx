@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Wrench, FileText, Zap, ChevronRight } from "lucide-react";
+import { X, Wrench, FileText, Zap, ChevronRight, ArrowLeftToLine } from "lucide-react";
 import { useCanvas, type MRP } from "../../lib/store";
 import { useFlowuxStore } from "../../store.js";
 import { Pill } from "../primitives/Pill";
@@ -53,6 +53,8 @@ export function ExpandedMRPLayer() {
   );
 }
 
+type SidecarSection = "tools" | "files";
+
 function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
   const highlight = useCanvas((s) => s.expandedHighlight);
   // Pull this MRP's real events + run from the apps/api snapshot. The
@@ -67,6 +69,27 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
     () => realTelemetry(mrp, placement?.mrpId, events, modelRuns),
     [mrp, placement?.mrpId, events, modelRuns],
   );
+
+  // Sidecar pops Tool Calls / Files Touched into a wider middle pane so
+  // the right column doesn't squeeze them to a single line when the dock
+  // is open. State is local — closing the overlay drops it automatically.
+  const [sidecarSection, setSidecarSection] = useState<SidecarSection | null>(null);
+  const togglePopOut = (section: SidecarSection) =>
+    setSidecarSection((cur) => (cur === section ? null : section));
+  // Esc layers — if the sidecar is open, swallow Esc to close it first;
+  // the parent's window-listener will only get the next Esc, which then
+  // dismisses the overlay. We do this with a captured-phase listener so
+  // we fire before the parent.
+  useEffect(() => {
+    if (!sidecarSection) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setSidecarSection(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [sidecarSection]);
 
   return (
     <div className="xmrp-portal">
@@ -118,8 +141,8 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
           </div>
         </header>
 
-        {/* 2-pane body */}
-        <div className="xmrp__body">
+        {/* 2-pane body — adds a third sidecar column when a section is popped out */}
+        <div className="xmrp__body" data-sidecar={sidecarSection ?? "off"}>
           {/* Left: conversation */}
           <div className="xmrp__pane xmrp__pane--conv">
             <section className="xmrp__msg xmrp__msg--user">
@@ -147,6 +170,20 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
             </section>
           </div>
 
+          {/* Sidecar: full-list view popped out of the right pane. Sits
+              between conversation and right-pane so the user reads
+              prompt/response AND the list at the same time. */}
+          <AnimatePresence>
+            {sidecarSection && (
+              <TelemetrySidecar
+                key={sidecarSection}
+                section={sidecarSection}
+                items={sidecarSection === "tools" ? telemetry.tools : telemetry.files}
+                onClose={() => setSidecarSection(null)}
+              />
+            )}
+          </AnimatePresence>
+
           {/* Right: call telemetry */}
           <aside className="xmrp__pane xmrp__pane--tele">
             <TelemetrySection
@@ -159,12 +196,16 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
               label="Tool Calls"
               items={telemetry.tools}
               grow
+              popOutActive={sidecarSection === "tools"}
+              onPopOut={() => togglePopOut("tools")}
             />
             <TelemetrySection
               icon={<FileText />}
               label="Files Touched"
               items={telemetry.files}
               grow
+              popOutActive={sidecarSection === "files"}
+              onPopOut={() => togglePopOut("files")}
             />
           </aside>
         </div>
@@ -226,6 +267,8 @@ function TelemetrySection({
   label,
   items,
   grow,
+  onPopOut,
+  popOutActive,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -235,7 +278,43 @@ function TelemetrySection({
    *  220px cap). Used for the Tool Calls section, where long runs were
    *  effectively invisible past ~2 rows. */
   grow?: boolean;
+  /** When provided, the section header becomes a toggle for a floating
+   *  sidecar pane instead of a native <details> open/close. Used when
+   *  the right-pane real estate is too cramped to show the full list. */
+  onPopOut?: () => void;
+  /** True when this section is currently mirrored in the sidecar.
+   *  Suppresses the inline list and lights the header with active-glow. */
+  popOutActive?: boolean;
 }) {
+  // When the section is popped out, render a compact button-style header
+  // and skip the inline list. Otherwise fall through to the standard
+  // <details>-based section so plain Call Stats stays unchanged.
+  if (onPopOut) {
+    return (
+      <div
+        className={cn(
+          "xmrp-tele",
+          "xmrp-tele--button",
+          popOutActive && "xmrp-tele--popped",
+        )}
+      >
+        <button
+          type="button"
+          className="xmrp-tele__sum xmrp-tele__sum--button"
+          onClick={onPopOut}
+          aria-pressed={popOutActive}
+          aria-label={popOutActive ? `Close ${label} sidecar` : `Open ${label} sidecar`}
+        >
+          <span className="xmrp-tele__icon">{icon}</span>
+          <Label size="micro" tone="ink">{label}</Label>
+          <ArrowLeftToLine
+            className={cn("xmrp-tele__pop", popOutActive && "xmrp-tele__pop--active")}
+          />
+          <span className="xmrp-tele__count fx-mono-micro">{items.length}</span>
+        </button>
+      </div>
+    );
+  }
   return (
     <details className={cn("xmrp-tele", grow && "xmrp-tele--grow")} open>
       <summary className="xmrp-tele__sum">
@@ -258,6 +337,58 @@ function TelemetrySection({
         ))}
       </ul>
     </details>
+  );
+}
+
+/* ── Sidecar pane ─────────────────────────────────────────────────────
+   Pops one telemetry list out of the cramped right pane into a wider
+   middle column. Conversation pane shrinks, right pane keeps its
+   collapsed-button headers as breadcrumbs. */
+function TelemetrySidecar({
+  section,
+  items,
+  onClose,
+}: {
+  section: SidecarSection;
+  items: TelemetryItem[];
+  onClose: () => void;
+}) {
+  const title = section === "tools" ? "Tool Calls" : "Files Touched";
+  const icon = section === "tools" ? <Wrench /> : <FileText />;
+  return (
+    <motion.aside
+      className="xmrp__pane xmrp__pane--sidecar"
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <header className="xmrp-sidecar__head">
+        <span className="xmrp-tele__icon">{icon}</span>
+        <Label size="micro" tone="cyan">{title}</Label>
+        <span className="xmrp-tele__count fx-mono-micro">{items.length}</span>
+        <Button variant="ghost" size="sm" iconOnly onClick={onClose} aria-label={`Close ${title}`}>
+          <X />
+        </Button>
+      </header>
+      <ul className="xmrp-sidecar__list">
+        {items.length === 0 && (
+          <li className="xmrp-tele__empty fx-mono-micro">— none —</li>
+        )}
+        {items.map((item, i) => (
+          <li
+            key={i}
+            className="xmrp-tele__row xmrp-sidecar__row"
+            title={item.title ?? `${item.label} = ${item.value}`}
+          >
+            <span className="xmrp-tele__label fx-mono-micro">{item.label}</span>
+            <span className={cn("xmrp-tele__val", item.tone && `xmrp-tele__val--${item.tone}`)}>
+              {item.value}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </motion.aside>
   );
 }
 
