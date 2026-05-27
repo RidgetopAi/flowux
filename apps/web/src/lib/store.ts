@@ -84,6 +84,16 @@ export type MRPObject = ObjectBase & {
   /** Number of child canvases this MRP seeded. 0/undefined when this card
    *  has never been used as a fork source. Renders as a small badge. */
   branchOutCount?: number;
+  /** User-pinned: exempt from compaction, always rides in context.
+   *  Renders with a pin icon and a slight cyan border accent. */
+  pinned?: boolean;
+  /** Set when this MRP has been folded into a state snapshot. Renders
+   *  muted/gray. Compacted MRPs stay on canvas but drop out of context
+   *  unless the user explicitly checks them into the bundle. */
+  compacted?: boolean;
+  /** Sequence at which compaction occurred (preserved across later
+   *  edits to the MRP's position in the thread). */
+  compactedAtSeq?: number;
 };
 
 export type ImageObject = ObjectBase & {
@@ -115,8 +125,35 @@ export type ToolCallObject = ObjectBase & {
   anchoredToId: string;
 };
 
+/** STATE card — the structured compaction snapshot rendered as a
+ *  first-class canvas object. Holds the structured state document
+ *  (goals, decisions, etc.) plus version metadata so the user can spot
+ *  which snapshot they're looking at. NOT selectable for context (the
+ *  snapshot rides automatically via the canvas thread's activeSnapshotId
+ *  on the server side). */
+export type StateObject = ObjectBase & {
+  type: "state";
+  /** Server-side snapshot id (state_snapshots.id). */
+  snapshotId: string;
+  version: number;
+  /** Range of MRP sequences this snapshot covers. */
+  coveredFromSeq: number;
+  coveredToSeq: number;
+  /** Number of MRPs folded into this snapshot — for the count badge. */
+  coveredCount: number;
+  /** Structured body. Read straight from the persisted snapshot row. */
+  state: import("@flowux/shared").StateDocument;
+  /** Provenance + audit. */
+  generatedBy: string;
+  generatedAt: string;
+  editedByUser: boolean;
+  /** True when this snapshot is the canvas's active one. Inactive
+   *  (historic) snapshots render dimmer. */
+  active: boolean;
+};
+
 /** Discriminated union — every canvas object is one of these variants. */
-export type CanvasObject = MRPObject | ImageObject | ToolCallObject;
+export type CanvasObject = MRPObject | ImageObject | ToolCallObject | StateObject;
 
 /** An image staged in the dock awaiting send. Holds enough to (a) render
  *  a thumbnail preview in the dock and (b) materialize an ImageObject

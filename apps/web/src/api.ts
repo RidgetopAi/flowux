@@ -2,12 +2,14 @@ import type {
   CanvasPlacement,
   CanvasSnapshot,
   CanvasThread,
+  CompactCanvasResponse,
   ContextBundle,
   CreateChildCanvasResponse,
   CreatePromptResponse,
   ContextEstimateResponse,
   HealthStatus,
   ImportExternalMrpsResponse,
+  Mrp,
   MrpDetails,
   SearchResponse,
   UploadedAttachment
@@ -166,6 +168,25 @@ export async function snapBack(canvasId: string, layout?: LayoutRequest): Promis
 export async function cancelPrompt(canvasId: string): Promise<{ cancelled: boolean; mrpId?: string }> {
   return fetchJson(`/api/canvases/${canvasId}/prompts/cancel`, {
     method: "POST"
+  });
+}
+
+export async function compactCanvas(
+  canvasId: string,
+  opts: { mrpIds?: string[]; trigger?: "user" | "auto" } = {}
+): Promise<CompactCanvasResponse> {
+  return fetchJson(`/api/canvases/${canvasId}/compact`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(opts)
+  });
+}
+
+export async function setMrpPinned(mrpId: string, pinned: boolean): Promise<Mrp> {
+  return fetchJson(`/api/mrps/${mrpId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pinned })
   });
 }
 

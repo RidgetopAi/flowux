@@ -7,9 +7,12 @@ import {
   GitFork,
   GripHorizontal,
   Maximize2,
+  Pin,
+  PinOff,
   SquareCheck,
 } from "lucide-react";
 import { useCanvas, type MRP } from "../../lib/store";
+import { useFlowuxStore } from "../../store.js";
 import { Card } from "../primitives/Card";
 import { Pill } from "../primitives/Pill";
 import { StatusDot } from "../primitives/StatusDot";
@@ -40,6 +43,17 @@ export function MRPCard({ mrp }: Props) {
   const setDragging = useCanvas((s) => s.setDragging);
   const setCursor = useCanvas((s) => s.setCursor);
   const toggleCheck = useCanvas((s) => s.toggleCheck);
+  /* Pin/unpin lives on useFlowuxStore (server-state) — useCanvas is
+   *  display-only and doesn't own server records. */
+  const toggleMrpPinned = useFlowuxStore((s) => s.toggleMrpPinned);
+  /* The MRP card object on useCanvas carries the live pinned/compacted
+   *  flags projected through canvasAdapter. We need the placement id
+   *  (mrp.id on the canvas object) → underlying server mrpId; useCanvas
+   *  holds it via the placement, but here we get it more cheaply by
+   *  reading from the useFlowuxStore snapshot. */
+  const serverMrpId = useFlowuxStore((s) =>
+    s.snapshot?.placements.find((p) => p.id === mrp.id)?.mrpId,
+  );
 
   const isExpanded = expandedId === mrp.id;
   const isDragging = draggingId === mrp.id;
@@ -287,6 +301,15 @@ export function MRPCard({ mrp }: Props) {
     },
     {
       kind: "action",
+      icon: mrp.pinned ? <PinOff size={13} /> : <Pin size={13} />,
+      label: mrp.pinned ? "Unpin (allow compaction)" : "Pin (exempt from compaction)",
+      onSelect: () => {
+        if (serverMrpId) void toggleMrpPinned(serverMrpId);
+      },
+      disabled: !serverMrpId,
+    },
+    {
+      kind: "action",
       icon: <GitFork size={13} />,
       label: forkActsOnBundle
         ? `Fork from bundle (${checkedCount})`
@@ -335,8 +358,15 @@ export function MRPCard({ mrp }: Props) {
         zIndex: isDragging ? 30 : 5,
       }}
       data-checked={mrp.checked ? "true" : undefined}
+      data-pinned={mrp.pinned ? "true" : undefined}
+      data-compacted={mrp.compacted ? "true" : undefined}
       data-object-id={mrp.id}
-      className={cn("mrp-card-wrap", isDragging && "is-dragging")}
+      className={cn(
+        "mrp-card-wrap",
+        isDragging && "is-dragging",
+        mrp.compacted && "is-compacted",
+        mrp.pinned && "is-pinned",
+      )}
       onContextMenu={onContextMenu}
     >
       <motion.div
@@ -373,9 +403,19 @@ export function MRPCard({ mrp }: Props) {
             <GripHorizontal />
           </span>
           <span className="mrp-seq">MRP · {String(mrp.sequence).padStart(4, "0")}</span>
+          {mrp.pinned && (
+            <span className="mrp-pin-glyph" title="Pinned — exempt from compaction">
+              <Pin size={11} />
+            </span>
+          )}
+          {mrp.compacted && (
+            <span className="mrp-compacted-glyph" title={`Compacted at turn ${mrp.compactedAtSeq ?? mrp.sequence}`}>
+              ⫶
+            </span>
+          )}
           <span className="mrp-drag-spacer" />
           <span className="mrp-drag-side">
-            {mrp.external ? "EXTERNAL" : cardState.toUpperCase()}
+            {mrp.compacted ? "COMPACTED" : mrp.external ? "EXTERNAL" : cardState.toUpperCase()}
           </span>
           <button
             type="button"

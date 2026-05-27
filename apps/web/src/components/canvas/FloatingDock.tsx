@@ -15,6 +15,7 @@ import {
   History as HistoryIcon,
   Layers,
   Maximize2,
+  Minimize2,
   Pin,
   Search,
   X,
@@ -63,6 +64,13 @@ type SlashExecContext = {
   setSidebarTab: (tab: "search" | "bundles" | "branches" | "imports" | "history") => void;
   focusSidebarSearch: () => void;
   createChildFromSelection: () => Promise<void> | void;
+  compactCanvas: (mrpIds?: string[]) => Promise<void> | void;
+  /** Currently-checked CanvasObject ids — for scoped commands like
+   *  bundle-fork or bundle-compact. */
+  checkedObjectIds: string[];
+  /** Map placement.id → server mrpId. Bundle-scoped commands that
+   *  speak to the server in MRP terms (like /compact) need this. */
+  placementToMrpId: (placementId: string) => string | undefined;
   flagError: (msg: string) => void;
 };
 
@@ -145,6 +153,22 @@ const SLASH_COMMANDS: SlashCommand[] = [
       closeDock();
     },
   },
+  {
+    name: "compact",
+    /* Bundle-scoped iff the user has cards checked, otherwise compact
+     * everything past the prior snapshot up to the working-set tail. */
+    label: "Compact conversation into a STATE snapshot",
+    icon: Minimize2,
+    exec: ({ compactCanvas, checkedObjectIds, placementToMrpId, setDraft, closeDock, flagError }) => {
+      const mrpIds = checkedObjectIds
+        .map((id) => placementToMrpId(id))
+        .filter((m): m is string => Boolean(m));
+      void Promise.resolve(compactCanvas(mrpIds.length > 0 ? mrpIds : undefined))
+        .catch((e) => flagError(e instanceof Error ? e.message : "compact failed"));
+      setDraft("");
+      closeDock();
+    },
+  },
 ];
 
 /* Render the dock with mount/exit animation managed via AnimatePresence. */
@@ -201,6 +225,7 @@ function FloatingDock() {
   const setSidebarTab = useCanvas((s) => s.setSidebarTab);
   const focusSidebarSearch = useCanvas((s) => s.focusSidebarSearch);
   const createChildCanvasFromSelection = useFlowuxStore((s) => s.createChildCanvasFromSelection);
+  const compactCurrentCanvas = useFlowuxStore((s) => s.compactCurrentCanvas);
   // Stable handle to push a one-shot error into the topbar status pill.
   const flagError = (msg: string) => useFlowuxStore.setState({ error: msg });
 
@@ -229,6 +254,11 @@ function FloatingDock() {
   }, [slashMatches.length, slashSelected]);
 
   const execSlash = (cmd: SlashCommand) => {
+    const checkedObjectIds = useCanvas
+      .getState()
+      .objects.filter((o) => o.checked)
+      .map((o) => o.id);
+    const snapshot = useFlowuxStore.getState().snapshot;
     cmd.exec({
       closeDock,
       setDraft,
@@ -237,6 +267,10 @@ function FloatingDock() {
       setSidebarTab,
       focusSidebarSearch,
       createChildFromSelection: createChildCanvasFromSelection,
+      compactCanvas: compactCurrentCanvas,
+      checkedObjectIds,
+      placementToMrpId: (placementId: string) =>
+        snapshot?.placements.find((p) => p.id === placementId)?.mrpId,
       flagError,
     });
   };

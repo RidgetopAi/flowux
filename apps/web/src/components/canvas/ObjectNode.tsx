@@ -1,6 +1,7 @@
 import type { CanvasObject } from "../../lib/store";
 import { MRPCard } from "./MRPCard";
 import { ImageCard } from "./ImageCard";
+import { StateCard } from "./StateCard";
 import { ToolCallChip } from "./ToolCallChip";
 
 /**
@@ -19,6 +20,8 @@ export function ObjectNode({ object }: Props) {
       return <ImageCard image={object} />;
     case "tool_call":
       return <ToolCallChip tool={object} />;
+    case "state":
+      return <StateCard state={object} />;
     default:
       // Exhaustiveness guard — if a new variant gets added to CanvasObject
       // without a case here, TypeScript will complain at compile time.

@@ -48,6 +48,12 @@ interface FlowuxState {
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
   setAllContextSelection: (selectedForContext: boolean) => Promise<void>;
   snapBack: (layout?: api.LayoutRequest) => Promise<void>;
+  /** Trigger compaction on the current canvas. Optional mrpIds scopes
+   *  to specific cards (bundle compaction); omitted = compact everything
+   *  past the prior snapshot range up to the working-set tail. */
+  compactCurrentCanvas: (mrpIds?: string[]) => Promise<void>;
+  /** Toggle pin on an MRP. Uses optimistic local update + server PATCH. */
+  toggleMrpPinned: (mrpId: string) => Promise<void>;
 }
 
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
@@ -316,6 +322,52 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       await api.cancelPrompt(canvasId);
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to cancel prompt" });
+    }
+  },
+
+  async compactCurrentCanvas(mrpIds) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    try {
+      await api.compactCanvas(canvasId, mrpIds && mrpIds.length ? { mrpIds, trigger: "user" } : { trigger: "user" });
+      /* Reload to pull the new snapshot row + compacted MRP flags. The
+       *  client store is read-only for snapshots/compaction state — server
+       *  is the source of truth so we don't risk drift. */
+      await get().reloadCanvas(canvasId);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Compaction failed" });
+    }
+  },
+
+  async toggleMrpPinned(mrpId) {
+    const snapshot = get().snapshot;
+    if (!snapshot) return;
+    const current = snapshot.mrps.find((m) => m.id === mrpId);
+    if (!current) return;
+    const nextPinned = !current.pinned;
+    /* Optimistic update — flip locally so the pin icon responds instantly.
+     *  Server roundtrip lands either way; on error we revert. */
+    set({
+      snapshot: {
+        ...snapshot,
+        mrps: snapshot.mrps.map((m) => (m.id === mrpId ? { ...m, pinned: nextPinned } : m))
+      }
+    });
+    try {
+      await api.setMrpPinned(mrpId, nextPinned);
+    } catch (error) {
+      // Revert on failure.
+      set((state) => ({
+        snapshot: state.snapshot
+          ? {
+              ...state.snapshot,
+              mrps: state.snapshot.mrps.map((m) =>
+                m.id === mrpId ? { ...m, pinned: current.pinned } : m
+              )
+            }
+          : state.snapshot,
+        error: error instanceof Error ? error.message : "Pin failed"
+      }));
     }
   },
 

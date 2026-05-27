@@ -5,13 +5,15 @@ import type {
   ModelRun,
   Mrp,
   MrpEvent,
-  MrpStatus as ServerMrpStatus
+  MrpStatus as ServerMrpStatus,
+  StateSnapshot
 } from "@flowux/shared";
 import type {
   CanvasObject,
   ImageObject,
   MRPObject,
   MRPStatus,
+  StateObject,
   ToolCallObject,
   ToolCallStatus
 } from "./store";
@@ -74,6 +76,13 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
     objects.push(
       toMRPObject(placement, mrp, runByMrpId.get(mrp.id), branchOutCountByMrpId.get(mrp.id)),
     );
+  }
+
+  /* State snapshots — render every snapshot as a STATE card so the
+   *  history is visible spatially, with the active one called out. */
+  const activeSnapshotId = snapshot.canvas.activeSnapshotId;
+  for (const stateSnap of snapshot.stateSnapshots ?? []) {
+    objects.push(toStateObject(stateSnap, stateSnap.id === activeSnapshotId));
   }
 
   // Track per-placement whether an image already occupies the right slot
@@ -239,7 +248,32 @@ export function toMRPObject(
     tokens: modelRun?.totalTokens ?? 0,
     timestamp: mrp.createdAt,
     external: placement.isExternalReference ? true : undefined,
-    branchOutCount: branchOutCount && branchOutCount > 0 ? branchOutCount : undefined
+    branchOutCount: branchOutCount && branchOutCount > 0 ? branchOutCount : undefined,
+    pinned: mrp.pinned ? true : undefined,
+    compacted: mrp.compactedBySnapshotId ? true : undefined,
+    compactedAtSeq: mrp.compactedAtSeq
+  };
+}
+
+export function toStateObject(snapshot: StateSnapshot, active: boolean): StateObject {
+  return {
+    type: "state",
+    id: `state-${snapshot.id}`,
+    x: snapshot.x,
+    y: snapshot.y,
+    width: snapshot.width,
+    height: snapshot.height,
+    checked: false,
+    snapshotId: snapshot.id,
+    version: snapshot.version,
+    coveredFromSeq: snapshot.coveredFromSeq,
+    coveredToSeq: snapshot.coveredToSeq,
+    coveredCount: snapshot.coveredMrpIds.length,
+    state: snapshot.state,
+    generatedBy: snapshot.generatedBy,
+    generatedAt: snapshot.generatedAt,
+    editedByUser: snapshot.editedByUser,
+    active
   };
 }
 
