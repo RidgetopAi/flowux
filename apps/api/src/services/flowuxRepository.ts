@@ -35,8 +35,10 @@ import {
   mrpBlocks,
   mrpEvents,
   mrps,
-  mrpSections
+  mrpSections,
+  stateSnapshots
 } from "../db/schema.js";
+import type { StateSnapshot } from "@flowux/shared";
 import { createHarnessAdapter } from "../harness/index.js";
 import type { TokenUsage } from "../model/adapter.js";
 
@@ -207,6 +209,11 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     .from(branches)
     .where(eq(branches.childCanvasId, canvasId));
   const bundleRows = await db.select().from(contextBundles).where(eq(contextBundles.canvasId, canvasId));
+  const snapshotRows = await db
+    .select()
+    .from(stateSnapshots)
+    .where(eq(stateSnapshots.canvasId, canvasId))
+    .orderBy(stateSnapshots.version);
 
   return {
     canvas: toCanvasThread(canvas),
@@ -218,7 +225,8 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     events: events.map(toMrpEvent),
     artifacts: artifactRows.map(toArtifact),
     branches: [...branchRows, ...parentBranchRows].map(toBranch),
-    contextBundles: bundleRows.map(toContextBundle)
+    contextBundles: bundleRows.map(toContextBundle),
+    stateSnapshots: snapshotRows.map(toStateSnapshot)
   };
 }
 
@@ -1125,7 +1133,32 @@ function toCanvasThread(row: typeof canvasThreads.$inferSelect): CanvasThread {
     ...(row.parentCanvasId ? { parentCanvasId: row.parentCanvasId } : {}),
     ...(row.parentBranchId ? { parentBranchId: row.parentBranchId } : {}),
     ...(row.summary ? { summary: row.summary } : {}),
-    ...(row.modelConfigId ? { modelConfigId: row.modelConfigId } : {})
+    ...(row.modelConfigId ? { modelConfigId: row.modelConfigId } : {}),
+    ...(row.activeSnapshotId ? { activeSnapshotId: row.activeSnapshotId } : {}),
+    ...(row.workingSetSize !== null && row.workingSetSize !== undefined ? { workingSetSize: row.workingSetSize } : {}),
+    ...(row.autoCompactThreshold !== null && row.autoCompactThreshold !== undefined ? { autoCompactThreshold: row.autoCompactThreshold } : {})
+  };
+}
+
+function toStateSnapshot(row: typeof stateSnapshots.$inferSelect): StateSnapshot {
+  return {
+    id: row.id,
+    canvasId: row.canvasId,
+    version: row.version,
+    ...(row.parentSnapshotId ? { parentSnapshotId: row.parentSnapshotId } : {}),
+    state: row.state,
+    generatedBy: row.generatedBy,
+    generatedAt: row.generatedAt,
+    triggeredBy: row.triggeredBy,
+    coveredMrpIds: row.coveredMrpIds,
+    coveredFromSeq: row.coveredFromSeq,
+    coveredToSeq: row.coveredToSeq,
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: row.height,
+    editedByUser: row.editedByUser,
+    ...(row.editHistory ? { editHistory: row.editHistory } : {})
   };
 }
 
@@ -1153,7 +1186,10 @@ function toMrp(row: typeof mrps.$inferSelect): Mrp {
     status: row.status,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    ...(row.modelRunId ? { modelRunId: row.modelRunId } : {})
+    ...(row.modelRunId ? { modelRunId: row.modelRunId } : {}),
+    ...(row.pinned ? { pinned: true } : {}),
+    ...(row.compactedBySnapshotId ? { compactedBySnapshotId: row.compactedBySnapshotId } : {}),
+    ...(row.compactedAtSeq !== null && row.compactedAtSeq !== undefined ? { compactedAtSeq: row.compactedAtSeq } : {})
   };
 }
 

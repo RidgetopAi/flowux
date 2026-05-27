@@ -77,6 +77,17 @@ export interface CanvasThread {
   parentBranchId?: string;
   summary?: string;
   modelConfigId?: string;
+  /** Pointer to the currently authoritative state snapshot for this
+   *  canvas. When set, context assembly uses snapshot + pinned + last
+   *  workingSetSize raw turns. When null, behavior is unchanged (all
+   *  selected MRPs ride along verbatim — today's baseline). */
+  activeSnapshotId?: string;
+  /** Number of most-recent non-pinned, non-compacted MRPs that ride
+   *  verbatim in context after the snapshot prelude. Default 8. */
+  workingSetSize?: number;
+  /** Percent-of-context-window at which auto-compaction triggers
+   *  (e.g. 75). null/undefined = manual /compact only. */
+  autoCompactThreshold?: number;
 }
 
 export interface Mrp {
@@ -91,6 +102,21 @@ export interface Mrp {
   createdAt: string;
   updatedAt: string;
   modelRunId?: string;
+  /** User-pinned MRPs are exempt from compaction. They ALWAYS ride
+   *  along verbatim in context after a snapshot prelude. Use this for
+   *  cards that capture a load-bearing decision, a long-lived constraint,
+   *  or anything you don't want the model to forget. */
+  pinned?: boolean;
+  /** When set, this MRP has been folded into the named state snapshot
+   *  and no longer rides in context (the snapshot speaks for it). The
+   *  MRP card stays on canvas — rendered muted — and remains drillable
+   *  for inspection or retrieval. Cleared if a later snapshot revert
+   *  un-covers it. */
+  compactedBySnapshotId?: string;
+  /** The MRP sequence at which compaction occurred — preserved so we
+   *  can show "compacted at turn N" in the UI even if the MRP is later
+   *  removed from a working set or shifted. */
+  compactedAtSeq?: number;
 }
 
 export interface CanvasPlacement {
@@ -156,6 +182,105 @@ export interface Branch {
   sourceMrpIds: string[];
   createdAt: string;
   label?: string;
+}
+
+/* ── State snapshots (compaction memory model) ─────────────────────────
+ * A state snapshot is a STRUCTURED summary of conversation state — not a
+ * narrative blob. It captures goals, decisions (with WHY), facts learned,
+ * artifacts in play, and open questions. Each compaction surgically
+ * updates a prior snapshot; versions are kept so a compaction can be
+ * rolled back. The snapshot is a first-class canvas object (rendered as
+ * a STATE card) and is editable by the user. */
+
+export type StateGoalStatus = "active" | "blocked" | "done";
+
+export interface StateGoal {
+  text: string;
+  status: StateGoalStatus;
+  /** ISO timestamp when the goal entered its current status. Lets the
+   *  UI render "blocked since…" or "completed at…" without losing context. */
+  since: string;
+}
+
+export interface StateDecision {
+  /** The decision itself, in plain language. */
+  what: string;
+  /** Why it was made — the load-bearing part Claude Code's compact
+   *  typically loses. Reasoning enables intelligent revisits. */
+  why: string;
+  /** Optional anchor back to the MRP where the decision crystallized. */
+  mrpId?: string;
+  at: string;
+}
+
+export type StateArtifactKind = "file" | "url" | "concept" | "other";
+
+export interface StateArtifact {
+  kind: StateArtifactKind;
+  /** Stable identifier: file path, full URL, concept name, etc. */
+  identifier: string;
+  /** What this artifact is, in this conversation's context.
+   *  E.g. "the main entry point we're refactoring" or "the spec we're following". */
+  role: string;
+}
+
+export interface StateFact {
+  text: string;
+  /** MRP IDs that established this fact — lets the UI jump back to the
+   *  source turns if the user wants to verify or rehydrate context. */
+  sources?: string[];
+}
+
+export interface StateOpenQuestion {
+  text: string;
+  raisedBy?: string;
+}
+
+/** The structured body of a state snapshot — the JSON the model is asked
+ *  to produce + the user is allowed to edit. */
+export interface StateDocument {
+  /** One- to two-sentence "where we are right now" statement. */
+  summary: string;
+  goals: StateGoal[];
+  decisions: StateDecision[];
+  artifacts: StateArtifact[];
+  facts: StateFact[];
+  openQuestions: StateOpenQuestion[];
+}
+
+export type StateSnapshotTrigger = "user" | "auto" | "manual_edit";
+
+export interface StateSnapshot {
+  id: string;
+  canvasId: string;
+  /** Monotonic version per canvas (1, 2, 3, …). Latest version is the
+   *  one canvas_threads.activeSnapshotId points to. */
+  version: number;
+  /** Prior version's id (null for the first snapshot of a canvas). */
+  parentSnapshotId?: string;
+  state: StateDocument;
+  /** Model id that generated this snapshot (e.g. "xai/grok-4.3"). */
+  generatedBy: string;
+  generatedAt: string;
+  triggeredBy: StateSnapshotTrigger;
+  /** Explicit list of MRPs this snapshot covers, in sequence order.
+   *  Sourcing this on the snapshot row (rather than deriving from
+   *  mrps.compactedBySnapshotId) lets future versions diff cleanly. */
+  coveredMrpIds: string[];
+  coveredFromSeq: number;
+  coveredToSeq: number;
+  /** Spatial placement on the canvas — the STATE card has to live
+   *  somewhere. Mirrors canvas_placements for MRPs. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Marks the snapshot as having been edited by the user (so the next
+   *  compaction knows to treat it as a corrected baseline rather than
+   *  re-summarize). */
+  editedByUser: boolean;
+  /** Optional edit trail for diagnostics. */
+  editHistory?: Array<{ at: string; fieldPath: string }>;
 }
 
 export interface ContextBundle {
@@ -261,6 +386,11 @@ export interface CanvasSnapshot {
   artifacts: Artifact[];
   branches: Branch[];
   contextBundles: ContextBundle[];
+  /** Every state snapshot ever taken on this canvas, oldest → newest.
+   *  The active one (if any) is canvas.activeSnapshotId. Older versions
+   *  ride along so the UI can build a history sidebar without an extra
+   *  fetch. */
+  stateSnapshots: StateSnapshot[];
 }
 
 export interface MrpDetails {
@@ -322,4 +452,22 @@ export interface ContextEstimateResponse {
   canvasId: string;
   prompt: string;
   budget: ContextBudget;
+}
+
+export interface CompactCanvasRequest {
+  /** Optional explicit MRP id list to compact. When omitted, the server
+   *  picks everything between the last snapshot and (latest sequence
+   *  − workingSetSize), exempting pinned MRPs. */
+  mrpIds?: string[];
+  /** "user" for manual /compact, "auto" for threshold-triggered. */
+  trigger?: StateSnapshotTrigger;
+}
+
+export interface CompactCanvasResponse {
+  snapshot: StateSnapshot;
+  /** The MRPs that were folded into this snapshot (returned so the
+   *  client can update its local state without a snapshot reload). */
+  compactedMrpIds: string[];
+  /** Updated canvas thread row (activeSnapshotId is now the new snapshot). */
+  canvas: CanvasThread;
 }

@@ -121,7 +121,32 @@ const statements = [
     started_at TEXT NOT NULL,
     completed_at TEXT,
     error TEXT
-  )`
+  )`,
+  /* state_snapshots — structured compaction memory. See packages/shared
+     StateDocument for the JSON shape of `state`. */
+  `CREATE TABLE IF NOT EXISTS state_snapshots (
+    id TEXT PRIMARY KEY,
+    canvas_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    parent_snapshot_id TEXT,
+    state TEXT NOT NULL,
+    generated_by TEXT NOT NULL,
+    generated_at TEXT NOT NULL,
+    triggered_by TEXT NOT NULL,
+    covered_mrp_ids TEXT NOT NULL,
+    covered_from_seq INTEGER NOT NULL,
+    covered_to_seq INTEGER NOT NULL,
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    edited_by_user INTEGER NOT NULL,
+    edit_history TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_state_snapshots_canvas
+   ON state_snapshots(canvas_id, version DESC)`
+  /* idx_mrps_compacted_by lives after the ALTER below — sqlite refuses
+     to index a column that doesn't exist yet on first run. */
 ];
 
 for (const statement of statements) {
@@ -135,5 +160,21 @@ if (!hasModelRunColumn("total_tokens")) sqlite.exec("ALTER TABLE model_runs ADD 
 if (!hasModelRunColumn("timing_ms")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN timing_ms INTEGER");
 if (!hasModelRunColumn("finish_reason")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN finish_reason TEXT");
 if (!hasModelRunColumn("metadata")) sqlite.exec("ALTER TABLE model_runs ADD COLUMN metadata TEXT");
+
+/* ── Compaction columns on existing tables (idempotent) ─────────────── */
+const canvasThreadColumns = sqlite.prepare("PRAGMA table_info(canvas_threads)").all() as Array<{ name: string }>;
+const hasCanvasThreadColumn = (name: string) => canvasThreadColumns.some((c) => c.name === name);
+if (!hasCanvasThreadColumn("active_snapshot_id")) sqlite.exec("ALTER TABLE canvas_threads ADD COLUMN active_snapshot_id TEXT");
+if (!hasCanvasThreadColumn("working_set_size")) sqlite.exec("ALTER TABLE canvas_threads ADD COLUMN working_set_size INTEGER");
+if (!hasCanvasThreadColumn("auto_compact_threshold")) sqlite.exec("ALTER TABLE canvas_threads ADD COLUMN auto_compact_threshold INTEGER");
+
+const mrpColumns = sqlite.prepare("PRAGMA table_info(mrps)").all() as Array<{ name: string }>;
+const hasMrpColumn = (name: string) => mrpColumns.some((c) => c.name === name);
+if (!hasMrpColumn("pinned")) sqlite.exec("ALTER TABLE mrps ADD COLUMN pinned INTEGER");
+if (!hasMrpColumn("compacted_by_snapshot_id")) sqlite.exec("ALTER TABLE mrps ADD COLUMN compacted_by_snapshot_id TEXT");
+if (!hasMrpColumn("compacted_at_seq")) sqlite.exec("ALTER TABLE mrps ADD COLUMN compacted_at_seq INTEGER");
+
+/* Index on the compaction column lands AFTER the column itself exists. */
+sqlite.exec("CREATE INDEX IF NOT EXISTS idx_mrps_compacted_by ON mrps(compacted_by_snapshot_id)");
 
 console.log("Flowux database is ready.");

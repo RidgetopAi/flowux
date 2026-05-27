@@ -10,7 +10,10 @@ export const canvasThreads = sqliteTable("canvas_threads", {
   parentCanvasId: text("parent_canvas_id"),
   parentBranchId: text("parent_branch_id"),
   summary: text("summary"),
-  modelConfigId: text("model_config_id")
+  modelConfigId: text("model_config_id"),
+  activeSnapshotId: text("active_snapshot_id"),
+  workingSetSize: integer("working_set_size"),
+  autoCompactThreshold: integer("auto_compact_threshold")
 });
 
 export const mrps = sqliteTable("mrps", {
@@ -24,7 +27,35 @@ export const mrps = sqliteTable("mrps", {
   status: text("status", { enum: ["pending", "streaming", "complete", "error"] }).notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-  modelRunId: text("model_run_id")
+  modelRunId: text("model_run_id"),
+  pinned: integer("pinned", { mode: "boolean" }),
+  compactedBySnapshotId: text("compacted_by_snapshot_id"),
+  compactedAtSeq: integer("compacted_at_seq")
+});
+
+/* ── State snapshots ───────────────────────────────────────────────────
+ * Structured compaction memory. One row per compaction; latest version
+ * per canvas is the authoritative snapshot. `state` is the JSON body
+ * (matches the StateDocument shared type). Versions are immutable except
+ * for user-edits, which set editedByUser=true and append to editHistory. */
+export const stateSnapshots = sqliteTable("state_snapshots", {
+  id: text("id").primaryKey(),
+  canvasId: text("canvas_id").notNull(),
+  version: integer("version").notNull(),
+  parentSnapshotId: text("parent_snapshot_id"),
+  state: text("state", { mode: "json" }).$type<import("@flowux/shared").StateDocument>().notNull(),
+  generatedBy: text("generated_by").notNull(),
+  generatedAt: text("generated_at").notNull(),
+  triggeredBy: text("triggered_by", { enum: ["user", "auto", "manual_edit"] }).notNull(),
+  coveredMrpIds: text("covered_mrp_ids", { mode: "json" }).$type<string[]>().notNull(),
+  coveredFromSeq: integer("covered_from_seq").notNull(),
+  coveredToSeq: integer("covered_to_seq").notNull(),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  editedByUser: integer("edited_by_user", { mode: "boolean" }).notNull(),
+  editHistory: text("edit_history", { mode: "json" }).$type<Array<{ at: string; fieldPath: string }>>()
 });
 
 export const canvasPlacements = sqliteTable("canvas_placements", {
