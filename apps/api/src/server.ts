@@ -8,6 +8,7 @@ import {
   applyContextBundle,
   buildMessagesForPrompt,
   buildPromptContextBudget,
+  compactCanvas,
   completePromptMrp,
   createCanvas,
   createChildCanvasFromSelection,
@@ -20,6 +21,7 @@ import {
   listCanvases,
   saveContextBundleFromSelection,
   searchWorkspace,
+  setMrpPinned,
   snapBack,
   deleteCanvas,
   updateCanvasStatus,
@@ -261,6 +263,45 @@ app.patch<{ Params: { canvasId: string }; Body: { selectedForContext?: boolean }
   "/api/canvases/:canvasId/placements",
   async (request) => {
     return updateCanvasSelection(request.params.canvasId, Boolean(request.body?.selectedForContext));
+  }
+);
+
+/* ── Compaction ───────────────────────────────────────────────────── */
+app.post<{
+  Params: { canvasId: string };
+  Body: { mrpIds?: string[]; trigger?: "user" | "auto" | "manual_edit" };
+}>("/api/canvases/:canvasId/compact", async (request, reply) => {
+  try {
+    const result = await compactCanvas(request.params.canvasId, {
+      ...(request.body?.mrpIds ? { mrpIds: request.body.mrpIds } : {}),
+      ...(request.body?.trigger ? { trigger: request.body.trigger } : {})
+    });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "compaction_failed";
+    if (message === "canvas_not_found") return reply.code(404).send({ error: message });
+    if (message === "nothing_to_compact") return reply.code(400).send({ error: message });
+    if (message.startsWith("compaction_parse_failed")) {
+      return reply.code(502).send({ error: "compaction_parse_failed", detail: message });
+    }
+    return reply.code(500).send({ error: message });
+  }
+});
+
+app.patch<{ Params: { mrpId: string }; Body: { pinned?: boolean } }>(
+  "/api/mrps/:mrpId",
+  async (request, reply) => {
+    if (typeof request.body?.pinned !== "boolean") {
+      return reply.code(400).send({ error: "pinned_required" });
+    }
+    try {
+      const mrp = await setMrpPinned(request.params.mrpId, request.body.pinned);
+      return mrp;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "pin_failed";
+      if (message === "mrp_not_found") return reply.code(404).send({ error: message });
+      return reply.code(500).send({ error: message });
+    }
   }
 );
 

@@ -24,7 +24,13 @@ import {
   type SearchResponse,
   type UploadedAttachment
 } from "@flowux/shared";
+import type {
+  CompactCanvasResponse,
+  StateDocument,
+  StateSnapshotTrigger
+} from "@flowux/shared";
 import { db } from "../db/client.js";
+import { createHarnessAdapter } from "../harness/index.js";
 import {
   branches,
   canvasPlacements,
@@ -39,7 +45,6 @@ import {
   stateSnapshots
 } from "../db/schema.js";
 import type { StateSnapshot } from "@flowux/shared";
-import { createHarnessAdapter } from "../harness/index.js";
 import type { TokenUsage } from "../model/adapter.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1090,11 +1095,26 @@ export async function buildMessagesForPrompt(canvasId: string, prompt: string) {
     ? await db.select().from(mrps).where(inArray(mrps.id, contextMrpIds)).orderBy(mrps.sequence)
     : [];
 
+  /* Load the active state snapshot (if compaction has been done on this
+   *  canvas) so buildContextMessages can render it as the prelude that
+   *  replaces compacted turns. Also pull in pinned MRP ids so they're
+   *  exempt from compaction filtering and workingSetSize truncation. */
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  let stateSnapshot: ReturnType<typeof toStateSnapshot> | undefined;
+  if (canvas?.activeSnapshotId) {
+    const [row] = await db.select().from(stateSnapshots).where(eq(stateSnapshots.id, canvas.activeSnapshotId));
+    if (row) stateSnapshot = toStateSnapshot(row);
+  }
+  const pinnedMrpIds = canvasMrps.filter((m) => m.pinned).map((m) => m.id);
+
   return buildContextMessages({
     mrps: canvasMrps.map(toMrp).filter((mrp) => mrp.status === "complete"),
     selectedMrpIds: contextMrpIds,
     systemPrompt: "You are Flowux, a spatial AI workspace assistant. Preserve project reasoning and answer concisely.",
-    currentPrompt: prompt
+    currentPrompt: prompt,
+    ...(stateSnapshot ? { stateSnapshot } : {}),
+    ...(pinnedMrpIds.length ? { pinnedMrpIds } : {}),
+    ...(canvas?.workingSetSize ? { workingSetSize: canvas.workingSetSize } : {})
   });
 }
 
@@ -1357,4 +1377,329 @@ function slimSummaryEventRow(row: MrpEventRow): MrpEventRow {
     },
   };
   return { ...row, payload: slimmed };
+}
+
+/* ── Compaction ───────────────────────────────────────────────────────
+ * Generates a new state snapshot covering a range of MRPs, persists it,
+ * marks the covered MRPs, and updates the canvas's activeSnapshotId.
+ * Used by /compact slash command, future auto-trigger, and bundle-scoped
+ * compaction. */
+
+const STATE_CARD_WIDTH = 480;
+const STATE_CARD_HEIGHT = 320;
+const STATE_CARD_GAP_Y = 360;
+const SNAPSHOT_RETRY_LIMIT = 1;
+
+const SNAPSHOT_SYSTEM_PROMPT = `You are maintaining the canonical state document for an ongoing technical conversation between a developer (the user) and an AI assistant. The state document captures everything important about the work: goals, decisions (with reasoning), facts learned, artifacts in play, and unresolved questions.
+
+You will receive:
+1. The PREVIOUS state snapshot (as JSON), or "(none)" if this is the first compaction.
+2. NEW raw conversation turns to fold into the state.
+
+Your job: produce an UPDATED state document that:
+- Carries forward what is still true from the prior snapshot.
+- Marks goals as "done" or "blocked" when the new turns show that.
+- Adds new goals, decisions, facts, artifacts, and open questions that emerged.
+- Preserves the WHY for every decision — reasoning is load-bearing.
+- Captures concise, durable signal — not chronological narration.
+- Drops nothing important.
+
+Output STRICTLY valid JSON matching this schema:
+
+{
+  "summary": "1-2 sentence statement of where the work stands now",
+  "goals": [
+    { "text": "...", "status": "active" | "blocked" | "done", "since": "<iso date>" }
+  ],
+  "decisions": [
+    { "what": "the choice that was made", "why": "the reasoning behind it",
+      "mrpId": "(optional) source MRP id", "at": "<iso date>" }
+  ],
+  "artifacts": [
+    { "kind": "file" | "url" | "concept" | "other",
+      "identifier": "path / url / name",
+      "role": "what this is in the conversation" }
+  ],
+  "facts": [
+    { "text": "the fact", "sources": ["(optional) mrp-id", ...] }
+  ],
+  "openQuestions": [
+    { "text": "...", "raisedBy": "(optional) mrp-id" }
+  ]
+}
+
+Rules:
+- Output ONLY the JSON object. No markdown code fences. No prose before or after.
+- Every array must be present (use [] if empty).
+- "summary" is required and non-empty.
+- ISO dates are full ISO-8601 strings.`;
+
+export async function compactCanvas(
+  canvasId: string,
+  opts: { mrpIds?: string[]; trigger?: StateSnapshotTrigger } = {}
+): Promise<CompactCanvasResponse> {
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  if (!canvas) throw new Error("canvas_not_found");
+
+  const activeSnapshotRow = canvas.activeSnapshotId
+    ? (await db.select().from(stateSnapshots).where(eq(stateSnapshots.id, canvas.activeSnapshotId)))[0]
+    : undefined;
+
+  const allCompleted = await db
+    .select()
+    .from(mrps)
+    .where(and(eq(mrps.canvasId, canvasId), eq(mrps.status, "complete")))
+    .orderBy(mrps.sequence);
+
+  const workingSize = canvas.workingSetSize ?? 8;
+
+  /* Resolve the target MRPs. Scoped (opts.mrpIds provided) = exactly
+   *  those, minus pinned/already-compacted. Unscoped = everything past
+   *  the prior snapshot's covered range up to (latest − workingSetSize),
+   *  minus pinned. */
+  let targets: typeof allCompleted;
+  if (opts.mrpIds && opts.mrpIds.length) {
+    const wanted = new Set(opts.mrpIds);
+    targets = allCompleted.filter(
+      (m) => wanted.has(m.id) && !m.pinned && !m.compactedBySnapshotId
+    );
+  } else {
+    const priorEnd = activeSnapshotRow?.coveredToSeq ?? -1;
+    const candidates = allCompleted.filter((m) => m.sequence > priorEnd && !m.compactedBySnapshotId);
+    const cutoff = Math.max(0, candidates.length - workingSize);
+    targets = candidates.slice(0, cutoff).filter((m) => !m.pinned);
+  }
+
+  if (targets.length === 0) {
+    throw new Error("nothing_to_compact");
+  }
+
+  /* Generate the new state document via the active harness model. */
+  const adapter = createHarnessAdapter();
+  const newState = await generateStateDocument(
+    adapter,
+    activeSnapshotRow ? (activeSnapshotRow.state as StateDocument) : undefined,
+    targets.map(toMrp)
+  );
+
+  /* Pick a spatial placement for the STATE card. Park it above the
+   *  topmost covered MRP placement so the spatial flow reads:
+   *  STATE card → compacted (muted) MRPs → recent verbatim MRPs. */
+  const targetIds = targets.map((m) => m.id);
+  const targetPlacements = targetIds.length
+    ? await db
+        .select()
+        .from(canvasPlacements)
+        .where(and(eq(canvasPlacements.canvasId, canvasId), inArray(canvasPlacements.mrpId, targetIds)))
+    : [];
+  const minX = targetPlacements.length ? Math.min(...targetPlacements.map((p) => p.x)) : 0;
+  const minY = targetPlacements.length ? Math.min(...targetPlacements.map((p) => p.y)) : 0;
+
+  const snapshotId = id();
+  const timestamp = now();
+  const newVersion = (activeSnapshotRow?.version ?? 0) + 1;
+  const coveredFromSeq = activeSnapshotRow?.coveredFromSeq ?? targets[0]!.sequence;
+  const coveredToSeq = targets[targets.length - 1]!.sequence;
+  const coveredMrpIds = [
+    ...(activeSnapshotRow?.coveredMrpIds ?? []),
+    ...targetIds
+  ];
+
+  const insertRow: typeof stateSnapshots.$inferInsert = {
+    id: snapshotId,
+    canvasId,
+    version: newVersion,
+    parentSnapshotId: activeSnapshotRow?.id ?? null,
+    state: newState,
+    generatedBy: `${adapter.provider}/${adapter.model}`,
+    generatedAt: timestamp,
+    triggeredBy: opts.trigger ?? "user",
+    coveredMrpIds,
+    coveredFromSeq,
+    coveredToSeq,
+    x: minX,
+    y: minY - STATE_CARD_GAP_Y,
+    width: STATE_CARD_WIDTH,
+    height: STATE_CARD_HEIGHT,
+    editedByUser: false,
+    editHistory: null
+  };
+
+  await db.insert(stateSnapshots).values(insertRow);
+  await db
+    .update(canvasThreads)
+    .set({ activeSnapshotId: snapshotId, updatedAt: timestamp })
+    .where(eq(canvasThreads.id, canvasId));
+  for (const m of targets) {
+    await db
+      .update(mrps)
+      .set({
+        compactedBySnapshotId: snapshotId,
+        compactedAtSeq: m.sequence,
+        updatedAt: timestamp
+      })
+      .where(eq(mrps.id, m.id));
+  }
+
+  const [updatedCanvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  const [persistedSnapshot] = await db.select().from(stateSnapshots).where(eq(stateSnapshots.id, snapshotId));
+
+  return {
+    snapshot: toStateSnapshot(persistedSnapshot!),
+    compactedMrpIds: targetIds,
+    canvas: toCanvasThread(updatedCanvas!)
+  };
+}
+
+export async function setMrpPinned(mrpId: string, pinned: boolean): Promise<Mrp> {
+  const timestamp = now();
+  await db.update(mrps).set({ pinned, updatedAt: timestamp }).where(eq(mrps.id, mrpId));
+  const [row] = await db.select().from(mrps).where(eq(mrps.id, mrpId));
+  if (!row) throw new Error("mrp_not_found");
+  return toMrp(row);
+}
+
+/* ── Snapshot generation helpers ──────────────────────────────────── */
+
+async function generateStateDocument(
+  adapter: ReturnType<typeof createHarnessAdapter>,
+  priorState: StateDocument | undefined,
+  newTurns: Mrp[]
+): Promise<StateDocument> {
+  const priorJson = priorState ? JSON.stringify(priorState, null, 2) : "(none)";
+  const turnsBlock = newTurns
+    .map(
+      (m) =>
+        `Turn ${m.sequence} [${m.id}]:\nUSER: ${m.userPrompt}\nASSISTANT: ${m.assistantResponse}`
+    )
+    .join("\n\n---\n\n");
+  const basePrompt = `Previous state snapshot:\n${priorJson}\n\nNew raw turns:\n${turnsBlock}\n\nProduce the updated state document JSON now.`;
+
+  let lastError: string | undefined;
+  for (let attempt = 0; attempt <= SNAPSHOT_RETRY_LIMIT; attempt++) {
+    const promptForAttempt = lastError
+      ? `${basePrompt}\n\nIMPORTANT: your previous response failed to parse (${lastError}). Output ONLY the JSON object — no fences, no prose, no comments.`
+      : basePrompt;
+    const responseText = await runCompactionGeneration(adapter, SNAPSHOT_SYSTEM_PROMPT, promptForAttempt);
+    try {
+      return parseStateDocument(responseText);
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  throw new Error(`compaction_parse_failed: ${lastError ?? "unknown"}`);
+}
+
+async function runCompactionGeneration(
+  adapter: ReturnType<typeof createHarnessAdapter>,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  /* Synthetic ids — the adapter doesn't persist anything itself; the
+   *  server writes mrp_events from the event stream. Since we consume
+   *  the stream here (not via the server's appendMrpEvent loop) these
+   *  ids never touch the DB. */
+  const syntheticCanvasId = "compaction";
+  const syntheticMrpId = `compaction-mrp-${id()}`;
+  const syntheticRunId = `compaction-run-${id()}`;
+  let text = "";
+  let errMsg: string | undefined;
+
+  for await (const event of adapter.generate({
+    messages: [{ role: "system", content: systemPrompt }],
+    prompt: userPrompt,
+    canvasId: syntheticCanvasId,
+    mrpId: syntheticMrpId,
+    modelRunId: syntheticRunId
+  })) {
+    if (event.type === "response_delta") text += event.text;
+    if (event.type === "error") {
+      errMsg = event.message;
+      break;
+    }
+    if (event.type === "done") break;
+  }
+  if (errMsg) throw new Error(errMsg);
+  if (!text.trim()) throw new Error("empty_compaction_response");
+  return text;
+}
+
+function parseStateDocument(raw: string): StateDocument {
+  let s = raw.trim();
+  /* Strip markdown fences defensively — the model is asked not to use
+   *  them but small models sometimes do. */
+  const fence = s.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
+  if (fence?.[1]) s = fence[1].trim();
+  /* Carve out the outermost JSON object — handles stray prose. */
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("no_json_object");
+  }
+  s = s.slice(start, end + 1);
+  const parsed = JSON.parse(s) as Record<string, unknown>;
+  const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+  if (!summary) throw new Error("missing_summary");
+
+  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  const obj = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
+
+  const goals = arr(parsed.goals)
+    .map(obj)
+    .filter((g): g is Record<string, unknown> => Boolean(g))
+    .map((g) => ({
+      text: str(g.text),
+      status: (g.status === "blocked" || g.status === "done" ? g.status : "active") as
+        | "active"
+        | "blocked"
+        | "done",
+      since: str(g.since, new Date().toISOString())
+    }))
+    .filter((g) => g.text);
+
+  const decisions = arr(parsed.decisions)
+    .map(obj)
+    .filter((d): d is Record<string, unknown> => Boolean(d))
+    .map((d) => ({
+      what: str(d.what),
+      why: str(d.why),
+      ...(typeof d.mrpId === "string" ? { mrpId: d.mrpId } : {}),
+      at: str(d.at, new Date().toISOString())
+    }))
+    .filter((d) => d.what);
+
+  const artifacts = arr(parsed.artifacts)
+    .map(obj)
+    .filter((a): a is Record<string, unknown> => Boolean(a))
+    .map((a) => {
+      const kind = a.kind === "file" || a.kind === "url" || a.kind === "concept" ? a.kind : "other";
+      return {
+        kind: kind as "file" | "url" | "concept" | "other",
+        identifier: str(a.identifier),
+        role: str(a.role)
+      };
+    })
+    .filter((a) => a.identifier);
+
+  const facts = arr(parsed.facts)
+    .map(obj)
+    .filter((f): f is Record<string, unknown> => Boolean(f))
+    .map((f) => ({
+      text: str(f.text),
+      ...(Array.isArray(f.sources) ? { sources: f.sources.filter((s): s is string => typeof s === "string") } : {})
+    }))
+    .filter((f) => f.text);
+
+  const openQuestions = arr(parsed.openQuestions)
+    .map(obj)
+    .filter((q): q is Record<string, unknown> => Boolean(q))
+    .map((q) => ({
+      text: str(q.text),
+      ...(typeof q.raisedBy === "string" ? { raisedBy: q.raisedBy } : {})
+    }))
+    .filter((q) => q.text);
+
+  return { summary, goals, decisions, artifacts, facts, openQuestions };
 }

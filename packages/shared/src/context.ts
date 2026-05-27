@@ -1,4 +1,11 @@
-import type { ContextBudget, ContextMessage, ContextMode, Mrp } from "./types.js";
+import type {
+  ContextBudget,
+  ContextMessage,
+  ContextMode,
+  Mrp,
+  StateDocument,
+  StateSnapshot
+} from "./types.js";
 
 export interface BuildContextInput {
   mrps: Mrp[];
@@ -7,10 +14,24 @@ export interface BuildContextInput {
   systemPrompt?: string;
   projectInstructions?: string;
   currentPrompt: string;
+  /** Active state snapshot for this canvas, if compaction has been
+   *  performed. When present, the snapshot is rendered as a structured
+   *  prelude message right after the system prompt — replacing the raw
+   *  turns it covers. */
+  stateSnapshot?: StateSnapshot;
+  /** Pinned MRPs are always included verbatim after the snapshot —
+   *  exempt from compaction and from workingSetSize truncation. */
+  pinnedMrpIds?: string[];
+  /** When set, the non-pinned/non-snapshot-covered raw turns are
+   *  truncated to the most-recent N. Only applied when stateSnapshot
+   *  is also present (otherwise existing canvases would suddenly start
+   *  losing context — bad). */
+  workingSetSize?: number;
 }
 
 export function buildContextMessages(input: BuildContextInput): ContextMessage[] {
   const selected = new Set(input.selectedMrpIds);
+  const pinned = new Set(input.pinnedMrpIds ?? []);
   const modes = input.modeByMrpId ?? {};
   const messages: ContextMessage[] = [];
 
@@ -22,9 +43,40 @@ export function buildContextMessages(input: BuildContextInput): ContextMessage[]
     messages.push({ role: "user", content: `Project instructions:\n${input.projectInstructions.trim()}` });
   }
 
-  const selectedMrps = input.mrps
+  if (input.stateSnapshot) {
+    messages.push({
+      role: "user",
+      content: renderStateSnapshotMarkdown(input.stateSnapshot)
+    });
+  }
+
+  /* MRP filtering pipeline:
+   *  1. Drop unselected.
+   *  2. Drop covered-by-snapshot UNLESS the user explicitly checked them
+   *     into the bundle (selectedForContext overrides compaction — "I
+   *     want this in context right now") OR they're pinned.
+   *  3. Sort by sequence.
+   *  4. If a snapshot is active AND workingSetSize is set, cap the
+   *     non-pinned tail. Pinned MRPs always pass through. */
+  const coveredIds = new Set(input.stateSnapshot?.coveredMrpIds ?? []);
+  let selectedMrps = input.mrps
     .filter((mrp) => selected.has(mrp.id))
+    .filter((mrp) => {
+      // Pinned + explicitly bundle-checked always ride.
+      if (pinned.has(mrp.id)) return true;
+      // Compacted (and not pinned, not explicitly re-selected via bundle UX)
+      // ride only when the user hasn't compacted them away.
+      if (coveredIds.has(mrp.id)) return false;
+      return true;
+    })
     .sort((a, b) => a.sequence - b.sequence);
+
+  if (input.stateSnapshot && input.workingSetSize && input.workingSetSize > 0) {
+    const pinnedHits = selectedMrps.filter((m) => pinned.has(m.id));
+    const rest = selectedMrps.filter((m) => !pinned.has(m.id));
+    const restTail = rest.slice(-input.workingSetSize);
+    selectedMrps = [...pinnedHits, ...restTail].sort((a, b) => a.sequence - b.sequence);
+  }
 
   for (const mrp of selectedMrps) {
     const mode = modes[mrp.id] ?? "full_mrp";
@@ -48,6 +100,90 @@ export function buildContextMessages(input: BuildContextInput): ContextMessage[]
 
   messages.push({ role: "user", content: input.currentPrompt });
   return messages;
+}
+
+/* ── Snapshot rendering ───────────────────────────────────────────────
+ * Render the structured state document as markdown for injection into
+ * model context. Markdown reads more naturally than JSON for the model,
+ * and we keep the JSON as the source of truth in the DB. Done goals are
+ * suppressed (no value re-listing completed work). */
+export function renderStateSnapshotMarkdown(snapshot: StateSnapshot): string {
+  return renderStateDocumentMarkdown(snapshot.state, {
+    version: snapshot.version,
+    generatedAt: snapshot.generatedAt,
+    coveredRange: { from: snapshot.coveredFromSeq, to: snapshot.coveredToSeq }
+  });
+}
+
+export function renderStateDocumentMarkdown(
+  state: StateDocument,
+  meta?: { version?: number; generatedAt?: string; coveredRange?: { from: number; to: number } }
+): string {
+  const lines: string[] = [];
+  const header = meta?.version !== undefined
+    ? `## State Snapshot (v${meta.version})`
+    : "## State Snapshot";
+  lines.push(header);
+
+  if (meta?.coveredRange) {
+    lines.push(
+      `*Covers turns ${meta.coveredRange.from}–${meta.coveredRange.to}. Use this as the authoritative summary of earlier conversation; raw turns above this range have been compacted into this snapshot.*`
+    );
+  }
+  lines.push("");
+  lines.push(`**Where we are:** ${state.summary || "(no summary)"}`);
+
+  const activeGoals = state.goals.filter((g) => g.status !== "done");
+  if (activeGoals.length) {
+    lines.push("");
+    lines.push("**Active goals:**");
+    for (const g of activeGoals) {
+      const since = g.since ? ` (${g.status} since ${shortDate(g.since)})` : "";
+      lines.push(`- ${g.text}${since}`);
+    }
+  }
+
+  if (state.decisions.length) {
+    lines.push("");
+    lines.push("**Decisions made:**");
+    for (const d of state.decisions) {
+      lines.push(`- **${d.what}** — *because* ${d.why}`);
+    }
+  }
+
+  if (state.facts.length) {
+    lines.push("");
+    lines.push("**Key facts learned:**");
+    for (const f of state.facts) {
+      lines.push(`- ${f.text}`);
+    }
+  }
+
+  if (state.artifacts.length) {
+    lines.push("");
+    lines.push("**Artifacts in play:**");
+    for (const a of state.artifacts) {
+      lines.push(`- ${a.identifier} — ${a.role}`);
+    }
+  }
+
+  if (state.openQuestions.length) {
+    lines.push("");
+    lines.push("**Open questions:**");
+    for (const q of state.openQuestions) {
+      lines.push(`- ${q.text}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function shortDate(iso: string): string {
+  try {
+    return new Date(iso).toISOString().slice(0, 10);
+  } catch {
+    return iso;
+  }
 }
 
 export function estimateContextBudget(input: {
