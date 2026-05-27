@@ -8,6 +8,7 @@ import { ConnectionLayer } from "./ConnectionLayer";
 import { CanvasControls } from "./CanvasControls";
 import { CanvasHud } from "./CanvasHud";
 import { ExpandedMRPLayer } from "./ExpandedMRP";
+import { ExpandedStateLayer } from "./ExpandedState";
 import { FloatingDockLayer } from "./FloatingDock";
 import { Minimap } from "./Minimap";
 import { Label } from "../primitives/Label";
@@ -187,11 +188,12 @@ export function Canvas() {
     if (!el) return;
 
     const onWheel = (e: WheelEvent) => {
-      // Expanded MRP overlay is rendered inside the canvas surface, so its
-      // wheel events bubble up here. Let the browser handle native scroll
-      // inside the overlay instead of eating it for canvas pan/zoom.
+      // Expanded MRP / STATE overlays are rendered inside the canvas
+      // surface, so their wheel events bubble up here. Let the browser
+      // handle native scroll inside the overlay instead of eating it for
+      // canvas pan/zoom.
       const target = e.target as HTMLElement | null;
-      if (target && target.closest(".xmrp-portal")) return;
+      if (target && (target.closest(".xmrp-portal") || target.closest(".xstate-portal"))) return;
 
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
@@ -372,10 +374,12 @@ export function Canvas() {
     // If the pointer is on a card (or its descendants), don't pan/select.
     const target = e.target as HTMLElement;
     if (target.closest("[data-canvas-card]")) return;
-    // If the expanded-MRP overlay is up and the pointer is inside it,
-    // don't pan (and don't dismiss via setExpanded(null) below). Backdrop
-    // click handles its own dismiss; pane scrollbars need pointer events.
+    // If an expanded overlay is up and the pointer is inside it, don't
+    // pan (and don't dismiss via setExpanded(null) below). Backdrop click
+    // handles its own dismiss; pane scrollbars need pointer events. Both
+    // MRP and STATE overlays use the .x*-portal pattern.
     if (target.closest(".xmrp-portal")) return;
+    if (target.closest(".xstate-portal")) return;
 
     setExpanded(null);
 
@@ -576,6 +580,9 @@ export function Canvas() {
 
       {/* ── Expanded MRP overlay (focus = lift-off, full-screen 2-pane) ── */}
       <ExpandedMRPLayer />
+
+      {/* ── Expanded STATE overlay (read + edit a compaction snapshot) ── */}
+      <ExpandedStateLayer />
     </div>
   );
 }

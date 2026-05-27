@@ -1,0 +1,364 @@
+/* ─── EXPANDED STATE ────────────────────────────────────────────────
+   Full-screen read + edit surface for a compaction snapshot. Shares
+   the phosphor-glass family with ExpandedMRP (xmrp__*) but at a more
+   intimate width — the user is reading structured fields, not a wide
+   prompt/response. */
+
+.xstate-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: grid;
+  place-items: center;
+  padding: 56px;
+  pointer-events: none;
+}
+
+.canvas[data-has-dock="true"] .xstate-portal {
+  place-items: start center;
+  padding: 24px 40px var(--dock-reserve, 56px);
+}
+
+.xstate-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 3, 3, 0.62);
+  backdrop-filter: blur(14px) saturate(0.7);
+  -webkit-backdrop-filter: blur(14px) saturate(0.7);
+  pointer-events: auto;
+}
+
+.canvas[data-has-dock="true"] .xstate-backdrop {
+  bottom: var(--dock-reserve, 0);
+}
+
+/* ── The card ─────────────────────────────────────────────────────── */
+.xstate {
+  position: relative;
+  width: min(880px, 100%);
+  height: min(820px, calc(100vh - 112px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  transition: height var(--dur-base) var(--ease-out-quart);
+  border: 1px solid rgba(168, 255, 241, 0.42);
+  border-radius: var(--r-xl);
+  background:
+    linear-gradient(180deg, rgba(168, 255, 241, 0.05), transparent 200px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 100px),
+    var(--glass-deep);
+  box-shadow:
+    inset 0 0 0 1px rgba(168, 255, 241, 0.18),
+    0 0 64px rgba(168, 255, 241, 0.20),
+    0 40px 120px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  overflow: hidden;
+  pointer-events: auto;
+  color: var(--ink);
+}
+
+.canvas[data-has-dock="true"] .xstate {
+  height: min(680px, calc(100vh - 24px - var(--dock-reserve, 56px) - 8px));
+}
+
+.xstate--historic {
+  border-color: rgba(123, 132, 124, 0.32);
+  box-shadow:
+    inset 0 0 0 1px rgba(123, 132, 124, 0.16),
+    0 30px 60px rgba(0, 0, 0, 0.5);
+  filter: saturate(0.85);
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.xstate__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(168, 255, 241, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 56px;
+}
+
+.xstate__head-l,
+.xstate__head-r {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.xstate__head-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(168, 255, 241, 0.22);
+}
+
+.xstate > .braille-band {
+  height: 12px;
+  padding: 0 20px;
+  opacity: 0.45;
+}
+
+/* ── Body ─────────────────────────────────────────────────────────── */
+.xstate__body {
+  padding: 24px 28px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 255, 241, 0.28) transparent;
+}
+
+.xstate__body::-webkit-scrollbar { width: 8px; }
+.xstate__body::-webkit-scrollbar-thumb {
+  background: rgba(168, 255, 241, 0.28);
+  border-radius: 4px;
+}
+.xstate__body::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.xstate__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.xstate__section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(233, 237, 232, 0.10);
+}
+
+.xstate__section-head .braille-band {
+  flex: 1;
+  min-width: 0;
+}
+
+.xstate__section-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--cyan-dim);
+}
+
+.xstate__section-count {
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan-sm);
+}
+
+.xstate__section--summary .xstate__summary {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ink);
+  padding-left: 14px;
+  border-left: 2px solid rgba(168, 255, 241, 0.5);
+  margin: 0;
+}
+
+/* ── Lists ────────────────────────────────────────────────────────── */
+.xstate__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.xstate__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--soft);
+  border-bottom: 1px dashed rgba(233, 237, 232, 0.06);
+}
+
+.xstate__row:last-child {
+  border-bottom: 0;
+}
+
+.xstate__row--decision {
+  align-items: flex-start;
+}
+
+.xstate__row--question {
+  color: var(--ink);
+}
+
+.xstate__row.is-blocked {
+  color: var(--amber);
+}
+
+.xstate__row--done {
+  opacity: 0.65;
+}
+
+.xstate__row-text {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.xstate__row-text strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.xstate__why {
+  color: var(--muted);
+}
+
+.xstate__row code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cyan);
+}
+
+.xstate__dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan-dim);
+  transform: translateY(6px);
+}
+
+.xstate__dot--amber {
+  background: var(--amber);
+}
+
+.xstate__kind {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 2px 6px;
+  border: 1px solid rgba(123, 132, 124, 0.3);
+  border-radius: 3px;
+  margin-top: 4px;
+}
+
+.xstate__empty {
+  color: var(--faint);
+  font-style: italic;
+  font-size: 13px;
+}
+
+.xstate__empty--row {
+  padding: 6px 0;
+  margin: 0;
+}
+
+/* ── Done goals (collapsed) ───────────────────────────────────────── */
+.xstate__done {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px dashed rgba(123, 132, 124, 0.3);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.xstate__done > summary {
+  cursor: pointer;
+  color: var(--soft);
+  user-select: none;
+}
+
+/* ── Edit mode ────────────────────────────────────────────────────── */
+.xstate__row--edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(168, 255, 241, 0.12);
+}
+
+.xstate__row--decision-edit {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.xstate__row--decision-edit .xstate__field:first-child {
+  font-weight: 500;
+}
+
+.xstate__row--artifact-edit {
+  grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
+.xstate__row--edit .xstate__select {
+  grid-row: 1 / span 99;
+}
+
+.xstate__row--decision-edit .xstate__field {
+  grid-column: 1;
+}
+
+.xstate__row--decision-edit > button {
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.xstate__field {
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(168, 255, 241, 0.22);
+  border-radius: var(--r-sm);
+  padding: 8px 10px;
+  resize: vertical;
+  outline: none;
+  min-width: 0;
+  width: 100%;
+  font-family: var(--font-sans);
+}
+
+.xstate__field:focus {
+  border-color: rgba(168, 255, 241, 0.6);
+  box-shadow: 0 0 0 1px rgba(168, 255, 241, 0.35);
+}
+
+.xstate__field--summary {
+  font-size: 16px;
+  min-height: 64px;
+}
+
+.xstate__select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--cyan);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(168, 255, 241, 0.22);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.xstate__select:focus {
+  border-color: rgba(168, 255, 241, 0.6);
+  outline: none;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+.xstate__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid rgba(168, 255, 241, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  min-height: 36px;
+  flex-wrap: wrap;
+}

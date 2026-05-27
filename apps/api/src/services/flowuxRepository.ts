@@ -1551,6 +1551,48 @@ export async function compactCanvas(
   };
 }
 
+export async function editStateSnapshot(
+  canvasId: string,
+  snapshotId: string,
+  patch: Partial<StateDocument>
+): Promise<import("@flowux/shared").StateSnapshot> {
+  const [row] = await db.select().from(stateSnapshots).where(eq(stateSnapshots.id, snapshotId));
+  if (!row) throw new Error("snapshot_not_found");
+  if (row.canvasId !== canvasId) throw new Error("snapshot_canvas_mismatch");
+
+  /* Merge surgically — only overwrite fields the caller provided so
+   *  partial edits don't blow away whole sections. Arrays are wholesale
+   *  replaced when present (caller is responsible for sending the full
+   *  list). summary, if sent, must remain non-empty. */
+  const current = row.state as StateDocument;
+  if (patch.summary !== undefined && !patch.summary.trim()) {
+    throw new Error("summary_required");
+  }
+  const merged: StateDocument = {
+    summary: patch.summary ?? current.summary,
+    goals: patch.goals ?? current.goals,
+    decisions: patch.decisions ?? current.decisions,
+    artifacts: patch.artifacts ?? current.artifacts,
+    facts: patch.facts ?? current.facts,
+    openQuestions: patch.openQuestions ?? current.openQuestions
+  };
+
+  const timestamp = now();
+  const editEntries = Object.keys(patch);
+  const nextHistory = [
+    ...(row.editHistory ?? []),
+    ...editEntries.map((fieldPath) => ({ at: timestamp, fieldPath }))
+  ];
+
+  await db
+    .update(stateSnapshots)
+    .set({ state: merged, editedByUser: true, editHistory: nextHistory })
+    .where(eq(stateSnapshots.id, snapshotId));
+
+  const [updated] = await db.select().from(stateSnapshots).where(eq(stateSnapshots.id, snapshotId));
+  return toStateSnapshot(updated!);
+}
+
 export async function setMrpPinned(mrpId: string, pinned: boolean): Promise<Mrp> {
   const timestamp = now();
   await db.update(mrps).set({ pinned, updatedAt: timestamp }).where(eq(mrps.id, mrpId));

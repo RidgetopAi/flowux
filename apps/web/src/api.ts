@@ -190,6 +190,18 @@ export async function setMrpPinned(mrpId: string, pinned: boolean): Promise<Mrp>
   });
 }
 
+export async function editStateSnapshot(
+  canvasId: string,
+  snapshotId: string,
+  patch: Partial<import("@flowux/shared").StateDocument>
+): Promise<import("@flowux/shared").StateSnapshot> {
+  return fetchJson(`/api/canvases/${canvasId}/state-snapshots/${snapshotId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch)
+  });
+}
+
 export async function streamPrompt(
   canvasId: string,
   prompt: string,

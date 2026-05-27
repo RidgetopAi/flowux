@@ -14,6 +14,7 @@ import {
   createChildCanvasFromSelection,
   createPromptMrp,
   deleteContextBundle,
+  editStateSnapshot,
   failPromptMrp,
   getCanvasSnapshot,
   getMrpDetails,
@@ -304,6 +305,26 @@ app.patch<{ Params: { mrpId: string }; Body: { pinned?: boolean } }>(
     }
   }
 );
+
+app.patch<{
+  Params: { canvasId: string; snapshotId: string };
+  Body: Partial<import("@flowux/shared").StateDocument>;
+}>("/api/canvases/:canvasId/state-snapshots/:snapshotId", async (request, reply) => {
+  try {
+    const snapshot = await editStateSnapshot(
+      request.params.canvasId,
+      request.params.snapshotId,
+      request.body ?? {}
+    );
+    return snapshot;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "snapshot_edit_failed";
+    if (message === "snapshot_not_found") return reply.code(404).send({ error: message });
+    if (message === "snapshot_canvas_mismatch") return reply.code(400).send({ error: message });
+    if (message === "summary_required") return reply.code(400).send({ error: message });
+    return reply.code(500).send({ error: message });
+  }
+});
 
 app.post<{
   Params: { canvasId: string };

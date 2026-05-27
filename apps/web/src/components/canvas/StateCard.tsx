@@ -32,13 +32,24 @@ export function StateCard({ state }: Props) {
   const setDragging = useCanvas((s) => s.setDragging);
   const setCursor = useCanvas((s) => s.setCursor);
 
+  const setExpanded = useCanvas((s) => s.setExpanded);
+
   const isDragging = draggingId === state.id;
   const isCursor = cursorId === state.id;
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  useEffect(() => () => undefined, []);
+  /* Two-tap-to-expand mirrors MRPCard's pattern — single tap moves the
+   *  cursor here (for keyboard nav), double-tap within 280ms opens the
+   *  full read/edit overlay. */
+  const tapTimerRef = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (tapTimerRef.current !== null) window.clearTimeout(tapTimerRef.current);
+    },
+    [],
+  );
 
   const onDragStart = () => {
     setDragging(state.id);
@@ -54,6 +65,15 @@ export function StateCard({ state }: Props) {
 
   const onTap = () => {
     setCursor(state.id);
+    if (tapTimerRef.current !== null) {
+      window.clearTimeout(tapTimerRef.current);
+      tapTimerRef.current = null;
+      setExpanded(state.id);
+      return;
+    }
+    tapTimerRef.current = window.setTimeout(() => {
+      tapTimerRef.current = null;
+    }, 280);
   };
 
   const doc = state.state;

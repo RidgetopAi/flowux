@@ -54,6 +54,12 @@ interface FlowuxState {
   compactCurrentCanvas: (mrpIds?: string[]) => Promise<void>;
   /** Toggle pin on an MRP. Uses optimistic local update + server PATCH. */
   toggleMrpPinned: (mrpId: string) => Promise<void>;
+  /** Save edited fields back to a state snapshot. Marks editedByUser
+   *  on the server, optimistically updates the local snapshot list. */
+  saveStateSnapshotEdit: (
+    snapshotId: string,
+    patch: Partial<import("@flowux/shared").StateDocument>
+  ) => Promise<void>;
 }
 
 export const useFlowuxStore = create<FlowuxState>((set, get) => ({
@@ -334,8 +340,38 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
        *  client store is read-only for snapshots/compaction state — server
        *  is the source of truth so we don't risk drift. */
       await get().reloadCanvas(canvasId);
+      /* Auto-frame the canvas so the brand-new STATE card (which sits
+       *  above the compacted region, often off the user's current pan)
+       *  is immediately visible. Done via a dynamic import to avoid a
+       *  circular dependency between useFlowuxStore and useCanvas. */
+      try {
+        const mod = await import("./lib/store");
+        mod.useCanvas.getState().zoomToFit?.();
+      } catch {
+        /* Non-fatal if the canvas store isn't loaded for some reason. */
+      }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Compaction failed" });
+    }
+  },
+
+  async saveStateSnapshotEdit(snapshotId, patch) {
+    const snapshot = get().snapshot;
+    if (!snapshot) return;
+    try {
+      const updated = await api.editStateSnapshot(snapshot.canvas.id, snapshotId, patch);
+      set((state) => ({
+        snapshot: state.snapshot
+          ? {
+              ...state.snapshot,
+              stateSnapshots: state.snapshot.stateSnapshots.map((s) =>
+                s.id === snapshotId ? updated : s
+              )
+            }
+          : state.snapshot
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Snapshot edit failed" });
     }
   },
 
