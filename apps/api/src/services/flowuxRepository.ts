@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   buildContextMessages,
   estimateContextBudget,
+  normalizeStateDocument,
   type Branch,
   type CanvasPlacement,
   type CanvasSnapshot,
@@ -1166,7 +1167,9 @@ function toStateSnapshot(row: typeof stateSnapshots.$inferSelect): StateSnapshot
     canvasId: row.canvasId,
     version: row.version,
     ...(row.parentSnapshotId ? { parentSnapshotId: row.parentSnapshotId } : {}),
-    state: row.state,
+    /* Coerce older snapshots (pre nextStep/constraints/rejected) into the
+     *  full shape so the UI and renderer can rely on every field. */
+    state: normalizeStateDocument(row.state as Partial<StateDocument>),
     generatedBy: row.generatedBy,
     generatedAt: row.generatedAt,
     triggeredBy: row.triggeredBy,
@@ -1390,38 +1393,55 @@ const STATE_CARD_HEIGHT = 320;
 const STATE_CARD_GAP_Y = 360;
 const SNAPSHOT_RETRY_LIMIT = 1;
 
-const SNAPSHOT_SYSTEM_PROMPT = `You are maintaining the canonical state document for an ongoing technical conversation between a developer (the user) and an AI assistant. The state document captures everything important about the work: goals, decisions (with reasoning), facts learned, artifacts in play, and unresolved questions.
+const SNAPSHOT_SYSTEM_PROMPT = `You are maintaining the canonical STATE for an ongoing technical conversation between a developer (the user) and an AI assistant. This is NOT a summary of what happened — it is the operating context a fresh agent would need to resume the work correctly WITHOUT the original transcript.
+
+Write for the next agent. The bar you must clear: given ONLY your state document (no transcript), could someone correctly answer — what is the goal, what is the single next action, what must not be changed, what has been decided and why, what has been ruled out, and which facts are solid versus still assumptions?
 
 You will receive:
 1. The PREVIOUS state snapshot (as JSON), or "(none)" if this is the first compaction.
 2. NEW raw conversation turns to fold into the state.
 
-Your job: produce an UPDATED state document that:
-- Carries forward what is still true from the prior snapshot.
-- Marks goals as "done" or "blocked" when the new turns show that.
-- Adds new goals, decisions, facts, artifacts, and open questions that emerged.
-- Preserves the WHY for every decision — reasoning is load-bearing.
-- Captures concise, durable signal — not chronological narration.
-- Drops nothing important.
+Produce an UPDATED state document that:
+- Carries forward what is still true from the prior snapshot; updates what changed.
+- Marks goals "done" or "blocked" when the new turns show that.
+- Names the single most useful NEXT STEP.
+- Preserves the WHY behind every decision — reasoning is load-bearing; without it the next agent re-litigates settled choices.
+- Records approaches that were tried or considered and ruled out, and why, so they are not blindly re-attempted.
+- Captures hard user requirements / non-negotiables as constraints, kept as close to the user's exact wording as possible.
+- Preserves brittle, exact tokens VERBATIM — error messages, file paths, commands, API/schema names, exact user quotes. Never paraphrase these.
+- Distinguishes established facts ("known") from guesses ("assumed") and things still to confirm ("needs_verification").
+- Captures concise, durable signal — not chronological narration. Omit social filler and abandoned tangents, EXCEPT where a dead end is itself load-bearing negative knowledge (record it under "rejected").
+- Drops nothing that would change the next action.
 
 Output STRICTLY valid JSON matching this schema:
 
 {
   "summary": "1-2 sentence statement of where the work stands now",
+  "nextStep": "the single most useful next action (empty string if there genuinely is none)",
   "goals": [
     { "text": "...", "status": "active" | "blocked" | "done", "since": "<iso date>" }
+  ],
+  "constraints": [
+    { "text": "a hard requirement / non-negotiable, verbatim where possible",
+      "source": "(optional) mrp-id" }
   ],
   "decisions": [
     { "what": "the choice that was made", "why": "the reasoning behind it",
       "mrpId": "(optional) source MRP id", "at": "<iso date>" }
   ],
+  "facts": [
+    { "text": "the fact, with any exact tokens preserved verbatim",
+      "confidence": "known" | "assumed" | "needs_verification",
+      "sources": ["(optional) mrp-id", ...] }
+  ],
+  "rejected": [
+    { "approach": "what was tried or considered", "why": "why it was ruled out",
+      "mrpId": "(optional) source MRP id" }
+  ],
   "artifacts": [
     { "kind": "file" | "url" | "concept" | "other",
       "identifier": "path / url / name",
       "role": "what this is in the conversation" }
-  ],
-  "facts": [
-    { "text": "the fact", "sources": ["(optional) mrp-id", ...] }
   ],
   "openQuestions": [
     { "text": "...", "raisedBy": "(optional) mrp-id" }
@@ -1431,7 +1451,8 @@ Output STRICTLY valid JSON matching this schema:
 Rules:
 - Output ONLY the JSON object. No markdown code fences. No prose before or after.
 - Every array must be present (use [] if empty).
-- "summary" is required and non-empty.
+- "summary" is required and non-empty. "nextStep" is always present (use "" if genuinely none).
+- "facts" default to "known" if you omit confidence — so set "assumed" or "needs_verification" explicitly when warranted.
 - ISO dates are full ISO-8601 strings.`;
 
 export async function compactCanvas(
@@ -1564,16 +1585,21 @@ export async function editStateSnapshot(
    *  partial edits don't blow away whole sections. Arrays are wholesale
    *  replaced when present (caller is responsible for sending the full
    *  list). summary, if sent, must remain non-empty. */
-  const current = row.state as StateDocument;
+  /* Normalize the stored doc first — snapshots written before the
+   *  nextStep/constraints/rejected fields existed lack them. */
+  const current = normalizeStateDocument(row.state as Partial<StateDocument>);
   if (patch.summary !== undefined && !patch.summary.trim()) {
     throw new Error("summary_required");
   }
   const merged: StateDocument = {
     summary: patch.summary ?? current.summary,
+    nextStep: patch.nextStep ?? current.nextStep,
     goals: patch.goals ?? current.goals,
+    constraints: patch.constraints ?? current.constraints,
     decisions: patch.decisions ?? current.decisions,
-    artifacts: patch.artifacts ?? current.artifacts,
     facts: patch.facts ?? current.facts,
+    rejected: patch.rejected ?? current.rejected,
+    artifacts: patch.artifacts ?? current.artifacts,
     openQuestions: patch.openQuestions ?? current.openQuestions
   };
 
@@ -1736,6 +1762,9 @@ function parseStateDocument(raw: string): StateDocument {
     .filter((f): f is Record<string, unknown> => Boolean(f))
     .map((f) => ({
       text: str(f.text),
+      ...(f.confidence === "known" || f.confidence === "assumed" || f.confidence === "needs_verification"
+        ? { confidence: f.confidence as "known" | "assumed" | "needs_verification" }
+        : {}),
       ...(Array.isArray(f.sources) ? { sources: f.sources.filter((s): s is string => typeof s === "string") } : {})
     }))
     .filter((f) => f.text);
@@ -1749,5 +1778,26 @@ function parseStateDocument(raw: string): StateDocument {
     }))
     .filter((q) => q.text);
 
-  return { summary, goals, decisions, artifacts, facts, openQuestions };
+  const nextStep = typeof parsed.nextStep === "string" ? parsed.nextStep.trim() : "";
+
+  const constraints = arr(parsed.constraints)
+    .map(obj)
+    .filter((c): c is Record<string, unknown> => Boolean(c))
+    .map((c) => ({
+      text: str(c.text),
+      ...(typeof c.source === "string" ? { source: c.source } : {})
+    }))
+    .filter((c) => c.text);
+
+  const rejected = arr(parsed.rejected)
+    .map(obj)
+    .filter((r): r is Record<string, unknown> => Boolean(r))
+    .map((r) => ({
+      approach: str(r.approach),
+      why: str(r.why),
+      ...(typeof r.mrpId === "string" ? { mrpId: r.mrpId } : {})
+    }))
+    .filter((r) => r.approach);
+
+  return { summary, nextStep, goals, constraints, decisions, facts, rejected, artifacts, openQuestions };
 }

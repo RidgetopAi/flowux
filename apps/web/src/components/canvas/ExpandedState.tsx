@@ -12,15 +12,21 @@ import {
   RotateCcw,
   Plus,
   Trash2,
+  ArrowRight,
+  Lock,
+  Ban,
 } from "lucide-react";
 import type {
   StateArtifact,
   StateArtifactKind,
+  StateConstraint,
   StateDecision,
   StateDocument,
   StateFact,
+  StateFactConfidence,
   StateGoalStatus,
   StateOpenQuestion,
+  StateRejected,
 } from "@flowux/shared";
 import { useCanvas, type StateObject } from "../../lib/store";
 import { useFlowuxStore } from "../../store.js";
@@ -96,10 +102,13 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
      *  enough for v1 — snapshots are small. */
     await saveStateSnapshotEdit(state.snapshotId, {
       summary: draft.summary,
+      nextStep: draft.nextStep,
       goals: draft.goals,
+      constraints: draft.constraints,
       decisions: draft.decisions,
-      artifacts: draft.artifacts,
       facts: draft.facts,
+      rejected: draft.rejected,
+      artifacts: draft.artifacts,
       openQuestions: draft.openQuestions,
     });
     setSaving(false);
@@ -188,6 +197,27 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
             )}
           </section>
 
+          {/* Next Step — the single most useful next action */}
+          <section className="xstate__section xstate__section--nextstep">
+            <header className="xstate__section-head">
+              <span className="xstate__section-icon"><ArrowRight size={14} /></span>
+              <Label size="micro" tone="cyan">NEXT STEP</Label>
+            </header>
+            {editing ? (
+              <textarea
+                className="xstate__field xstate__field--summary"
+                value={draft.nextStep}
+                onChange={(e) => setDraft({ ...draft, nextStep: e.target.value })}
+                placeholder="The single most useful next action for whoever resumes this work."
+                rows={2}
+              />
+            ) : (
+              <p className="xstate__summary xstate__nextstep">
+                {doc.nextStep || <em className="xstate__empty">no next step recorded</em>}
+              </p>
+            )}
+          </section>
+
           {/* Active Goals */}
           <ListSection
             icon={<ListChecks size={14} />}
@@ -242,6 +272,45 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
                   <span className="xstate__dot" />
                   <span className="xstate__row-text">{g.text}</span>
                   {g.status === "blocked" && <Pill tone="amber">blocked</Pill>}
+                </div>
+              );
+            })}
+          </ListSection>
+
+          {/* Constraints / non-negotiables */}
+          <ListSection
+            icon={<Lock size={14} />}
+            label="Constraints"
+            count={doc.constraints.length}
+            editing={editing}
+            onAdd={() =>
+              setDraft({ ...draft, constraints: [...draft.constraints, { text: "" } as StateConstraint] })
+            }
+          >
+            {doc.constraints.length === 0 && !editing && (
+              <p className="xstate__empty xstate__empty--row">— none —</p>
+            )}
+            {doc.constraints.map((c, i) => {
+              const idx = editing ? draft.constraints.indexOf(c) : -1;
+              return editing ? (
+                <div key={idx} className="xstate__row xstate__row--edit">
+                  <textarea
+                    className="xstate__field"
+                    value={c.text}
+                    rows={1}
+                    placeholder="A hard requirement / non-negotiable (verbatim where it matters)"
+                    onChange={(e) =>
+                      updateListItem(draft, setDraft, "constraints", idx, { ...c, text: e.target.value })
+                    }
+                  />
+                  <DeleteBtn
+                    onClick={() => removeListItem(draft, setDraft, "constraints", idx)}
+                  />
+                </div>
+              ) : (
+                <div key={i} className="xstate__row xstate__row--constraint">
+                  <span className="xstate__dot xstate__dot--cyan" />
+                  <span className="xstate__row-text">{c.text}</span>
                 </div>
               );
             })}
@@ -304,6 +373,60 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
             })}
           </ListSection>
 
+          {/* Ruled out — negative knowledge */}
+          <ListSection
+            icon={<Ban size={14} />}
+            label="Ruled out"
+            count={doc.rejected.length}
+            editing={editing}
+            onAdd={() =>
+              setDraft({
+                ...draft,
+                rejected: [...draft.rejected, { approach: "", why: "" } as StateRejected],
+              })
+            }
+          >
+            {doc.rejected.length === 0 && !editing && (
+              <p className="xstate__empty xstate__empty--row">— none —</p>
+            )}
+            {doc.rejected.map((r, i) => {
+              const idx = editing ? draft.rejected.indexOf(r) : -1;
+              return editing ? (
+                <div key={idx} className="xstate__row xstate__row--edit xstate__row--decision-edit">
+                  <textarea
+                    className="xstate__field"
+                    value={r.approach}
+                    rows={1}
+                    placeholder="Approach that was tried or considered"
+                    onChange={(e) =>
+                      updateListItem(draft, setDraft, "rejected", idx, { ...r, approach: e.target.value })
+                    }
+                  />
+                  <textarea
+                    className="xstate__field"
+                    value={r.why}
+                    rows={2}
+                    placeholder="Why it was ruled out — so it isn't re-attempted"
+                    onChange={(e) =>
+                      updateListItem(draft, setDraft, "rejected", idx, { ...r, why: e.target.value })
+                    }
+                  />
+                  <DeleteBtn
+                    onClick={() => removeListItem(draft, setDraft, "rejected", idx)}
+                  />
+                </div>
+              ) : (
+                <div key={i} className="xstate__row xstate__row--decision">
+                  <span className="xstate__dot xstate__dot--amber" />
+                  <span className="xstate__row-text">
+                    <strong>{r.approach}</strong>
+                    <span className="xstate__why"> — rejected because {r.why}</span>
+                  </span>
+                </div>
+              );
+            })}
+          </ListSection>
+
           {/* Facts */}
           <ListSection
             icon={<HistoryIcon size={14} />}
@@ -320,7 +443,21 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
             {doc.facts.map((f, i) => {
               const idx = editing ? draft.facts.indexOf(f) : -1;
               return editing ? (
-                <div key={idx} className="xstate__row xstate__row--edit">
+                <div key={idx} className="xstate__row xstate__row--edit xstate__row--goal-edit">
+                  <select
+                    className="xstate__select"
+                    value={f.confidence ?? "known"}
+                    onChange={(e) =>
+                      updateListItem(draft, setDraft, "facts", idx, {
+                        ...f,
+                        confidence: e.target.value as StateFactConfidence,
+                      })
+                    }
+                  >
+                    <option value="known">known</option>
+                    <option value="assumed">assumed</option>
+                    <option value="needs_verification">verify</option>
+                  </select>
                   <textarea
                     className="xstate__field"
                     value={f.text}
@@ -335,8 +472,10 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
                 </div>
               ) : (
                 <div key={i} className="xstate__row">
-                  <span className="xstate__dot" />
+                  <span className={cn("xstate__dot", f.confidence === "needs_verification" && "xstate__dot--amber")} />
                   <span className="xstate__row-text">{f.text}</span>
+                  {f.confidence === "assumed" && <Pill tone="amber">assumed</Pill>}
+                  {f.confidence === "needs_verification" && <Pill tone="amber">verify</Pill>}
                 </div>
               );
             })}

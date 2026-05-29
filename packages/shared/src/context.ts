@@ -6,6 +6,7 @@ import type {
   StateDocument,
   StateSnapshot
 } from "./types.js";
+import { normalizeStateDocument } from "./types.js";
 
 export interface BuildContextInput {
   mrps: Mrp[];
@@ -116,9 +117,12 @@ export function renderStateSnapshotMarkdown(snapshot: StateSnapshot): string {
 }
 
 export function renderStateDocumentMarkdown(
-  state: StateDocument,
+  rawState: StateDocument,
   meta?: { version?: number; generatedAt?: string; coveredRange?: { from: number; to: number } }
 ): string {
+  /* Normalize so a snapshot written before these fields existed renders
+   *  without blowing up on a missing array. */
+  const state = normalizeStateDocument(rawState);
   const lines: string[] = [];
   const header = meta?.version !== undefined
     ? `## State Snapshot (v${meta.version})`
@@ -132,6 +136,19 @@ export function renderStateDocumentMarkdown(
   }
   lines.push("");
   lines.push(`**Where we are:** ${state.summary || "(no summary)"}`);
+
+  if (state.nextStep.trim()) {
+    lines.push("");
+    lines.push(`**Next step:** ${state.nextStep.trim()}`);
+  }
+
+  if (state.constraints.length) {
+    lines.push("");
+    lines.push("**Constraints / non-negotiables (do not violate):**");
+    for (const c of state.constraints) {
+      lines.push(`- ${c.text}`);
+    }
+  }
 
   const activeGoals = state.goals.filter((g) => g.status !== "done");
   if (activeGoals.length) {
@@ -155,7 +172,23 @@ export function renderStateDocumentMarkdown(
     lines.push("");
     lines.push("**Key facts learned:**");
     for (const f of state.facts) {
-      lines.push(`- ${f.text}`);
+      /* Flag anything not yet established so the model doesn't treat a
+       *  guess as ground truth. */
+      const tag =
+        f.confidence === "assumed"
+          ? " *(assumed — unverified)*"
+          : f.confidence === "needs_verification"
+            ? " *(needs verification)*"
+            : "";
+      lines.push(`- ${f.text}${tag}`);
+    }
+  }
+
+  if (state.rejected.length) {
+    lines.push("");
+    lines.push("**Ruled out (do not retry without new reason):**");
+    for (const r of state.rejected) {
+      lines.push(`- **${r.approach}** — *rejected because* ${r.why}`);
     }
   }
 

@@ -224,8 +224,15 @@ export interface StateArtifact {
   role: string;
 }
 
+/** How much we trust a fact. Distinguishing known from assumed stops a
+ *  resuming model from acting on guesses as if they were established. */
+export type StateFactConfidence = "known" | "assumed" | "needs_verification";
+
 export interface StateFact {
   text: string;
+  /** Defaults to "known" when omitted (back-compat with pre-confidence
+   *  snapshots and with facts the model states plainly). */
+  confidence?: StateFactConfidence;
   /** MRP IDs that established this fact — lets the UI jump back to the
    *  source turns if the user wants to verify or rehydrate context. */
   sources?: string[];
@@ -236,16 +243,59 @@ export interface StateOpenQuestion {
   raisedBy?: string;
 }
 
+/** A hard requirement or non-negotiable the user stated — preserved as
+ *  close to verbatim as possible so it survives summarization intact. */
+export interface StateConstraint {
+  text: string;
+  /** Optional MRP id where the constraint was stated. */
+  source?: string;
+}
+
+/** Negative knowledge: an approach that was tried or considered and ruled
+ *  out. Recording it stops the next agent from re-walking the dead end. */
+export interface StateRejected {
+  /** The approach that was ruled out. */
+  approach: string;
+  /** Why it was rejected — the reasoning that keeps it rejected. */
+  why: string;
+  /** Optional anchor back to the MRP where it was ruled out. */
+  mrpId?: string;
+}
+
 /** The structured body of a state snapshot — the JSON the model is asked
  *  to produce + the user is allowed to edit. */
 export interface StateDocument {
   /** One- to two-sentence "where we are right now" statement. */
   summary: string;
+  /** The single most useful next action — what a resuming agent should do
+   *  first. Empty string when there's no clear next step. */
+  nextStep: string;
   goals: StateGoal[];
+  /** Hard requirements / non-negotiables stated by the user. */
+  constraints: StateConstraint[];
   decisions: StateDecision[];
-  artifacts: StateArtifact[];
   facts: StateFact[];
+  /** Approaches tried or considered and ruled out (negative knowledge). */
+  rejected: StateRejected[];
+  artifacts: StateArtifact[];
   openQuestions: StateOpenQuestion[];
+}
+
+/** Coerce a possibly-partial state document (e.g. a snapshot written
+ *  before these fields existed, or raw model output) into the full shape
+ *  so consumers can rely on every field being present. */
+export function normalizeStateDocument(doc: Partial<StateDocument> | null | undefined): StateDocument {
+  return {
+    summary: doc?.summary ?? "",
+    nextStep: doc?.nextStep ?? "",
+    goals: doc?.goals ?? [],
+    constraints: doc?.constraints ?? [],
+    decisions: doc?.decisions ?? [],
+    facts: doc?.facts ?? [],
+    rejected: doc?.rejected ?? [],
+    artifacts: doc?.artifacts ?? [],
+    openQuestions: doc?.openQuestions ?? []
+  };
 }
 
 export type StateSnapshotTrigger = "user" | "auto" | "manual_edit";

@@ -231,6 +231,18 @@
   background: var(--amber);
 }
 
+.xstate__dot--cyan {
+  background: var(--cyan);
+  box-shadow: 0 0 6px rgba(168, 255, 241, 0.5);
+}
+
+/* Next step reads as the action line — give it a left accent so the eye
+ *  lands on "what now" right after the summary. */
+.xstate__nextstep {
+  border-left: 2px solid var(--cyan);
+  padding-left: 12px;
+}
+
 .xstate__kind {
   flex: 0 0 auto;
   font-family: var(--font-mono);
