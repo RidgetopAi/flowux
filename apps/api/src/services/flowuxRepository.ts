@@ -665,7 +665,7 @@ export async function createPromptMrp(
 
   const inputMrpIds = await getPromptContextMrpIds(canvasId);
 
-  const adapter = createHarnessAdapter();
+  const adapter = createHarnessAdapter(canvasId);
   const modelRun: ModelRun = {
     id: id(),
     canvasId,
@@ -1496,7 +1496,7 @@ export async function compactCanvas(
   }
 
   /* Generate the new state document via the active harness model. */
-  const adapter = createHarnessAdapter();
+  const adapter = createHarnessAdapter(canvasId);
   const newState = await generateStateDocument(
     adapter,
     activeSnapshotRow ? (activeSnapshotRow.state as StateDocument) : undefined,

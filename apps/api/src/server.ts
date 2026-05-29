@@ -30,8 +30,15 @@ import {
   updateCanvasSelection,
   updatePlacement
 } from "./services/flowuxRepository.js";
-import { createHarnessAdapter } from "./harness/index.js";
-import { prepareAttachmentDelivery, supportsImageInputs } from "./services/attachmentDelivery.js";
+import {
+  createHarnessAdapter,
+  listTargets,
+  getTarget,
+  setActiveTarget,
+  resolveTarget,
+  pingTarget
+} from "./harness/index.js";
+import { prepareAttachmentDelivery } from "./services/attachmentDelivery.js";
 import { loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
 
 const config = loadConfig();
@@ -50,20 +57,41 @@ await app.register(cors, {
   methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
 });
 
-app.get("/api/health", async () => ({
-  ok: true,
-  harnessMode: config.harnessMode,
-  modelMode: config.modelMode,
-  modelBaseUrl: config.modelBaseUrl,
-  modelName: config.modelName,
-  modelMaxTokens: config.modelMaxTokens,
-  contextWindow: config.modelContextWindow,
-  maxOutputTokens: config.modelMaxTokens,
-  piMonoCwd: config.piMonoCwd,
-  piMonoProvider: config.piMonoProvider,
-  piMonoModel: config.piMonoModel,
-  executionContext: getExecutionContext(config)
-}));
+app.get("/api/health", async () => {
+  const pi = config.harnessMode === "pi_mono" ? resolveTarget() : undefined;
+  return {
+    ok: true,
+    harnessMode: config.harnessMode,
+    modelMode: config.modelMode,
+    modelBaseUrl: config.modelBaseUrl,
+    modelName: pi?.model ?? config.modelName,
+    modelMaxTokens: pi?.maxOutputTokens ?? config.modelMaxTokens,
+    contextWindow: pi?.contextWindow ?? config.modelContextWindow,
+    maxOutputTokens: pi?.maxOutputTokens ?? config.modelMaxTokens,
+    piMonoCwd: pi?.cwd ?? config.piMonoCwd,
+    piMonoProvider: pi?.provider ?? config.piMonoProvider,
+    piMonoModel: pi?.model ?? config.piMonoModel,
+    activeTargetId: pi?.id,
+    executionContext: getExecutionContext(config)
+  };
+});
+
+// ── Pi targets: list / switch / connectivity-test ─────────────────────────
+app.get("/api/pi/targets", async () => listTargets());
+
+app.post<{ Body: { id?: string } }>("/api/pi/target", async (request, reply) => {
+  const id = request.body?.id;
+  if (!id) return reply.code(400).send({ error: "target_id_required" });
+  const target = setActiveTarget(id);
+  if (!target) return reply.code(404).send({ error: "unknown_target", id });
+  return { ...listTargets(), executionContext: getExecutionContext(config) };
+});
+
+app.post<{ Params: { id: string } }>("/api/pi/target/:id/test", async (request, reply) => {
+  const target = getTarget(request.params.id);
+  if (!target) return reply.code(404).send({ error: "unknown_target", id: request.params.id });
+  return pingTarget(target);
+});
 
 app.get("/api/canvases", async () => listCanvases());
 
@@ -78,12 +106,13 @@ app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?
     const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
+    const pi = config.harnessMode === "pi_mono" ? resolveTarget(request.params.canvasId) : undefined;
     const unsupportedImages = attachments.filter((attachment) => attachment.type === "image");
-    if (unsupportedImages.length && !supportsImageInputs(config)) {
+    if (unsupportedImages.length && !(pi?.supportsImages ?? false)) {
       return reply.code(400).send({
         error: "image_model_input_not_supported",
         message:
-          "This model adapter does not currently accept image pixels. Use Grok through Pi-Mono for image inputs, or remove image attachments."
+          "The active Pi target does not accept image pixels. Switch to a Grok target for image inputs, or remove image attachments."
       });
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
@@ -92,7 +121,12 @@ app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?
     return {
       canvasId: request.params.canvasId,
       prompt,
-      budget: await buildPromptContextBudget(request.params.canvasId, modelPrompt, config.modelContextWindow, config.modelMaxTokens)
+      budget: await buildPromptContextBudget(
+        request.params.canvasId,
+        modelPrompt,
+        pi?.contextWindow ?? config.modelContextWindow,
+        pi?.maxOutputTokens ?? config.modelMaxTokens
+      )
     };
   }
 );
@@ -359,11 +393,12 @@ app.post<{
     const attachments = (await Promise.all(attachmentIds.map((attachmentId) => loadUpload(attachmentId)))).filter(
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
-    if (attachments.some((attachment) => attachment.type === "image") && !supportsImageInputs(config)) {
+    const pi = config.harnessMode === "pi_mono" ? resolveTarget(request.params.canvasId) : undefined;
+    if (attachments.some((attachment) => attachment.type === "image") && !(pi?.supportsImages ?? false)) {
       return reply.code(400).send({
         error: "image_model_input_not_supported",
         message:
-          "This model adapter does not currently accept image pixels. Use Grok through Pi-Mono for image inputs, or remove image attachments."
+          "The active Pi target does not accept image pixels. Switch to a Grok target for image inputs, or remove image attachments."
       });
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
@@ -402,8 +437,8 @@ app.post<{
       const contextBudget = await buildPromptContextBudget(
         request.params.canvasId,
         modelPrompt,
-        config.modelContextWindow,
-        config.modelMaxTokens
+        pi?.contextWindow ?? config.modelContextWindow,
+        pi?.maxOutputTokens ?? config.modelMaxTokens
       );
       created = await createPromptMrp(
         request.params.canvasId,
@@ -424,7 +459,7 @@ app.post<{
       });
       send("created", { ...created, contextBudget });
 
-      const adapter = createHarnessAdapter();
+      const adapter = createHarnessAdapter(request.params.canvasId);
       let responseText = "";
       let thinkingText = "";
       let sawThinking = false;
@@ -465,7 +500,7 @@ app.post<{
         canvasId: request.params.canvasId,
         mrpId: created.mrp.id,
         modelRunId: created.modelRun.id,
-        executionContext: getExecutionContext(config),
+        executionContext: getExecutionContext(config, request.params.canvasId),
         images: delivery.images,
         signal: abortController.signal
       })) {

@@ -2,8 +2,8 @@ import type { FlowuxTurnEvent } from "@flowux/shared";
 import type { FlowuxToolCall, FlowuxToolResult } from "@flowux/shared";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
-import type { FlowuxConfig } from "../config.js";
 import type { HarnessAdapter, HarnessTurnInput } from "./types.js";
+import type { PiTarget } from "./targets.js";
 
 type PiRpcEvent = Record<string, unknown> & { type?: string };
 const PI_PROMPT_ACK_TIMEOUT_MS = 30_000;
@@ -80,6 +80,66 @@ export function mapPiMonoEvent(raw: PiRpcEvent): FlowuxTurnEvent[] {
   return [{ type: "raw_event", eventType: raw.type ?? "unknown", raw }];
 }
 
+interface SpawnSpec {
+  command: string;
+  args: string[];
+  cwd: string;
+}
+
+/** Pi RPC CLI flags for a target's provider/model. */
+function buildPiArgs(target: PiTarget): string[] {
+  const args = [
+    "--mode", "rpc",
+    "--provider", target.provider,
+    "--model", target.model,
+    "--no-session",
+    "--no-context-files",
+    "--thinking", target.thinking
+  ];
+  const extra = process.env.FLOWUX_PI_EXTRA_ARGS?.trim();
+  if (extra) args.push(...extra.split(/\s+/));
+  return args;
+}
+
+/**
+ * Turn a target into a concrete spawn. The RPC loop downstream is identical
+ * for both transports — only HOW we launch pi differs:
+ *   local → spawn the pi binary directly in target.cwd
+ *   ssh   → spawn `ssh <host> -- sh -lc 'cd <cwd> && exec pi …'`; stdin/stdout
+ *           flow over the SSH pipe transparently, so the JSON-RPC framing is
+ *           unchanged. -T disables a pty; BatchMode fails fast instead of
+ *           hanging on a password prompt. A login shell (sh -lc) ensures pi is
+ *           on PATH on the remote.
+ */
+export function buildSpawnSpec(target: PiTarget): SpawnSpec {
+  const piArgs = buildPiArgs(target);
+  if (target.transport === "ssh") {
+    if (!target.sshHost) throw new Error(`ssh target ${target.id} is missing sshHost`);
+    // The pi invocation, quoted for a POSIX shell on the remote.
+    const inner = [
+      target.cwd ? `cd ${shellQuote(target.cwd)} && ` : "",
+      "exec ",
+      [target.bin, ...piArgs].map(shellQuote).join(" ")
+    ].join("");
+    // ssh joins its trailing args with spaces and hands ONE command string to
+    // the remote login shell, which re-parses it. So we pass a single
+    // pre-quoted arg: `sh -lc '<inner>'`. sh -lc forces a login shell so pi is
+    // on PATH; the outer quote keeps <inner> intact through ssh's re-parse.
+    const remoteCommand = `sh -lc ${shellQuote(inner)}`;
+    return {
+      command: "ssh",
+      args: ["-T", "-o", "BatchMode=yes", target.sshHost, remoteCommand],
+      cwd: process.cwd()
+    };
+  }
+  return { command: target.bin, args: piArgs, cwd: target.cwd || process.cwd() };
+}
+
+/** POSIX single-quote escaping for safe interpolation into the remote shell. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export class PiMonoHarnessAdapter implements HarnessAdapter {
   mode = "pi_mono" as const;
   provider = "pi_mono" as const;
@@ -94,12 +154,12 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
     rawEvents: true
   };
 
-  constructor(private readonly config: FlowuxConfig) {
-    this.model = config.piMonoModel;
+  constructor(private readonly target: PiTarget) {
+    this.model = target.model;
   }
 
   async *generate(input: HarnessTurnInput): AsyncGenerator<FlowuxTurnEvent> {
-    const session = new PiRpcProcess(this.config);
+    const session = new PiRpcProcess(this.target);
     const abort = () => void session.stop();
     input.signal?.addEventListener("abort", abort, { once: true });
     try {
@@ -118,13 +178,15 @@ export class PiMonoHarnessAdapter implements HarnessAdapter {
         }
       }
     } catch (error) {
+      const spec = buildSpawnSpec(this.target);
       yield {
         type: "error",
         message: error instanceof Error ? error.message : "pi_mono_rpc_error",
         raw: {
-          bin: this.config.piMonoBin,
-          args: this.config.piMonoArgs,
-          cwd: this.config.piMonoCwd,
+          targetId: this.target.id,
+          command: spec.command,
+          args: spec.args,
+          cwd: spec.cwd,
           stderr: session.stderr
         }
       };
@@ -143,11 +205,12 @@ class PiRpcProcess {
   private startResponse?: Promise<void>;
   stderr = "";
 
-  constructor(private readonly config: FlowuxConfig) {}
+  constructor(private readonly target: PiTarget) {}
 
   async start(): Promise<void> {
-    this.process = spawn(this.config.piMonoBin, this.config.piMonoArgs, {
-      cwd: this.config.piMonoCwd,
+    const spec = buildSpawnSpec(this.target);
+    this.process = spawn(spec.command, spec.args, {
+      cwd: spec.cwd,
       stdio: ["pipe", "pipe", "pipe"]
     });
 
@@ -273,6 +336,70 @@ class PiRpcProcess {
       throw new Error(`Pi-Mono RPC process is not running. stderr: ${this.stderr.trim()}`);
     }
     return this.process;
+  }
+}
+
+export interface PiPingResult {
+  ok: boolean;
+  targetId: string;
+  model: string;
+  transport: PiTarget["transport"];
+  latencyMs: number;
+  error?: string;
+}
+
+/**
+ * Connectivity check for a target: spawn pi the same way a real prompt would
+ * (local or over ssh), send a trivial prompt, and wait for the FIRST
+ * meaningful generation event. Seeing any token/turn/end proves the whole
+ * path is live — ssh reachable, pi present, model server actually answering —
+ * not just that the process launched. An error event or timeout = not
+ * reachable. The in-flight generation is killed immediately after.
+ */
+export async function pingTarget(target: PiTarget, timeoutMs = 25_000): Promise<PiPingResult> {
+  const startedAt = Date.now();
+  const session = new PiRpcProcess(target);
+  const result = (ok: boolean, error?: string): PiPingResult => ({
+    ok,
+    targetId: target.id,
+    model: target.model,
+    transport: target.transport,
+    latencyMs: Date.now() - startedAt,
+    ...(error ? { error } : {})
+  });
+
+  const timer = new Promise<PiPingResult>((resolve) => {
+    setTimeout(() => resolve(result(false, "connectivity check timed out")), timeoutMs);
+  });
+
+  const probe = (async (): Promise<PiPingResult> => {
+    try {
+      await session.start();
+      await session.prompt("Reply with exactly: ok");
+      for await (const raw of session.events()) {
+        if (raw.type === "error") {
+          return result(false, stringValue(raw.reason) ?? "pi reported an error");
+        }
+        // First sign of life from the model = reachable.
+        if (
+          raw.type === "turn_start" ||
+          raw.type === "turn_end" ||
+          raw.type === "agent_end" ||
+          raw.type === "message_update"
+        ) {
+          return result(true);
+        }
+      }
+      return result(false, `pi stream ended without output. stderr: ${session.stderr.trim()}`.trim());
+    } catch (error) {
+      return result(false, error instanceof Error ? error.message : "connectivity check failed");
+    }
+  })();
+
+  try {
+    return await Promise.race([probe, timer]);
+  } finally {
+    await session.stop();
   }
 }
 
