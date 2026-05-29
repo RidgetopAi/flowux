@@ -1622,10 +1622,12 @@ async function generateStateDocument(
     const promptForAttempt = lastError
       ? `${basePrompt}\n\nIMPORTANT: your previous response failed to parse (${lastError}). Output ONLY the JSON object — no fences, no prose, no comments.`
       : basePrompt;
-    const responseText = await runCompactionGeneration(adapter, SNAPSHOT_SYSTEM_PROMPT, promptForAttempt);
     try {
+      const responseText = await runCompactionGeneration(adapter, SNAPSHOT_SYSTEM_PROMPT, promptForAttempt);
       return parseStateDocument(responseText);
     } catch (err) {
+      /* Includes transient empty/error responses from the harness — retry
+       *  rather than failing the whole compaction on a single bad turn. */
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
@@ -1647,9 +1649,13 @@ async function runCompactionGeneration(
   let text = "";
   let errMsg: string | undefined;
 
+  /* Some harness adapters (pi_mono) strip system-role messages before
+   *  prompting, so the schema instructions must also ride along in the
+   *  prompt itself. Adapters that honor system messages (direct_model)
+   *  read from `messages` and ignore the duplicated `prompt`. */
   for await (const event of adapter.generate({
     messages: [{ role: "system", content: systemPrompt }],
-    prompt: userPrompt,
+    prompt: `${systemPrompt}\n\n${userPrompt}`,
     canvasId: syntheticCanvasId,
     mrpId: syntheticMrpId,
     modelRunId: syntheticRunId
