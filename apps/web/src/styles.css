@@ -44,6 +44,10 @@ select { font: inherit; }
 
 /* ── Lean topbar (post Phase C.5) ───────────────────────────────────────── */
 .flowux-topbar {
+  /* Positioned stacking context above .flowux-stage so top-bar popovers
+     (e.g. the Pi target selector) paint over the canvas below. */
+  position: relative;
+  z-index: 20;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;

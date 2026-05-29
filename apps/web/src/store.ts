@@ -22,8 +22,18 @@ interface FlowuxState {
   contextBudget?: ContextBudget;
   searchResults: SearchResult[];
   executionContext?: ExecutionContext;
+  /** Pi targets the API can spawn against (local grok / remote desktop). */
+  piTargets: api.PiTargetDto[];
+  activeTargetId?: string;
+  /** id currently mid connectivity-test, if any. */
+  piTesting?: string;
+  /** last connectivity-test result keyed by target id. */
+  piPing: Record<string, api.PiPingResult>;
   error?: string;
   loadInitial: () => Promise<void>;
+  loadPiTargets: () => Promise<void>;
+  switchPiTarget: (id: string) => Promise<void>;
+  testPiTarget: (id: string) => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
   switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: (title?: string) => Promise<void>;
@@ -67,6 +77,8 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   loading: false,
   promptRunning: false,
   searchResults: [],
+  piTargets: [],
+  piPing: {},
 
   async loadInitial() {
     set({ loading: true, error: undefined });
@@ -80,8 +92,50 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
       const snapshot = await api.getCanvas(canvas.id, { summary: true });
       window.localStorage.setItem(activeCanvasStorageKey, canvas.id);
       set({ canvases: nextCanvases, snapshot, executionContext: health.executionContext, loading: false });
+      void get().loadPiTargets();
     } catch (error) {
       set({ error: error instanceof Error ? error.message : "Failed to load Flowux", loading: false });
+    }
+  },
+
+  async loadPiTargets() {
+    try {
+      const { targets, activeTargetId } = await api.listPiTargets();
+      set({ piTargets: targets, activeTargetId });
+    } catch {
+      // Targets only exist when the API runs in pi_mono mode — silent on absence.
+    }
+  },
+
+  async switchPiTarget(id) {
+    try {
+      const { targets, activeTargetId, executionContext } = await api.setPiTarget(id);
+      set({ piTargets: targets, activeTargetId, executionContext });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to switch Pi target" });
+    }
+  },
+
+  async testPiTarget(id) {
+    set({ piTesting: id });
+    try {
+      const result = await api.testPiTarget(id);
+      set((state) => ({ piPing: { ...state.piPing, [id]: result }, piTesting: undefined }));
+    } catch (error) {
+      set((state) => ({
+        piPing: {
+          ...state.piPing,
+          [id]: {
+            ok: false,
+            targetId: id,
+            model: "",
+            transport: "local",
+            latencyMs: 0,
+            error: error instanceof Error ? error.message : "test failed"
+          }
+        },
+        piTesting: undefined
+      }));
     }
   },
 

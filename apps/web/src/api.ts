@@ -19,6 +19,53 @@ export async function getHealth(): Promise<HealthStatus> {
   return fetchJson("/api/health");
 }
 
+export interface PiTargetDto {
+  id: string;
+  label: string;
+  transport: "local" | "ssh";
+  sshHost?: string;
+  bin: string;
+  provider: string;
+  model: string;
+  thinking: string;
+  cwd: string;
+  contextWindow: number;
+  maxOutputTokens: number;
+  supportsImages: boolean;
+}
+
+export interface PiTargetsResponse {
+  targets: PiTargetDto[];
+  activeTargetId: string;
+}
+
+export interface PiPingResult {
+  ok: boolean;
+  targetId: string;
+  model: string;
+  transport: "local" | "ssh";
+  latencyMs: number;
+  error?: string;
+}
+
+export async function listPiTargets(): Promise<PiTargetsResponse> {
+  return fetchJson("/api/pi/targets");
+}
+
+export async function setPiTarget(
+  id: string
+): Promise<PiTargetsResponse & { executionContext: import("@flowux/shared").ExecutionContext }> {
+  return fetchJson("/api/pi/target", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+}
+
+export async function testPiTarget(id: string): Promise<PiPingResult> {
+  return fetchJson(`/api/pi/target/${id}/test`, { method: "POST" });
+}
+
 export async function listCanvases(): Promise<CanvasThread[]> {
   return fetchJson("/api/canvases");
 }

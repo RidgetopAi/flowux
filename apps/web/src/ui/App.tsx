@@ -3,6 +3,7 @@ import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Canvas } from "../components/canvas/Canvas";
 import { Sidebar } from "../components/sidebar/Sidebar";
+import { PiTargetSelector } from "../components/sidebar/PiTargetSelector";
 import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
@@ -226,6 +227,7 @@ export function App() {
         </div>
 
         <div className="flowux-status">
+          <PiTargetSelector />
           <Pill tone="neutral">{canvasStatus}</Pill>
         </div>
       </header>
