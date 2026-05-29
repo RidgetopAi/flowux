@@ -114,7 +114,7 @@ export const COLOR_PLAYER = "#a8fff1";
 export const COLOR_BULLET = "#d4fff7";
 export const COLOR_ALIEN_ROW = [
   "#c7bdff", // row 0 — top, violet (the mystery row look)
-  "#a8fff1", // row 1 — cyan
+  "#ff8a5c", // row 1 — Claude coral (the Claude mascot row)
   "#a8fff1", // row 2 — cyan
   "#b8ffba", // row 3 — green
   "#b8ffba", // row 4 — green

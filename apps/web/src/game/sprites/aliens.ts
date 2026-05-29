@@ -108,9 +108,47 @@ export const OCTOPUS: AnimSprite = {
   ],
 };
 
-/** Which archetype a grid row uses. Mirrors the arcade row layout. */
+/** The Claude mascot — the coral invader: a square head with two eye-holes,
+ *  a nub arm out each side, and four little legs. Stands in for the crab on
+ *  the second row. The two frames shuffle the feet (planted vs splayed) so
+ *  it walks in lockstep with the march like a proper invader. 11×8 matches
+ *  the crab footprint so the formation grid is unchanged; rendered in
+ *  Claude coral. The eyes are negative space — holes in the fill that read
+ *  dark against the canvas. */
+export const CLAUDE: AnimSprite = {
+  w: 11,
+  h: 8,
+  frames: [
+    // prettier-ignore
+    [
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,0,1,1,1,0,1,1,0,
+      0,1,1,1,1,1,1,1,1,1,0,
+      1,1,1,1,1,1,1,1,1,1,1,
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,0,1,0,1,0,1,1,0,
+      0,0,1,0,1,0,1,0,1,0,0,
+    ],
+    // prettier-ignore
+    [
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,0,1,1,1,0,1,1,0,
+      0,1,1,1,1,1,1,1,1,1,0,
+      1,1,1,1,1,1,1,1,1,1,1,
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,1,1,1,1,1,1,1,0,
+      0,1,1,0,1,0,1,0,1,1,0,
+      1,0,0,1,0,0,0,1,0,0,1,
+    ],
+  ],
+};
+
+/** Which archetype a grid row uses. Mirrors the arcade row layout, with
+ *  the second row swapped for the Claude spark. */
 export function alienSpriteForRow(row: number): AnimSprite {
   if (row === 0) return SQUID;
-  if (row === 1 || row === 2) return CRAB;
+  if (row === 1) return CLAUDE;
+  if (row === 2) return CRAB;
   return OCTOPUS;
 }
