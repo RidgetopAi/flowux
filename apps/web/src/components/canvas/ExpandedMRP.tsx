@@ -6,6 +6,7 @@ import { useFlowuxStore } from "../../store.js";
 import { Pill } from "../primitives/Pill";
 import { Label } from "../primitives/Label";
 import { Button } from "../primitives/Button";
+import { Markdown } from "../primitives/Markdown";
 import { StatusDot } from "../primitives/StatusDot";
 import { BrailleBand } from "../effects/BrailleBand";
 import { cn } from "../../lib/cn";
@@ -150,9 +151,7 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
                 <Label size="micro" tone="amber">PROMPT</Label>
                 <BrailleBand length={24} density={0.45} tone="amber" seed={mrp.sequence} />
               </div>
-              <p className="xmrp__msg-text">
-                <HighlightedText text={mrp.prompt} query={highlight} />
-              </p>
+              <Markdown className="xmrp__msg-text" text={mrp.prompt} highlight={highlight} />
             </section>
 
             <section className="xmrp__msg xmrp__msg--assistant">
@@ -160,13 +159,11 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
                 <Label size="micro" tone="cyan">RESPONSE</Label>
                 <BrailleBand length={24} density={0.55} tone="cyan" seed={mrp.sequence + 100} />
               </div>
-              <p className="xmrp__msg-text">
-                {mrp.response ? (
-                  <HighlightedText text={mrp.response} query={highlight} />
-                ) : (
-                  "(no response yet)"
-                )}
-              </p>
+              {mrp.response ? (
+                <Markdown className="xmrp__msg-text" text={mrp.response} highlight={highlight} />
+              ) : (
+                <p className="xmrp__msg-text">(no response yet)</p>
+              )}
             </section>
           </div>
 
@@ -231,27 +228,6 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
  *  styled <mark>. Returns the original text unchanged when query is empty
  *  or doesn't match. Escapes regex metachars so user search like "(a+b)"
  *  doesn't blow up. */
-function HighlightedText({ text, query }: { text: string; query: string | null }) {
-  if (!query) return <>{text}</>;
-  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`(${escaped})`, "gi");
-  const parts = text.split(re);
-  if (parts.length <= 1) return <>{text}</>;
-  return (
-    <>
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <mark key={i} className="xmrp__match">
-            {part}
-          </mark>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </>
-  );
-}
-
 /* ── Telemetry section ────────────────────────────────────────────────── */
 type TelemetryItem = {
   label: string;

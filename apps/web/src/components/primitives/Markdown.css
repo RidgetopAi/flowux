@@ -1,0 +1,180 @@
+/* ── Rendered markdown ───────────────────────────────────────────────────
+   Deliberately sizeless: font-size + color inherit from the caller's text
+   style, so the SAME component reads correctly in the big expanded pane
+   (17px) and the small card preview (smaller). Headings, code, and spacing
+   all scale in `em`, so they track whatever the container sets. */
+.md {
+  /* Long code lines / URLs wrap instead of forcing horizontal scroll. */
+  overflow-wrap: anywhere;
+}
+
+/* Collapse outer margins so the block sits flush inside bordered containers. */
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 0.85em;
+}
+
+/* Headings — phosphor ink, tight tracking, quiet rule under the big ones. */
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 1.4em 0 0.6em;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+.md h1 { font-size: 1.5em; }
+.md h2 { font-size: 1.3em; }
+.md h3 { font-size: 1.15em; }
+.md h4,
+.md h5,
+.md h6 { font-size: 1em; }
+.md h1,
+.md h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Lists */
+.md ul,
+.md ol {
+  margin: 0 0 0.85em;
+  padding-left: 1.5em;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md li::marker {
+  color: var(--cyan-dim);
+}
+.md ul ul,
+.md ul ol,
+.md ol ul,
+.md ol ol {
+  margin: 0.25em 0;
+}
+
+/* GFM task lists */
+.md li input[type="checkbox"] {
+  margin-right: 0.5em;
+  accent-color: var(--cyan);
+}
+
+/* Inline code */
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  padding: 0.12em 0.4em;
+  border-radius: var(--r-sm);
+  background: rgba(168, 255, 241, 0.08);
+  border: 1px solid rgba(168, 255, 241, 0.16);
+  color: var(--cyan-bright);
+}
+
+/* Fenced code blocks — the code element inside resets to a bare span. */
+.md pre {
+  margin: 0 0 0.85em;
+  padding: 0.85em 1em;
+  border-radius: var(--r-md, 8px);
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+  line-height: 1.55;
+}
+.md pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--soft);
+  font-size: 0.85em;
+}
+
+/* Links */
+.md a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(168, 255, 241, 0.4);
+  transition: color var(--dur-fast, 120ms) ease,
+              text-decoration-color var(--dur-fast, 120ms) ease;
+}
+.md a:hover {
+  color: var(--cyan-bright);
+  text-decoration-color: var(--cyan-bright);
+}
+
+/* Emphasis */
+.md strong {
+  font-weight: 650;
+  color: var(--ink);
+}
+.md em {
+  font-style: italic;
+}
+.md del {
+  opacity: 0.6;
+}
+
+/* Blockquote */
+.md blockquote {
+  margin: 0 0 0.85em;
+  padding: 0.1em 0 0.1em 1em;
+  border-left: 2px solid rgba(168, 255, 241, 0.35);
+  color: var(--soft);
+}
+.md blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* Horizontal rule */
+.md hr {
+  margin: 1.3em 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Tables (GFM) */
+.md table {
+  margin: 0 0 0.85em;
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92em;
+}
+.md th,
+.md td {
+  padding: 0.4em 0.7em;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+.md th {
+  background: rgba(168, 255, 241, 0.06);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Images shouldn't blow out the container. */
+.md img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+}
+
+/* Search-hit highlight — same cyan phosphor wash as the rest of flowux. */
+.md .md-match {
+  background: rgba(168, 255, 241, 0.22);
+  color: var(--ink);
+  padding: 0 2px;
+  margin: 0 -2px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(168, 255, 241, 0.35);
+}

@@ -6,6 +6,7 @@ import {
   EyeOff,
   GitFork,
   GripHorizontal,
+  Layers,
   Maximize2,
   Pin,
   PinOff,
@@ -14,6 +15,7 @@ import {
 import { useCanvas, type MRP } from "../../lib/store";
 import { useFlowuxStore } from "../../store.js";
 import { Card } from "../primitives/Card";
+import { Markdown } from "../primitives/Markdown";
 import { Pill } from "../primitives/Pill";
 import { StatusDot } from "../primitives/StatusDot";
 import { cn } from "../../lib/cn";
@@ -266,6 +268,17 @@ export function MRPCard({ mrp }: Props) {
     runFork();
   };
 
+  // Open the STATE snapshot that folded this MRP. The snapshot isn't a canvas
+  // tile — it lives in the stateSnapshots lookup keyed `state-${snapshotId}`,
+  // which the ExpandedState overlay resolves. stopPropagation so the click
+  // doesn't bubble into the card's tap/drag handlers.
+  const onCompactedClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (mrp.compactedBySnapshotId) {
+      setExpanded(`state-${mrp.compactedBySnapshotId}`);
+    }
+  };
+
   // Right-click context menu — anchored to clientX/Y, portal-mounted so
   // canvas transforms don't clip it. State is declared above the
   // isExpanded early-return; this section just wires the handler +
@@ -414,9 +427,23 @@ export function MRPCard({ mrp }: Props) {
             </span>
           )}
           <span className="mrp-drag-spacer" />
-          <span className="mrp-drag-side">
-            {mrp.compacted ? "COMPACTED" : mrp.external ? "EXTERNAL" : cardState.toUpperCase()}
-          </span>
+          {mrp.compacted ? (
+            <button
+              type="button"
+              className="mrp-compacted-chip"
+              onClick={onCompactedClick}
+              disabled={!mrp.compactedBySnapshotId}
+              aria-label="Open the state snapshot this card was compacted into"
+              title="Compacted — open state snapshot"
+            >
+              <Layers size={11} />
+              COMPACTED
+            </button>
+          ) : (
+            <span className="mrp-drag-side">
+              {mrp.external ? "EXTERNAL" : cardState.toUpperCase()}
+            </span>
+          )}
           <button
             type="button"
             className={cn("mrp-fork", forkActsOnBundle && "mrp-fork--bundle")}
@@ -455,7 +482,7 @@ export function MRPCard({ mrp }: Props) {
         {mrp.response && (
           <Card.Body>
             <Card.Section>
-              <p className="mrp-response">{mrp.response}</p>
+              <Markdown className="mrp-response" text={mrp.response} />
             </Card.Section>
           </Card.Body>
         )}

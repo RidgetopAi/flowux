@@ -122,6 +122,57 @@
   letter-spacing: 0.1em;
 }
 
+/* Compacted cards swap the static side-label for a clickable chip that opens
+   the STATE snapshot this card was folded into. Reads as the amber label it
+   replaces, but lights up on hover/focus to advertise it's interactive. */
+.mrp-compacted-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font: inherit;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+  text-shadow: 0 0 6px rgba(244, 208, 117, 0.4);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    color var(--dur-fast) var(--ease-out-quart),
+    border-color var(--dur-fast) var(--ease-out-quart),
+    background-color var(--dur-fast) var(--ease-out-quart),
+    box-shadow var(--dur-fast) var(--ease-out-quart);
+}
+
+.mrp-compacted-chip svg {
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 4px rgba(244, 208, 117, 0.5));
+}
+
+.mrp-compacted-chip:hover {
+  color: var(--amber-bright, #ffe6a8);
+  border-color: rgba(244, 208, 117, 0.4);
+  background: rgba(244, 208, 117, 0.08);
+}
+
+.mrp-compacted-chip:focus-visible {
+  outline: none;
+  border-color: rgba(244, 208, 117, 0.65);
+  box-shadow: 0 0 0 2px rgba(244, 208, 117, 0.22);
+}
+
+.mrp-compacted-chip:disabled {
+  cursor: default;
+  opacity: 0.65;
+  text-shadow: none;
+}
+
+.mrp-compacted-chip:disabled svg {
+  filter: none;
+}
+
 
 /* ── Check button (bundle inclusion) ──────────────────────────────────── */
 .mrp-check {
@@ -263,11 +314,6 @@
 /* Recolor the chip + state badge + glyph amber on compacted cards. */
 .mrp-card-wrap.is-compacted .mrp-seq {
   color: var(--amber-dim);
-}
-
-.mrp-card-wrap.is-compacted .mrp-drag-side {
-  color: var(--amber);
-  text-shadow: 0 0 6px rgba(244, 208, 117, 0.4);
 }
 
 .mrp-card-wrap.is-compacted .mrp-compacted-glyph {

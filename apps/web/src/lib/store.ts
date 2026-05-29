@@ -1,6 +1,6 @@
 import type { CanvasSnapshot } from "@flowux/shared";
 import { create } from "zustand";
-import { snapshotToCanvasObjects } from "./canvasAdapter";
+import { snapshotToCanvasObjects, snapshotToStateObjects } from "./canvasAdapter";
 import { arrangeGrid, nextGridSlot } from "./layout";
 
 /** External hook for sending a prompt + staged attachments. When set on
@@ -94,6 +94,10 @@ export type MRPObject = ObjectBase & {
   /** Sequence at which compaction occurred (preserved across later
    *  edits to the MRP's position in the thread). */
   compactedAtSeq?: number;
+  /** Snapshot that folded this MRP (mrps.compactedBySnapshotId). Drives the
+   *  click-to-open affordance on the COMPACTED chip — opens this snapshot in
+   *  the STATE overlay even when it's a superseded (non-active) version. */
+  compactedBySnapshotId?: string;
 };
 
 export type ImageObject = ObjectBase & {
@@ -227,6 +231,12 @@ function fitInside(
 
 type State = {
   objects: CanvasObject[];
+  /** STATE compaction snapshots — kept OUT of `objects` so they don't render
+   *  as canvas tiles, participate in layout/cursor/minimap, or leave grid
+   *  gaps. They exist only as a lookup keyed by their canvas id
+   *  (`state-${snapshotId}`) so the STATE overlay can open one when the user
+   *  clicks the COMPACTED chip on an MRP it folded. */
+  stateSnapshots: StateObject[];
   viewport: Viewport;
   expandedId: string | null;
   draggingId: string | null;
@@ -376,6 +386,7 @@ const nextId = (prefix = "obj") =>
 
 export const useCanvas = create<State>((set, get) => ({
   objects: [],
+  stateSnapshots: [],
   viewport: { pan: { x: 0, y: 0 }, zoom: 1, width: 1280, height: 800, left: 0, top: 0 },
   expandedId: null,
   draggingId: null,
@@ -818,18 +829,27 @@ export const useCanvas = create<State>((set, get) => ({
       x: positions[i]?.x ?? o.x,
       y: positions[i]?.y ?? o.y,
     }));
-    set({ objects: arranged, expandedId: null, cursorId: null });
+    set({ objects: arranged, stateSnapshots: [], expandedId: null, cursorId: null });
   },
 
   loadFromSnapshot: (snapshot) => {
     const next = snapshotToCanvasObjects(snapshot);
+    const states = snapshotToStateObjects(snapshot);
     // Preserve UI-only state across snapshot refreshes; only swap objects.
-    set((s) => ({
-      objects: next,
-      // If the expanded MRP is no longer in the snapshot, drop the overlay.
-      expandedId: s.expandedId && next.some((o) => o.id === s.expandedId) ? s.expandedId : null,
-      cursorId: s.cursorId && next.some((o) => o.id === s.cursorId) ? s.cursorId : null,
-    }));
+    set((s) => {
+      // The expand overlay may point at an MRP (in `next`) OR a STATE
+      // snapshot (in `states`) — keep it open only if its id still resolves.
+      const expandedStillExists =
+        !!s.expandedId &&
+        (next.some((o) => o.id === s.expandedId) ||
+          states.some((st) => st.id === s.expandedId));
+      return {
+        objects: next,
+        stateSnapshots: states,
+        expandedId: expandedStillExists ? s.expandedId : null,
+        cursorId: s.cursorId && next.some((o) => o.id === s.cursorId) ? s.cursorId : null,
+      };
+    });
   },
 
   arrangeAll: () => {

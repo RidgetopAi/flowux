@@ -78,14 +78,10 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
     );
   }
 
-  /* State snapshots — only the ACTIVE snapshot renders as a canvas card
-   *  (a single tidy amber tile). Superseded snapshots stay in the DB for
-   *  the future history view rather than stacking up on the board. */
-  const activeSnapshotId = snapshot.canvas.activeSnapshotId;
-  for (const stateSnap of snapshot.stateSnapshots ?? []) {
-    if (stateSnap.id !== activeSnapshotId) continue;
-    objects.push(toStateObject(stateSnap, true));
-  }
+  /* State snapshots are NOT canvas tiles anymore — they're reached by
+   *  clicking the COMPACTED chip on an MRP, which opens the snapshot that
+   *  folded it in the STATE overlay. See snapshotToStateObjects (consumed by
+   *  the canvas store's stateSnapshots lookup). */
 
   // Track per-placement whether an image already occupies the right slot
   // so tool-call stacking can offset below it without overlapping.
@@ -253,8 +249,21 @@ export function toMRPObject(
     branchOutCount: branchOutCount && branchOutCount > 0 ? branchOutCount : undefined,
     pinned: mrp.pinned ? true : undefined,
     compacted: mrp.compactedBySnapshotId ? true : undefined,
-    compactedAtSeq: mrp.compactedAtSeq
+    compactedAtSeq: mrp.compactedAtSeq,
+    compactedBySnapshotId: mrp.compactedBySnapshotId
   };
+}
+
+/** Build the STATE-overlay lookup: every snapshot on the canvas, keyed by its
+ *  `state-${id}` canvas id. Unlike snapshotToCanvasObjects these are NOT
+ *  rendered as tiles — a compacted MRP opens the one referenced by its
+ *  compactedBySnapshotId. We expose ALL snapshots (not just the active one) so
+ *  an MRP folded by a now-superseded version can still open the right state. */
+export function snapshotToStateObjects(snapshot: CanvasSnapshot): StateObject[] {
+  const activeSnapshotId = snapshot.canvas.activeSnapshotId;
+  return (snapshot.stateSnapshots ?? []).map((stateSnap) =>
+    toStateObject(stateSnap, stateSnap.id === activeSnapshotId),
+  );
 }
 
 export function toStateObject(snapshot: StateSnapshot, active: boolean): StateObject {

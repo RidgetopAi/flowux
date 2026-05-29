@@ -55,8 +55,9 @@ export function ExpandedStateLayer() {
   const expandedId = useCanvas((s) => s.expandedId);
   const state = useCanvas((s) => {
     if (!s.expandedId) return undefined;
-    const obj = s.objects.find((o) => o.id === s.expandedId);
-    return obj && obj.type === "state" ? obj : undefined;
+    // STATE snapshots live in their own lookup (not `objects`) — they're
+    // opened by clicking the COMPACTED chip on an MRP, not rendered as tiles.
+    return s.stateSnapshots.find((st) => st.id === s.expandedId);
   });
   const setExpanded = useCanvas((s) => s.setExpanded);
 

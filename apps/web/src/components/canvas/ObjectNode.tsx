@@ -1,7 +1,6 @@
 import type { CanvasObject } from "../../lib/store";
 import { MRPCard } from "./MRPCard";
 import { ImageCard } from "./ImageCard";
-import { StateCard } from "./StateCard";
 import { ToolCallChip } from "./ToolCallChip";
 
 /**
@@ -21,7 +20,11 @@ export function ObjectNode({ object }: Props) {
     case "tool_call":
       return <ToolCallChip tool={object} />;
     case "state":
-      return <StateCard state={object} />;
+      // STATE snapshots are no longer canvas tiles — they're opened from the
+      // COMPACTED chip on an MRP via the stateSnapshots lookup. Should never
+      // reach here (none are emitted into `objects`), but keep the union
+      // exhaustive so TypeScript still flags genuinely-unhandled variants.
+      return null;
     default:
       // Exhaustiveness guard — if a new variant gets added to CanvasObject
       // without a case here, TypeScript will complain at compile time.
