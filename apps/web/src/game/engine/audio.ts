@@ -11,7 +11,7 @@
    running, so callers never have to guard.
    ──────────────────────────────────────────────────────────────────────── */
 
-const MASTER_VOL = 0.3;
+const MASTER_VOL = 0.62;
 /** The four descending heartbeat tones, cycled one-per-march-step. */
 const MARCH_TONES = [142, 126, 113, 101];
 
@@ -58,7 +58,15 @@ export function createAudioEngine(): AudioEngine {
     ctx = new Ctor();
     master = ctx.createGain();
     master.gain.value = muted ? 0 : MASTER_VOL;
-    master.connect(ctx.destination);
+    // A limiter on the bus so we can run the mix loud without harsh
+    // clipping when several voices stack (heartbeat + shot + explosion).
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -8;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.18;
+    master.connect(limiter).connect(ctx.destination);
 
     // One second of white noise, reused for every explosion via a fresh
     // (cheap, fire-and-forget) BufferSource each time.
@@ -143,32 +151,34 @@ export function createAudioEngine(): AudioEngine {
 
     shoot() {
       if (!live()) return;
-      blip("square", 880, 180, 0.16, 0.28);
+      blip("square", 880, 180, 0.16, 0.5);
     },
 
     alienExplosion() {
       if (!live()) return;
-      noiseBurst(4200, 320, 0.2, 0.32);
+      noiseBurst(4200, 320, 0.2, 0.6);
     },
 
     playerExplosion() {
       if (!live()) return;
       // Heavier and longer: a noise bed plus a detuned descending growl.
-      noiseBurst(2000, 90, 0.6, 0.42);
-      blip("sawtooth", 420, 60, 0.55, 0.3);
+      noiseBurst(2000, 90, 0.6, 0.75);
+      blip("sawtooth", 420, 60, 0.55, 0.5);
     },
 
     ufoExplosion() {
       if (!live()) return;
-      noiseBurst(3000, 200, 0.34, 0.36);
-      blip("square", 600, 120, 0.34, 0.26);
+      noiseBurst(3000, 200, 0.34, 0.62);
+      blip("square", 600, 120, 0.34, 0.45);
     },
 
     marchStep() {
       if (!live()) return;
       const f = MARCH_TONES[marchIndex % MARCH_TONES.length] ?? 120;
       marchIndex += 1;
-      blip("triangle", f, f * 0.92, 0.15, 0.34, 0.006);
+      // A touch of square in the body would be lost low; triangle reads as
+      // the classic thump. Pushed loud — it's the always-on pulse.
+      blip("triangle", f, f * 0.92, 0.16, 0.6, 0.006);
     },
 
     ufoOn() {
@@ -185,7 +195,7 @@ export function createAudioEngine(): AudioEngine {
       lfoGain.gain.value = 70; // vibrato depth (Hz)
       lfo.connect(lfoGain).connect(osc.frequency);
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.12, t + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.06);
       osc.connect(gain).connect(master);
       osc.start(t);
       lfo.start(t);
