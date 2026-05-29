@@ -10,6 +10,7 @@ import {
 import {
   ChevronRight,
   Eraser,
+  Gamepad2,
   GitBranch,
   GripHorizontal,
   History as HistoryIcon,
@@ -63,6 +64,7 @@ type SlashExecContext = {
   setSidebarTab: (tab: "search" | "bundles" | "branches" | "imports" | "history") => void;
   focusSidebarSearch: () => void;
   createChildFromSelection: () => Promise<void> | void;
+  openInvaders: () => void;
   flagError: (msg: string) => void;
 };
 
@@ -145,6 +147,18 @@ const SLASH_COMMANDS: SlashCommand[] = [
       closeDock();
     },
   },
+  {
+    name: "invaders",
+    label: "Project Space Invaders onto the board",
+    icon: Gamepad2,
+    exec: ({ openInvaders, setDraft, closeDock }) => {
+      setDraft("");
+      closeDock();
+      // Defer one tick so the dock unmount doesn't race the overlay mount
+      // and steal back the focus / keyboard authority.
+      window.setTimeout(() => openInvaders(), 0);
+    },
+  },
 ];
 
 /* Render the dock with mount/exit animation managed via AnimatePresence. */
@@ -200,6 +214,7 @@ function FloatingDock() {
   const zoomToFit = useCanvas((s) => s.zoomToFit);
   const setSidebarTab = useCanvas((s) => s.setSidebarTab);
   const focusSidebarSearch = useCanvas((s) => s.focusSidebarSearch);
+  const openInvaders = useCanvas((s) => s.openInvaders);
   const createChildCanvasFromSelection = useFlowuxStore((s) => s.createChildCanvasFromSelection);
   // Stable handle to push a one-shot error into the topbar status pill.
   const flagError = (msg: string) => useFlowuxStore.setState({ error: msg });
@@ -236,6 +251,7 @@ function FloatingDock() {
       zoomToFit,
       setSidebarTab,
       focusSidebarSearch,
+      openInvaders,
       createChildFromSelection: createChildCanvasFromSelection,
       flagError,
     });

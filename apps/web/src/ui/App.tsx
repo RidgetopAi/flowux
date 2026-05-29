@@ -7,6 +7,7 @@ import { ChromaText } from "../components/effects/ChromaText";
 import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
 import { Pill } from "../components/primitives/Pill";
+import { InvadersOverlay } from "../game/Invaders";
 import { arrangeGrid } from "../lib/layout";
 import { useCanvas, type ForkHandler, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
 import { useFlowuxStore } from "../store.js";
@@ -217,6 +218,8 @@ export function App() {
           <Canvas />
         </div>
       </div>
+
+      <InvadersOverlay />
     </main>
   );
 }

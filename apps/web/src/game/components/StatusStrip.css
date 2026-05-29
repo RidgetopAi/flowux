@@ -1,0 +1,47 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   STATUS STRIP
+   Quiet mono rail at the bottom of the projection frame. Lives between
+   the playfield and the bottom Braille band. Restrained on purpose —
+   the playfield is the wow, the chrome is just there to anchor it.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-3) var(--s-7);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.32em;
+  color: var(--muted);
+  text-transform: uppercase;
+  border-top: 1px solid rgba(168, 255, 241, 0.10);
+}
+
+.status-strip__left,
+.status-strip__right {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.status-strip__kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 36px;
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--line-warm);
+  background: rgba(168, 255, 241, 0.04);
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-sm);
+  box-shadow: var(--glow-cyan-sm);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  font-size: 10px;
+}
+
+.status-strip__text {
+  color: var(--soft);
+}

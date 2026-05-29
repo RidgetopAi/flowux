@@ -1,0 +1,78 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   HUD BAR
+   The top tactical-readout strip. Four columns evenly spaced, each with
+   a micro-label above a monospace numeric value. Lives column gets the
+   ship glyph row in place of a numeral.
+
+   Layout is grid, not flex, so the four columns share equal width and
+   the values line up vertically across the row.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.hud-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: end;
+  gap: var(--s-6);
+  padding: var(--s-5) var(--s-7) var(--s-5);
+  border-top: 1px solid var(--line-warm);
+  border-bottom: 1px solid var(--line-warm);
+  background:
+    linear-gradient(180deg, rgba(168, 255, 241, 0.04), rgba(168, 255, 241, 0.00));
+}
+
+.hud-col {
+  display: grid;
+  gap: var(--s-2);
+  text-align: center;
+}
+
+.hud-col__label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.hud-col__value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  /* Numbers use tabular figures so the score field doesn't dance when
+   * digits change width — same trick as scoreboards everywhere. */
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-col--cyan .hud-col__value {
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-md);
+}
+
+.hud-col--amber .hud-col__value {
+  color: var(--amber-bright);
+  text-shadow: var(--glow-amber-md);
+}
+
+/* ── LIVES ──────────────────────────────────────────────────────────── */
+
+.hud-lives {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  /* Lives value cell is shorter than a numeral cell — nudge down a
+   * touch so the ship row baselines line up with the other columns. */
+  padding-top: 4px;
+}
+
+.hud-ship {
+  color: var(--cyan-bright);
+  filter:
+    drop-shadow(0 0 1px rgba(212, 255, 247, 1))
+    drop-shadow(0 0 4px rgba(168, 255, 241, 0.65))
+    drop-shadow(0 0 10px rgba(78, 168, 158, 0.4));
+  display: block;
+}

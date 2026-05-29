@@ -1,0 +1,137 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   INVADERS · PROJECTION SURFACE
+   The outer overlay + frame chrome. Sub-components (HudBar, Playfield,
+   Marquee, StatusStrip) own their own CSS and slot into the frame's
+   grid rows.
+
+   Tokens from tokens.css drive every color, glow, and timing.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.invaders-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80; /* above canvas + dock layer; below modal-level chrome */
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  overflow: hidden;
+  isolation: isolate; /* contain blend modes & glow stacks */
+}
+
+/* ── BACKDROP ────────────────────────────────────────────────────────────
+   Dims and softly blurs the canvas behind. Not opaque — the MRP cards
+   still bleed through faintly, which is what sells the "projected"
+   metaphor. The eye knows there's a board underneath. */
+.invaders-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 80% at 50% 50%, rgba(0, 0, 0, 0.50), rgba(0, 0, 0, 0.86) 90%);
+  backdrop-filter: blur(3px) saturate(0.85);
+  -webkit-backdrop-filter: blur(3px) saturate(0.85);
+}
+
+/* ── PROJECTION BEAM ─────────────────────────────────────────────────────
+   Soft cyan light cone falling from above. Wide, low opacity — meant to
+   read as "something is being projected onto this surface" without
+   selling the metaphor too literally. */
+.invaders-overlay__beam {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 65% 70% at 50% -10%,
+      rgba(168, 255, 241, 0.16),
+      rgba(168, 255, 241, 0.06) 35%,
+      transparent 70%
+    );
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+/* ── SCANLINES ───────────────────────────────────────────────────────────
+   Horizontal CRT scanline texture across the whole projection surface.
+   The playfield owns its own denser version internally; this one is
+   the "surrounding atmosphere" pass. */
+.invaders-overlay__scanlines {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.18) 2px,
+    rgba(0, 0, 0, 0.18) 3px
+  );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* ── VIGNETTE ────────────────────────────────────────────────────────────
+   Corner darkening — sits on top, pulls the eye inward. The combination
+   of beam (light, screen-blended) + vignette (dark, multiply) is what
+   gives the surface its dimensional feel without any 3D math. */
+.invaders-overlay__vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 70% at 50% 50%,
+      transparent 40%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* ── FRAME ───────────────────────────────────────────────────────────────
+   The actual playfield container. Grid-rows compose the HUD bar,
+   playfield, and status strip between two Braille bands. min-height: 0
+   on the playfield row keeps the flex/grid math honest so the playfield
+   never overflows the frame. */
+.invaders-overlay__frame {
+  position: relative;
+  width: min(1100px, 94vw);
+  height: min(820px, 92vh);
+  padding: var(--s-5) var(--s-6);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, rgba(10, 18, 18, 0.78), rgba(5, 8, 8, 0.86));
+  border: 1px solid var(--line-warm);
+  box-shadow:
+    /* Chroma offset — locked style fingerprint */
+    -2px 0 0 0 rgba(255, 111, 156, 0.10),
+     2px 0 0 0 rgba(111, 184, 255, 0.10),
+    /* Inner phosphor edge */
+    inset 0 0 0 1px rgba(168, 255, 241, 0.10),
+    inset 0 0 32px rgba(78, 168, 158, 0.18),
+    /* Outer haze */
+    0 0 0 1px rgba(168, 255, 241, 0.18),
+    0 0 24px rgba(78, 168, 158, 0.22),
+    0 0 80px rgba(78, 168, 158, 0.12),
+    var(--shadow-shell);
+  display: grid;
+  grid-template-rows:
+    auto    /* top braille band */
+    auto    /* hud bar */
+    1fr     /* playfield (flexes) */
+    auto    /* status strip */
+    auto;   /* bottom braille band */
+  gap: var(--s-4);
+  overflow: hidden;
+}
+
+/* ── BRAILLE BANDS ───────────────────────────────────────────────────────
+   Top + bottom bands give the frame its tactical-readout chrome. Cyan
+   tone, low density. The bands are the only visual element that lives
+   inline in the frame stylesheet — sub-components own everything else. */
+.invaders-overlay__band {
+  display: block;
+  letter-spacing: 0.04em;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0.66;
+}
