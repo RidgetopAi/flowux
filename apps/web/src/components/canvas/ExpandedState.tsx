@@ -210,7 +210,7 @@ function ExpandedState({ state, onDismiss }: { state: StateObject; onDismiss: ()
             {(editing ? draft.goals : activeGoals).map((g, i) => {
               const idx = editing ? draft.goals.indexOf(g) : -1;
               return editing ? (
-                <div key={idx} className="xstate__row xstate__row--edit">
+                <div key={idx} className="xstate__row xstate__row--edit xstate__row--goal-edit">
                   <select
                     className="xstate__select"
                     value={g.status}

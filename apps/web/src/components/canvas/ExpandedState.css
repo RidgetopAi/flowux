@@ -281,6 +281,12 @@
   border-bottom: 1px dashed rgba(168, 255, 241, 0.12);
 }
 
+/* Goal rows carry an extra status <select> before the text field, so they
+ * need a dedicated column for it: status (narrow) │ goal text (fills) │ delete. */
+.xstate__row--goal-edit {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .xstate__row--decision-edit {
   grid-template-columns: minmax(0, 1fr) auto;
 }
