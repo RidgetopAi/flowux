@@ -40,6 +40,11 @@ export function App() {
   // with the placeholder id we hand back from the handler, which doesn't
   // exist in useCanvas yet, so it silently no-ops without this bridge.
   const pendingFocusId = useRef<string | null>(null);
+  // Canvas we've already framed the camera for. On a fresh load / canvas
+  // switch we center on the newest MRP; we DON'T re-frame on same-canvas
+  // reloads (e.g. after a prompt completes) so the camera isn't yanked
+  // while the user is working.
+  const framedCanvasId = useRef<string | null>(null);
   // One-shot per-canvas migration of legacy workspace-era 360×240 placements
   // to the lean canvas's 320×240 tight grid. Tracks which canvas ids have
   // already been migrated this session so a refetched snapshot doesn't
@@ -55,6 +60,28 @@ export function App() {
     loadFromSnapshot(snapshot);
 
     maybeMigrateLegacyLayout(snapshot, migratedCanvasIds.current, patchPlacement);
+
+    // First load / canvas switch: center the camera on the newest MRP so
+    // resuming a board lands on the most recent card instead of empty
+    // space above it. rAF lets Canvas's ResizeObserver set the real
+    // viewport size before revealMRP does its centering math.
+    if (snapshot.canvas.id !== framedCanvasId.current) {
+      framedCanvasId.current = snapshot.canvas.id;
+      if (!pendingFocusId.current) {
+        requestAnimationFrame(() => {
+          const objs = useCanvas.getState().objects;
+          let lastId: string | null = null;
+          let lastSeq = -Infinity;
+          for (const o of objs) {
+            if (o.type === "mrp" && o.sequence > lastSeq) {
+              lastSeq = o.sequence;
+              lastId = o.id;
+            }
+          }
+          if (lastId) useCanvas.getState().revealMRP(lastId);
+        });
+      }
+    }
 
     const target = pendingFocusId.current;
     if (!target) return;
