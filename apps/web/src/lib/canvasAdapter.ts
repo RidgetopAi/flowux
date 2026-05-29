@@ -78,11 +78,13 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
     );
   }
 
-  /* State snapshots — render every snapshot as a STATE card so the
-   *  history is visible spatially, with the active one called out. */
+  /* State snapshots — only the ACTIVE snapshot renders as a canvas card
+   *  (a single tidy amber tile). Superseded snapshots stay in the DB for
+   *  the future history view rather than stacking up on the board. */
   const activeSnapshotId = snapshot.canvas.activeSnapshotId;
   for (const stateSnap of snapshot.stateSnapshots ?? []) {
-    objects.push(toStateObject(stateSnap, stateSnap.id === activeSnapshotId));
+    if (stateSnap.id !== activeSnapshotId) continue;
+    objects.push(toStateObject(stateSnap, true));
   }
 
   // Track per-placement whether an image already occupies the right slot
@@ -261,8 +263,10 @@ export function toStateObject(snapshot: StateSnapshot, active: boolean): StateOb
     id: `state-${snapshot.id}`,
     x: snapshot.x,
     y: snapshot.y,
-    width: snapshot.width,
-    height: snapshot.height,
+    /* Force MRP tile size so STATE cards read as peers of MRP cards
+     *  (older snapshots persisted a larger 480×320). */
+    width: MRP_TILE_W,
+    height: MRP_TILE_H,
     checked: false,
     snapshotId: snapshot.id,
     version: snapshot.version,

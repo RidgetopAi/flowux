@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion, useMotionValue, type PanInfo } from "motion/react";
-import { History, ListChecks, Sparkles, FileText as FileIcon, HelpCircle, Edit3 } from "lucide-react";
+import { Edit3 } from "lucide-react";
 import { useCanvas, type StateObject } from "../../lib/store";
 import { Card } from "../primitives/Card";
 import { Label } from "../primitives/Label";
@@ -14,16 +14,12 @@ type Props = { state: StateObject };
 /**
  * STATE card — first-class canvas tile for a compaction snapshot.
  *
- * Renders the structured state document (summary + goals + decisions +
- * facts + artifacts + open questions) at the position where the
- * compaction's covered-range MRPs are. Cool phosphor styling, distinct
- * from MRP cards (cyan accent border + braille band), with a version
- * pill and a "covers turns N-M" badge so the user can map snapshot ↔
- * raw cards spatially.
- *
- * Inactive (historic) snapshots render dimmer — only the active
- * snapshot drives current context. Click to scroll inside; full read
- * view + editing land in v3.
+ * Rendered as a compact MRP-sized tile in amber (the same colour as the
+ * compacted MRPs it covers, so the amber run + its STATE card read as
+ * one unit: "this is the point the context was folded; everything amber
+ * before it is tied to this card"). Shows a preview — summary, next
+ * step, and a count strip — and opens the full structured read/edit
+ * overlay on double-tap, exactly like an MRP card.
  */
 export function StateCard({ state }: Props) {
   const draggingId = useCanvas((s) => s.draggingId);
@@ -78,14 +74,25 @@ export function StateCard({ state }: Props) {
 
   const doc = state.state;
   const activeGoals = doc.goals.filter((g) => g.status !== "done");
-  const doneGoals = doc.goals.filter((g) => g.status === "done");
-  const totalItems =
-    activeGoals.length + doc.decisions.length + doc.facts.length + doc.artifacts.length + doc.openQuestions.length;
+
+  /* Compact count strip — only non-empty sections, so the user can see
+   *  at a glance what's inside before expanding. */
+  const stats: string[] = [];
+  const push = (n: number, one: string, many = one + "s") => {
+    if (n > 0) stats.push(`${n} ${n === 1 ? one : many}`);
+  };
+  push(activeGoals.length, "goal");
+  push(doc.constraints?.length ?? 0, "constraint");
+  push(doc.decisions.length, "decision");
+  push(doc.facts.length, "fact");
+  push(doc.rejected?.length ?? 0, "ruled out", "ruled out");
+  push(doc.artifacts.length, "artifact");
+  push(doc.openQuestions.length, "question");
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96, y: 16 }}
-      animate={{ opacity: state.active ? 1 : 0.65, scale: 1, y: 0 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       whileHover={!isDragging
         ? { y: -3, transition: { duration: 0.18, ease: "easeOut" } }
@@ -99,11 +106,7 @@ export function StateCard({ state }: Props) {
         zIndex: isDragging ? 30 : 6,
       }}
       data-object-id={state.id}
-      className={cn(
-        "state-card-wrap",
-        isDragging && "is-dragging",
-        state.active ? "is-active" : "is-historic",
-      )}
+      className={cn("state-card-wrap", isDragging && "is-dragging")}
     >
       <motion.div
         data-canvas-card
@@ -125,12 +128,12 @@ export function StateCard({ state }: Props) {
       >
         <Card state="idle" className="state-card">
           <div className="state-card__head">
-            <Label tone="cyan" size="micro">STATE</Label>
-            <Pill tone="cyan">v{state.version}</Pill>
-            <Pill tone={state.active ? "cyan" : "neutral"}>
+            <Label tone="amber" size="micro">STATE</Label>
+            <Pill tone="amber">v{state.version}</Pill>
+            <Pill tone="amber">
               {state.coveredCount} turn{state.coveredCount === 1 ? "" : "s"}
             </Pill>
-            <span className="state-card__head-divider" />
+            <span className="state-card__spacer" />
             <Label size="micro" tone="muted">
               {`#${state.coveredFromSeq}–${state.coveredToSeq}`}
             </Label>
@@ -139,101 +142,24 @@ export function StateCard({ state }: Props) {
                 <Edit3 size={11} />
               </span>
             )}
-            <span className="state-card__spacer" />
-            {!state.active && (
-              <Pill tone="neutral">historic</Pill>
-            )}
           </div>
 
-          <BrailleBand length={36} density={0.5} tone="cyan" seed={state.version + 99} />
+          <BrailleBand length={36} density={0.5} tone="amber" seed={state.version + 99} />
 
           <div className="state-card__body">
             <p className="state-card__summary">
               {doc.summary || <em className="state-card__empty">no summary yet</em>}
             </p>
 
-            {activeGoals.length > 0 && (
-              <Section icon={<ListChecks size={12} />} label="Active Goals" count={activeGoals.length}>
-                <ul className="state-card__list">
-                  {activeGoals.map((g, i) => (
-                    <li key={i} className={cn("state-card__row", g.status === "blocked" && "is-blocked")}>
-                      <span className="state-card__dot" />
-                      <span className="state-card__row-text">{g.text}</span>
-                      {g.status === "blocked" && <Pill tone="amber">blocked</Pill>}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {doc.decisions.length > 0 && (
-              <Section icon={<Sparkles size={12} />} label="Decisions" count={doc.decisions.length}>
-                <ul className="state-card__list">
-                  {doc.decisions.map((d, i) => (
-                    <li key={i} className="state-card__row state-card__row--decision">
-                      <span className="state-card__row-text">
-                        <strong>{d.what}</strong>
-                        <span className="state-card__why"> — because {d.why}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {doc.facts.length > 0 && (
-              <Section icon={<History size={12} />} label="Facts learned" count={doc.facts.length}>
-                <ul className="state-card__list">
-                  {doc.facts.map((f, i) => (
-                    <li key={i} className="state-card__row">
-                      <span className="state-card__dot" />
-                      <span className="state-card__row-text">{f.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {doc.artifacts.length > 0 && (
-              <Section icon={<FileIcon size={12} />} label="Artifacts" count={doc.artifacts.length}>
-                <ul className="state-card__list">
-                  {doc.artifacts.map((a, i) => (
-                    <li key={i} className="state-card__row">
-                      <span className="state-card__kind">{a.kind}</span>
-                      <span className="state-card__row-text">
-                        <code>{a.identifier}</code>
-                        <span className="state-card__why"> — {a.role}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {doc.openQuestions.length > 0 && (
-              <Section icon={<HelpCircle size={12} />} label="Open questions" count={doc.openQuestions.length}>
-                <ul className="state-card__list">
-                  {doc.openQuestions.map((q, i) => (
-                    <li key={i} className="state-card__row state-card__row--question">
-                      <span className="state-card__dot state-card__dot--amber" />
-                      <span className="state-card__row-text">{q.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {totalItems === 0 && !doc.summary && (
-              <p className="state-card__empty">
-                Empty state — the conversation hadn't crystallized into goals or
-                decisions yet when this snapshot was taken.
+            {doc.nextStep && (
+              <p className="state-card__next">
+                <span className="state-card__next-label">NEXT</span>
+                {doc.nextStep}
               </p>
             )}
 
-            {doneGoals.length > 0 && (
-              <div className="state-card__done">
-                {doneGoals.length} resolved goal{doneGoals.length === 1 ? "" : "s"} archived in this snapshot.
-              </div>
+            {stats.length > 0 && (
+              <div className="state-card__stats">{stats.join(" · ")}</div>
             )}
           </div>
 
@@ -244,29 +170,6 @@ export function StateCard({ state }: Props) {
         </Card>
       </motion.div>
     </motion.div>
-  );
-}
-
-function Section({
-  icon,
-  label,
-  count,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="state-card__section">
-      <div className="state-card__section-head">
-        <span className="state-card__section-icon">{icon}</span>
-        <Label size="micro" tone="ink">{label}</Label>
-        <span className="state-card__section-count fx-mono-micro">{count}</span>
-      </div>
-      {children}
-    </section>
   );
 }
 

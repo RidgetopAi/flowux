@@ -1388,9 +1388,9 @@ function slimSummaryEventRow(row: MrpEventRow): MrpEventRow {
  * Used by /compact slash command, future auto-trigger, and bundle-scoped
  * compaction. */
 
-const STATE_CARD_WIDTH = 480;
-const STATE_CARD_HEIGHT = 320;
-const STATE_CARD_GAP_Y = 360;
+const STATE_CARD_WIDTH = 320;
+const STATE_CARD_HEIGHT = 240;
+const STATE_CARD_GAP_Y = 280;
 const SNAPSHOT_RETRY_LIMIT = 1;
 
 const SNAPSHOT_SYSTEM_PROMPT = `You are maintaining the canonical STATE for an ongoing technical conversation between a developer (the user) and an AI assistant. This is NOT a summary of what happened — it is the operating context a fresh agent would need to resume the work correctly WITHOUT the original transcript.
