@@ -31,3 +31,9 @@ export {
   type PiTarget
 } from "./targets.js";
 export { pingTarget, type PiPingResult } from "./piMonoAdapter.js";
+export {
+  checkModelServer,
+  startModelServer,
+  type ModelServerStatus,
+  type ModelServerStartResult
+} from "./modelServer.js";

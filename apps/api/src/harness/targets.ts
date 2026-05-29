@@ -41,6 +41,12 @@ export interface PiTarget {
   maxOutputTokens: number;
   /** Whether this target's model accepts image pixels (grok yes; local no). */
   supportsImages: boolean;
+  /** ssh targets only: command to launch the model server (e.g. the
+   *  run-server script). Run detached so it survives the ssh session. */
+  serverStartCmd?: string;
+  /** ssh targets only: HTTP endpoint that returns 200 when the model server
+   *  is up (the OpenAI /v1/models route). Used for health + post-start poll. */
+  serverHealthUrl?: string;
 }
 
 interface TargetsState {
@@ -66,19 +72,23 @@ function buildInitialState(config: FlowuxConfig): TargetsState {
     supportsImages: isGrok(config.piMonoProvider, config.piMonoModel)
   };
 
-  // Remote desktop target. Flags are PROVISIONAL until verified against the
-  // desktop's pi config (Phase 2) — overridable via FLOWUX_PI_REMOTE_*.
+  // Remote desktop target. Defaults verified against the desktop's pi config
+  // (~/.pi/agent/models.json provider "local-qwen") and mise install — all
+  // overridable via FLOWUX_PI_REMOTE_*.
+  //
+  // `pi` on the desktop is a .bashrc alias → pi-wrapper.sh, invisible to a
+  // non-interactive ssh shell. The mise shim is the stable, PATH-independent
+  // entry point (symlinks to /usr/bin/mise, which resolves pi). Absolute path
+  // because the ssh command quotes each arg (so ~ wouldn't expand).
   const remoteHost = process.env.FLOWUX_PI_REMOTE_HOST ?? "ridgetop-desktop";
-  const remoteProvider = process.env.FLOWUX_PI_REMOTE_PROVIDER ?? "ollama";
-  // Independent of the local script's FLOWUX_MODEL_NAME (which may be grok).
-  // Provisional until verified against the desktop's pi config (Phase 2).
+  const remoteProvider = process.env.FLOWUX_PI_REMOTE_PROVIDER ?? "local-qwen";
   const remoteModel = process.env.FLOWUX_PI_REMOTE_MODEL ?? "qwen3.6-35b";
   const remote: PiTarget = {
     id: "desktop-local",
     label: `${remoteHost} · ${remoteModel}`,
     transport: "ssh",
     sshHost: remoteHost,
-    bin: process.env.FLOWUX_PI_REMOTE_BIN ?? "pi",
+    bin: process.env.FLOWUX_PI_REMOTE_BIN ?? "/home/ridgetop/.local/share/mise/shims/pi",
     provider: remoteProvider,
     model: remoteModel,
     thinking: process.env.FLOWUX_PI_REMOTE_THINKING ?? "minimal",
@@ -87,7 +97,13 @@ function buildInitialState(config: FlowuxConfig): TargetsState {
       process.env.FLOWUX_PI_REMOTE_CONTEXT_WINDOW ?? contextWindowFor(remoteProvider, remoteModel)
     ),
     maxOutputTokens: Number(process.env.FLOWUX_PI_REMOTE_MAX_TOKENS ?? config.modelMaxTokens),
-    supportsImages: isGrok(remoteProvider, remoteModel)
+    supportsImages: isGrok(remoteProvider, remoteModel),
+    // The ik_llama.cpp server binds the Tailscale IP (matches the desktop's
+    // pi models.json baseUrl), not loopback — health-probe THAT address.
+    serverStartCmd:
+      process.env.FLOWUX_PI_REMOTE_SERVER_CMD ?? "~/models/qwen3.6-35b/run-server-ik.sh",
+    serverHealthUrl:
+      process.env.FLOWUX_PI_REMOTE_SERVER_HEALTH ?? "http://100.122.105.69:5005/v1/models"
   };
 
   const activeId = process.env.FLOWUX_PI_ACTIVE_TARGET ?? local.id;
@@ -144,6 +160,6 @@ function isGrok(provider: string, model: string): boolean {
 function contextWindowFor(provider: string, model: string): number {
   if (provider === "xai" && /^grok-4\.3/i.test(model)) return 1_048_576;
   if (provider === "xai" && /^grok-4/i.test(model)) return 262_144;
-  if (/qwen3\.6-35b/i.test(model)) return 140_000;
+  if (/qwen3\.6-35b/i.test(model)) return 131_072; // matches desktop models.json
   return 128_000;
 }

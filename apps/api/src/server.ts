@@ -36,7 +36,9 @@ import {
   getTarget,
   setActiveTarget,
   resolveTarget,
-  pingTarget
+  pingTarget,
+  checkModelServer,
+  startModelServer
 } from "./harness/index.js";
 import { prepareAttachmentDelivery } from "./services/attachmentDelivery.js";
 import { loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
@@ -91,6 +93,19 @@ app.post<{ Params: { id: string } }>("/api/pi/target/:id/test", async (request, 
   const target = getTarget(request.params.id);
   if (!target) return reply.code(404).send({ error: "unknown_target", id: request.params.id });
   return pingTarget(target);
+});
+
+// Remote model-server lifecycle (ssh targets). Health probe + detached start.
+app.get<{ Params: { id: string } }>("/api/pi/target/:id/server", async (request, reply) => {
+  const target = getTarget(request.params.id);
+  if (!target) return reply.code(404).send({ error: "unknown_target", id: request.params.id });
+  return checkModelServer(target);
+});
+
+app.post<{ Params: { id: string } }>("/api/pi/target/:id/server/start", async (request, reply) => {
+  const target = getTarget(request.params.id);
+  if (!target) return reply.code(404).send({ error: "unknown_target", id: request.params.id });
+  return startModelServer(target);
 });
 
 app.get("/api/canvases", async () => listCanvases());

@@ -18,6 +18,9 @@ export function PiTargetSelector() {
   const piTesting = useFlowuxStore((s) => s.piTesting);
   const switchPiTarget = useFlowuxStore((s) => s.switchPiTarget);
   const testPiTarget = useFlowuxStore((s) => s.testPiTarget);
+  const piServer = useFlowuxStore((s) => s.piServer);
+  const checkPiServer = useFlowuxStore((s) => s.checkPiServer);
+  const startPiServer = useFlowuxStore((s) => s.startPiServer);
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -37,6 +40,13 @@ export function PiTargetSelector() {
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Auto-probe the remote model server when the popover opens for an ssh target.
+  useEffect(() => {
+    if (!open) return;
+    const a = targets.find((t) => t.id === activeTargetId) ?? targets[0];
+    if (a?.transport === "ssh") void checkPiServer(a.id);
+  }, [open, activeTargetId, targets, checkPiServer]);
 
   // Nothing to show when the API isn't running Pi (no targets registered).
   if (targets.length === 0) return null;
@@ -95,6 +105,51 @@ export function PiTargetSelector() {
               );
             })}
           </div>
+
+          {active?.transport === "ssh" && (
+            (() => {
+              const srv = piServer[active.id];
+              const srvState = srv?.starting
+                ? "testing"
+                : srv?.checking
+                  ? "testing"
+                  : srv?.running
+                    ? "ok"
+                    : srv
+                      ? "err"
+                      : "idle";
+              const srvText = srv?.starting
+                ? "starting…"
+                : srv?.checking
+                  ? "checking…"
+                  : srv?.running
+                    ? "up"
+                    : srv?.error
+                      ? srv.error
+                      : srv
+                        ? "down"
+                        : "—";
+              return (
+                <div className="pi-target__server">
+                  <span className={cn("pi-target__dot", `pi-target__dot--${srvState}`)} aria-hidden="true" />
+                  <span className="pi-target__server-label">model server</span>
+                  <span className={cn("pi-target__server-state", srv?.running && "pi-target__server-state--ok", !srv?.running && srv && !srv.checking && !srv.starting && "pi-target__server-state--err")}>
+                    {srvText}
+                  </span>
+                  {!srv?.running && (
+                    <button
+                      type="button"
+                      className="pi-target__server-start"
+                      onClick={() => void startPiServer(active.id)}
+                      disabled={srv?.starting}
+                    >
+                      {srv?.starting ? "Starting…" : "Start"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()
+          )}
 
           <div className="pi-target__foot">
             <button

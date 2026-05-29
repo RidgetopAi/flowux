@@ -66,6 +66,27 @@ export async function testPiTarget(id: string): Promise<PiPingResult> {
   return fetchJson(`/api/pi/target/${id}/test`, { method: "POST" });
 }
 
+export interface ModelServerStatus {
+  managed: boolean;
+  running: boolean;
+  httpStatus?: number;
+  error?: string;
+}
+
+export interface ModelServerStartResult {
+  started: boolean;
+  alreadyRunning: boolean;
+  error?: string;
+}
+
+export async function getModelServer(id: string): Promise<ModelServerStatus> {
+  return fetchJson(`/api/pi/target/${id}/server`);
+}
+
+export async function startModelServer(id: string): Promise<ModelServerStartResult> {
+  return fetchJson(`/api/pi/target/${id}/server/start`, { method: "POST" });
+}
+
 export async function listCanvases(): Promise<CanvasThread[]> {
   return fetchJson("/api/canvases");
 }

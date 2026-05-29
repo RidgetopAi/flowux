@@ -29,11 +29,18 @@ interface FlowuxState {
   piTesting?: string;
   /** last connectivity-test result keyed by target id. */
   piPing: Record<string, api.PiPingResult>;
+  /** remote model-server status keyed by target id. */
+  piServer: Record<
+    string,
+    api.ModelServerStatus & { checking?: boolean; starting?: boolean }
+  >;
   error?: string;
   loadInitial: () => Promise<void>;
   loadPiTargets: () => Promise<void>;
   switchPiTarget: (id: string) => Promise<void>;
   testPiTarget: (id: string) => Promise<void>;
+  checkPiServer: (id: string) => Promise<void>;
+  startPiServer: (id: string) => Promise<void>;
   reloadCanvas: (canvasId: string) => Promise<void>;
   switchCanvas: (canvasId: string) => Promise<void>;
   createNewCanvas: (title?: string) => Promise<void>;
@@ -79,6 +86,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   searchResults: [],
   piTargets: [],
   piPing: {},
+  piServer: {},
 
   async loadInitial() {
     set({ loading: true, error: undefined });
@@ -136,6 +144,52 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
         },
         piTesting: undefined
       }));
+    }
+  },
+
+  async checkPiServer(id) {
+    set((state) => ({
+      piServer: { ...state.piServer, [id]: { ...state.piServer[id], managed: state.piServer[id]?.managed ?? true, running: state.piServer[id]?.running ?? false, checking: true } }
+    }));
+    try {
+      const status = await api.getModelServer(id);
+      set((state) => ({ piServer: { ...state.piServer, [id]: { ...status, checking: false, starting: state.piServer[id]?.starting } } }));
+    } catch (error) {
+      set((state) => ({
+        piServer: {
+          ...state.piServer,
+          [id]: { managed: true, running: false, checking: false, error: error instanceof Error ? error.message : "check failed" }
+        }
+      }));
+    }
+  },
+
+  async startPiServer(id) {
+    set((state) => ({ piServer: { ...state.piServer, [id]: { ...(state.piServer[id] ?? { managed: true, running: false }), starting: true, error: undefined } } }));
+    try {
+      const res = await api.startModelServer(id);
+      if (res.error) {
+        set((state) => ({ piServer: { ...state.piServer, [id]: { ...(state.piServer[id] ?? { managed: true }), running: false, starting: false, error: res.error } } }));
+        return;
+      }
+      // Poll health until the server comes up (model load can take a while).
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        let status: api.ModelServerStatus;
+        try {
+          status = await api.getModelServer(id);
+        } catch {
+          continue;
+        }
+        if (status.running) {
+          set((state) => ({ piServer: { ...state.piServer, [id]: { ...status, starting: false } } }));
+          return;
+        }
+      }
+      set((state) => ({ piServer: { ...state.piServer, [id]: { managed: true, running: false, starting: false, error: "server did not come up in time" } } }));
+    } catch (error) {
+      set((state) => ({ piServer: { ...state.piServer, [id]: { managed: true, running: false, starting: false, error: error instanceof Error ? error.message : "start failed" } } }));
     }
   },
 
