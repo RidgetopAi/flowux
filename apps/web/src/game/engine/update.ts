@@ -65,6 +65,18 @@ export type UpdateNotice = {
   waveCleared?: boolean;
   /** Score delta from this step's kills. Loop forwards to HUD. */
   scoreDelta?: number;
+  /* ── Sound events (Phase 4). The sim stays pure — it only flags what
+     happened; the Game layer turns these into Web Audio. ── */
+  /** Player fired a bullet this step. */
+  shotFired?: boolean;
+  /** An alien was destroyed by the player bullet. */
+  alienKilled?: boolean;
+  /** The player ship was hit. */
+  playerKilled?: boolean;
+  /** The UFO was shot down. */
+  ufoKilled?: boolean;
+  /** The formation took a march step (drives the heartbeat tempo). */
+  marchStepped?: boolean;
 };
 
 /** Tick the simulation forward by FIXED_STEP_S seconds. Returns a notice
@@ -131,6 +143,7 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
       state.playerBullet.y = state.player.y - PLAYER_H / 2 - BULLET_H;
       // Shot count drives the deterministic UFO bonus value (arcade trick).
       state.shotCount += 1;
+      notice.shotFired = true;
     }
   }
 
@@ -156,6 +169,7 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
           const points = ALIEN_ROW_POINTS[alien.row] ?? 10;
           state.score += points;
           notice.scoreDelta = (notice.scoreDelta ?? 0) + points;
+          notice.alienKilled = true;
           spawnBurst(state.particles, alien.x + ALIEN_W / 2, alien.y + ALIEN_H / 2, {
             count: PARTICLE_PER_ALIEN,
             color: COLOR_ALIEN_ROW[alien.row] ?? COLOR_PLAYER,
@@ -165,6 +179,7 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
         state.playerBullet.alive = false;
         state.score += state.ufo.points;
         notice.scoreDelta = (notice.scoreDelta ?? 0) + state.ufo.points;
+        notice.ufoKilled = true;
         spawnBurst(state.particles, state.ufo.x, UFO_Y + UFO_H / 2, {
           count: PARTICLE_PER_ALIEN + 4,
           color: COLOR_UFO_BODY,
@@ -183,6 +198,7 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
   if (state.march.untilStep <= 0) {
     stepAliens(state);
     state.march.untilStep += currentStepInterval(state.aliveCount);
+    notice.marchStepped = true;
   }
 
   // ── Alien fire ───────────────────────────────────────────────────────
@@ -212,6 +228,7 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
     if (playerHit(state, b.x, b.y)) {
       b.alive = false;
       onPlayerHit(state);
+      notice.playerKilled = true;
       if (state.lives <= 0) {
         state.phase = "gameOver";
         notice.gameOver = true;

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createAudioEngine, type AudioEngine } from "../engine/audio";
 import { PLAYFIELD_H, PLAYFIELD_W } from "../engine/constants";
 import { createInputHandler } from "../engine/input";
 import { startLoop } from "../engine/loop";
@@ -8,6 +10,7 @@ import { Marquee } from "./Marquee";
 import "./Game.css";
 
 const HI_SCORE_KEY = "invaders.hiScore";
+const MUTE_KEY = "invaders.muted";
 
 export type HudSnapshot = {
   score: number;
@@ -32,7 +35,35 @@ type Props = {
  */
 export function Game({ onHud }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<AudioEngine | null>(null);
   const [phase, setPhase] = useState<GamePhase>("attract");
+  const [muted, setMuted] = useState<boolean>(readMuted);
+
+  // Mute toggle shared by the M key and the on-screen button. Stable
+  // identity so the keydown effect below doesn't re-bind every render.
+  const toggleMute = useCallback(() => {
+    setMuted((prev) => {
+      const next = !prev;
+      audioRef.current?.setMuted(next);
+      try {
+        localStorage.setItem(MUTE_KEY, next ? "1" : "0");
+      } catch {
+        // ignore — mute just won't persist
+      }
+      return next;
+    });
+  }, []);
+
+  // M toggles mute. Separate from the game loop effect so toggling doesn't
+  // tear down and rebuild the loop.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "m" || e.key === "M") toggleMute();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleMute]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,6 +81,24 @@ export function Game({ onHud }: Props) {
     const state = createInitialState(hiScore);
 
     const input = createInputHandler();
+
+    // ── Audio ──────────────────────────────────────────────────────────
+    // The context starts suspended; the browser only lets us resume from
+    // inside a user gesture. Resume on the first key/pointer event after
+    // mount, then drop the listeners.
+    const audio = createAudioEngine();
+    audioRef.current = audio;
+    audio.setMuted(readMuted());
+    const resumeOnce = () => {
+      audio.resume();
+      window.removeEventListener("keydown", resumeOnce);
+      window.removeEventListener("pointerdown", resumeOnce);
+    };
+    window.addEventListener("keydown", resumeOnce);
+    window.addEventListener("pointerdown", resumeOnce);
+    // Tracks the saucer's on-screen state so we start/stop the siren on
+    // the transitions rather than every tick.
+    let ufoWasActive = false;
 
     // Last-emitted HUD snapshot. We compare against this to skip
     // redundant onHud calls — without this the parent setState fires
@@ -88,7 +137,7 @@ export function Game({ onHud }: Props) {
     emit(state);
 
     let lastSavedHi = hiScore;
-    const loop = startLoop(ctx, state, input.state, (s) => {
+    const loop = startLoop(ctx, state, input.state, (s, notice) => {
       // Persist hi-score whenever it actually advances. Cheap (one
       // localStorage write per real new high). Wrapped in try/catch so
       // private-mode / blocked storage doesn't crash the loop.
@@ -101,11 +150,28 @@ export function Game({ onHud }: Props) {
         }
       }
       emit(s);
+
+      // ── Sound events ──────────────────────────────────────────────────
+      if (notice.shotFired) audio.shoot();
+      if (notice.alienKilled) audio.alienExplosion();
+      if (notice.ufoKilled) audio.ufoExplosion();
+      if (notice.playerKilled) audio.playerExplosion();
+      if (notice.marchStepped) audio.marchStep();
+      // Siren only while the saucer is actually on a live playfield — also
+      // cuts it the instant the game ends or the wave clears.
+      const ufoActive = s.phase === "playing" && s.ufo.active;
+      if (ufoActive && !ufoWasActive) audio.ufoOn();
+      else if (!ufoActive && ufoWasActive) audio.ufoOff();
+      ufoWasActive = ufoActive;
     });
 
     return () => {
       loop.stop();
       input.dispose();
+      window.removeEventListener("keydown", resumeOnce);
+      window.removeEventListener("pointerdown", resumeOnce);
+      audio.dispose();
+      audioRef.current = null;
     };
   }, [onHud]);
 
@@ -116,6 +182,20 @@ export function Game({ onHud }: Props) {
         className="game-canvas"
         aria-label="Space Invaders playfield"
       />
+      <button
+        type="button"
+        className="game-mute"
+        onClick={(e) => {
+          toggleMute();
+          // Hand focus back so Space keeps firing instead of re-clicking.
+          e.currentTarget.blur();
+        }}
+        aria-label={muted ? "Unmute sound (M)" : "Mute sound (M)"}
+        aria-pressed={muted}
+        data-muted={muted}
+      >
+        {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+      </button>
       {phase !== "playing" && (
         <div className="game-attract">
           <Marquee />
@@ -134,5 +214,13 @@ function readHiScore(): number {
     return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0;
   } catch {
     return 0;
+  }
+}
+
+function readMuted(): boolean {
+  try {
+    return localStorage.getItem(MUTE_KEY) === "1";
+  } catch {
+    return false;
   }
 }

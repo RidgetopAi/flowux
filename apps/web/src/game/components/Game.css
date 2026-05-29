@@ -22,6 +22,46 @@
   image-rendering: crisp-edges;
 }
 
+/* ── Mute toggle ──────────────────────────────────────────────────────
+   Quiet phosphor affordance, top-right of the CRT. Dims to a whisper at
+   rest so it never competes with the canvas; lifts on hover/focus. The
+   muted state desaturates to a warning amber so the off-state reads at a
+   glance. M key mirrors it. */
+.game-mute {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--phosphor-cyan, #a8fff1);
+  background: rgba(2, 12, 12, 0.4);
+  border: 1px solid rgba(168, 255, 241, 0.18);
+  border-radius: var(--r-sm);
+  opacity: 0.45;
+  cursor: pointer;
+  transition:
+    opacity 0.18s var(--ease-out, ease),
+    border-color 0.18s var(--ease-out, ease),
+    color 0.18s var(--ease-out, ease);
+}
+
+.game-mute:hover,
+.game-mute:focus-visible {
+  opacity: 1;
+  border-color: rgba(168, 255, 241, 0.5);
+  outline: none;
+}
+
+.game-mute[data-muted="true"] {
+  color: var(--amber-bright, #ffcf8b);
+  border-color: rgba(255, 207, 139, 0.32);
+  opacity: 0.7;
+}
+
 /* ── ATTRACT / GAME-OVER overlay ─────────────────────────────────────
    DOM-side text overlay above the canvas during non-playing phases.
    The CSS pulse + font polish on <Marquee /> carries over instead of

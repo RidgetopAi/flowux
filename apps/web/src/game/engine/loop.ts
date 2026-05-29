@@ -61,6 +61,12 @@ export function startLoop(
       if (stepNotice.scoreDelta) {
         notice.scoreDelta = (notice.scoreDelta ?? 0) + stepNotice.scoreDelta;
       }
+      // Sound events — OR across every sub-step folded into this frame.
+      if (stepNotice.shotFired) notice.shotFired = true;
+      if (stepNotice.alienKilled) notice.alienKilled = true;
+      if (stepNotice.playerKilled) notice.playerKilled = true;
+      if (stepNotice.ufoKilled) notice.ufoKilled = true;
+      if (stepNotice.marchStepped) notice.marchStepped = true;
       acc -= FIXED_STEP_S;
     }
 
