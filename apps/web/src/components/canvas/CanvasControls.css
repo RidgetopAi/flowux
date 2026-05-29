@@ -3,8 +3,11 @@
 .canvas-controls {
   position: absolute;
   top: 18px;
-  right: 18px;
+  left: 18px;
   z-index: 50;
+  /* Hug the icons — never span toward the right margin. */
+  width: fit-content;
+  max-width: max-content;
   display: flex;
   align-items: center;
   gap: 14px;

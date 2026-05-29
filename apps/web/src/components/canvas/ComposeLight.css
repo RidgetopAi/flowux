@@ -1,0 +1,128 @@
+/* ─── COMPOSE LIGHT (standalone) ──────────────────────────────────────
+   Free-standing new-message lamp pinned to the top-right of the canvas,
+   outside any toolbar/chrome. Two-state phosphor light:
+     OFF  (dock closed) → dim cyan-deep standby glow, faint bloom
+     ON   (dock open)   → bright cyan-bright core + full bloom that spills
+                          onto the canvas behind it, slow breathe */
+.compose-light {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(78, 168, 158, 0.5);
+  background: radial-gradient(
+    circle at 50% 36%,
+    rgba(168, 255, 241, 0.14),
+    rgba(0, 0, 0, 0.22) 72%
+  );
+  color: var(--cyan-deep);
+  cursor: pointer;
+  pointer-events: auto;
+  /* OFF: low standby glow — a lamp turned low. */
+  box-shadow:
+    0 0 8px rgba(78, 168, 158, 0.3),
+    inset 0 0 7px rgba(78, 168, 158, 0.22);
+  transition:
+    color var(--dur-base) var(--ease-out-quart),
+    border-color var(--dur-base) var(--ease-out-quart),
+    background var(--dur-base) var(--ease-out-quart),
+    box-shadow var(--dur-base) var(--ease-out-quart);
+}
+
+.compose-light svg {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+}
+
+/* Backlit bloom — a large blurred radial behind the lamp that spills onto
+   the canvas. Faint when off, full + breathing when on. */
+.compose-light__glow {
+  position: absolute;
+  inset: -18px;
+  z-index: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(168, 255, 241, 0.6),
+    transparent 68%
+  );
+  filter: blur(12px);
+  opacity: 0.16;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out-quart);
+}
+
+.compose-light:hover {
+  color: var(--cyan);
+  border-color: rgba(168, 255, 241, 0.6);
+  box-shadow:
+    0 0 12px rgba(168, 255, 241, 0.4),
+    inset 0 0 9px rgba(168, 255, 241, 0.25);
+}
+
+.compose-light:hover .compose-light__glow {
+  opacity: 0.45;
+}
+
+.compose-light:focus-visible {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow:
+    0 0 0 2px rgba(168, 255, 241, 0.35),
+    0 0 14px rgba(168, 255, 241, 0.45);
+}
+
+/* ON — the light is lit. Bright core, border, and a deep multi-layer bloom
+   that reads on the canvas behind it. */
+.compose-light[data-active="true"] {
+  color: var(--cyan-bright);
+  border-color: rgba(212, 255, 247, 0.85);
+  background: radial-gradient(
+    circle at 50% 36%,
+    rgba(212, 255, 247, 0.5),
+    rgba(168, 255, 241, 0.12) 72%
+  );
+  box-shadow:
+    0 0 2px rgba(212, 255, 247, 1),
+    0 0 16px rgba(168, 255, 241, 0.85),
+    0 0 38px rgba(78, 168, 158, 0.5),
+    0 0 72px rgba(78, 168, 158, 0.26),
+    inset 0 0 12px rgba(212, 255, 247, 0.4);
+}
+
+.compose-light[data-active="true"] svg {
+  filter: drop-shadow(0 0 5px rgba(212, 255, 247, 0.8));
+}
+
+.compose-light[data-active="true"] .compose-light__glow {
+  opacity: 0.9;
+  animation: compose-breathe 2.8s var(--ease-out-quart) infinite;
+}
+
+/* Gentle "live" breathe on the backlit bloom while the dock is open. */
+@keyframes compose-breathe {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compose-light[data-active="true"] .compose-light__glow {
+    animation: none;
+  }
+}

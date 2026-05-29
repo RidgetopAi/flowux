@@ -1,4 +1,4 @@
-import { Maximize2, MessageSquarePlus, Trash2, LayoutGrid, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Maximize2, Trash2, LayoutGrid, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCanvas, ZOOM_MIN, ZOOM_MAX } from "../../lib/store";
 import { Button } from "../primitives/Button";
 import { Pill } from "../primitives/Pill";
@@ -9,7 +9,6 @@ export function CanvasControls() {
   const objects = useCanvas((s) => s.objects);
   const bundleCount = useCanvas((s) => s.bundleCount());
   const zoom = useCanvas((s) => s.viewport.zoom);
-  const openDock = useCanvas((s) => s.openDock);
   const zoomBy = useCanvas((s) => s.zoomBy);
   const resetView = useCanvas((s) => s.resetView);
   const zoomToFit = useCanvas((s) => s.zoomToFit);
@@ -111,16 +110,6 @@ export function CanvasControls() {
           title="Auto-arrange into grid"
         >
           <LayoutGrid />
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          iconOnly
-          onClick={openDock}
-          aria-label="Compose new message (/)"
-          title="Compose new message (/)"
-        >
-          <MessageSquarePlus />
         </Button>
         <Button
           variant="ghost"

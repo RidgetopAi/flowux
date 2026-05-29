@@ -1,10 +1,12 @@
-/* ─── CANVAS HUD (top-left runtime status) ────────────────────────────
-   Mirrors .canvas-controls (top-right). Same pill-shaped glass surface;
-   houses exec context + context-budget meter + cancel STOP button. */
+/* ─── CANVAS HUD (top-left runtime status, under the toolbar) ─────────
+   Sits just below .canvas-controls so runtime status (exec + budget +
+   STOP) stacks under the utility toolbar on the left, clear of the
+   standalone compose light in the top-right. Only mounts while there's
+   live runtime data, so it's absent at rest. Same pill-shaped glass. */
 
 .canvas-hud {
   position: absolute;
-  top: 18px;
+  top: 76px;
   left: 18px;
   z-index: 50;
   display: flex;

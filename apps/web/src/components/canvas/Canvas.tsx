@@ -7,6 +7,7 @@ import { ObjectNode } from "./ObjectNode";
 import { ConnectionLayer } from "./ConnectionLayer";
 import { CanvasControls } from "./CanvasControls";
 import { CanvasHud } from "./CanvasHud";
+import { ComposeLight } from "./ComposeLight";
 import { ExpandedMRPLayer } from "./ExpandedMRP";
 import { ExpandedStateLayer } from "./ExpandedState";
 import { FloatingDockLayer } from "./FloatingDock";
@@ -569,8 +570,11 @@ export function Canvas() {
       {/* ── HUD: top-left runtime status (exec / budget / cancel) ───── */}
       <CanvasHud />
 
-      {/* ── HUD: top-right floating controls ─────────────────────────── */}
+      {/* ── HUD: top-left floating utility controls ──────────────────── */}
       <CanvasControls />
+
+      {/* ── Compose light: standalone top-right new-message lamp ──────── */}
+      <ComposeLight />
 
       {/* ── Minimap: bottom-right birds-eye + viewport tracker ────────── */}
       <Minimap />
