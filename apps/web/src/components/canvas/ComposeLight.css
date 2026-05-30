@@ -12,8 +12,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 31px;
+  height: 31px;
   padding: 0;
   border-radius: 50%;
   border: 1px solid rgba(78, 168, 158, 0.5);
@@ -39,15 +39,15 @@
 .compose-light svg {
   position: relative;
   z-index: 1;
-  width: 18px;
-  height: 18px;
+  width: 13px;
+  height: 13px;
 }
 
 /* Backlit bloom — a large blurred radial behind the lamp that spills onto
    the canvas. Faint when off, full + breathing when on. */
 .compose-light__glow {
   position: absolute;
-  inset: -18px;
+  inset: -13px;
   z-index: 0;
   border-radius: 50%;
   background: radial-gradient(
