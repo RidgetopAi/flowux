@@ -5,7 +5,6 @@ import { useCanvas } from "../../lib/store";
 import { SEED_OBJECTS } from "../../lib/mockData";
 import { ObjectNode } from "./ObjectNode";
 import { ConnectionLayer } from "./ConnectionLayer";
-import { CanvasControls } from "./CanvasControls";
 import { CanvasHud } from "./CanvasHud";
 import { ComposeLight } from "./ComposeLight";
 import { TelemetryLamp } from "./TelemetryLamp";
@@ -574,8 +573,8 @@ export function Canvas() {
       {/* ── HUD: top-left runtime status (exec / budget / cancel) ───── */}
       <CanvasHud />
 
-      {/* ── HUD: top-left floating utility controls ──────────────────── */}
-      <CanvasControls />
+      {/* CanvasControls now lives in the top app bar (see App.tsx) to keep
+          the canvas surface uncluttered. */}
 
       {/* ── Compose light: standalone top-right new-message lamp ──────── */}
       <ComposeLight />

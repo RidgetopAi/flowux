@@ -3,9 +3,19 @@ import { useCanvas, ZOOM_MIN, ZOOM_MAX } from "../../lib/store";
 import { Button } from "../primitives/Button";
 import { Pill } from "../primitives/Pill";
 import { Label } from "../primitives/Label";
+import { cn } from "../../lib/cn";
 import "./CanvasControls.css";
 
-export function CanvasControls() {
+/**
+ * Canvas utility bar — bundle counter, zoom, fit/arrange/clear.
+ *
+ * `variant`:
+ *  - "floating" (default): the original glass island that docks top-left
+ *    over the canvas surface.
+ *  - "bar": inline chrome-less form for embedding in the top app bar, where
+ *    the bar's own glass panel already supplies the background.
+ */
+export function CanvasControls({ variant = "floating" }: { variant?: "floating" | "bar" }) {
   const objects = useCanvas((s) => s.objects);
   const bundleCount = useCanvas((s) => s.bundleCount());
   const zoom = useCanvas((s) => s.viewport.zoom);
@@ -33,7 +43,7 @@ export function CanvasControls() {
   };
 
   return (
-    <div className="canvas-controls">
+    <div className={cn("canvas-controls", variant === "bar" && "canvas-controls--bar")}>
       <div className="canvas-controls__bundle">
         <Label size="micro" tone="muted">BUNDLE</Label>
         <Pill tone={bundleCount > 0 ? "cyan" : "neutral"} emphasis={bundleCount > 0}>

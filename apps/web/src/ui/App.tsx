@@ -2,6 +2,7 @@ import type { CanvasPlacement, CanvasSnapshot } from "@flowux/shared";
 import { Loader2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Canvas } from "../components/canvas/Canvas";
+import { CanvasControls } from "../components/canvas/CanvasControls";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { PiTargetSelector } from "../components/sidebar/PiTargetSelector";
 import { ChromaText } from "../components/effects/ChromaText";
@@ -227,6 +228,8 @@ export function App() {
         </div>
 
         <div className="flowux-status">
+          <CanvasControls variant="bar" />
+          <span className="flowux-topbar-sep" aria-hidden="true" />
           <PiTargetSelector />
           <Pill tone="neutral">{canvasStatus}</Pill>
         </div>

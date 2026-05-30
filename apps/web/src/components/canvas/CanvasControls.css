@@ -21,6 +21,23 @@
   pointer-events: auto;
 }
 
+/* Inline form for the top app bar: drop the floating island chrome
+   (the topbar supplies its own glass) and tighten spacing to bar height. */
+.canvas-controls--bar {
+  position: static;
+  top: auto;
+  left: auto;
+  z-index: auto;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
 .canvas-controls__bundle {
   display: flex;
   align-items: center;
