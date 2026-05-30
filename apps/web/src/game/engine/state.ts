@@ -12,6 +12,7 @@ import {
   BUNKER_COUNT,
   BUNKER_W,
   BUNKER_Y,
+  EXTRA_LIFE_SCORE,
   PLAYER_Y,
   PLAYFIELD_W,
   UFO_INTERVAL_S,
@@ -50,6 +51,8 @@ export function createInitialState(hiScore = 0): GameState {
     untilUfo: UFO_INTERVAL_S,
     shotCount: 0,
     waveFlash: 0,
+    nextExtraLife: EXTRA_LIFE_SCORE,
+    extraLifeFlash: 0,
     bunkers: createBunkers(),
     particles: createParticlePool(),
     scorePopups: createScorePopupPool(),
@@ -65,6 +68,7 @@ export function resetForNewGame(state: GameState): void {
   state.wave = 1;
   state.lives = 3;
   state.shotCount = 0;
+  state.nextExtraLife = EXTRA_LIFE_SCORE;
   resetForPlay(state, 1);
 }
 
@@ -88,6 +92,7 @@ export function resetForPlay(state: GameState, wave: number): void {
   for (const p of state.scorePopups) p.alive = false;
   state.time = 0;
   state.waveFlash = 0;
+  state.extraLifeFlash = 0;
 }
 
 /** Player ship at its spawn position — bottom center of the playfield. */

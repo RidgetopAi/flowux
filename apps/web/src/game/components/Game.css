@@ -184,3 +184,49 @@
     animation: none;
   }
 }
+
+/* ── 1UP bonus-life flash ─────────────────────────────────────────────
+   A quick green lift when a bonus life is earned. Green (the life/positive
+   tone) sets it apart from the cyan wave beat and amber game-over; parked
+   in the upper third so it never collides with the centered WAVE banner. */
+.game-oneup {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: start center;
+  padding-top: 16%;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 26px);
+  letter-spacing: 0.42em;
+  color: var(--green-bright);
+  text-shadow: var(--glow-green-sm);
+  text-align: center;
+  animation: oneup-rise 0.9s var(--ease-out, ease-out) both;
+}
+
+@keyframes oneup-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  45% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-oneup {
+    animation: none;
+  }
+}

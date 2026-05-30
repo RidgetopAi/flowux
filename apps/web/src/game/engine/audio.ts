@@ -32,6 +32,8 @@ export type AudioEngine = {
   ufoExplosion: () => void;
   /** One heartbeat tone; advances the 4-note cycle each call. */
   marchStep: () => void;
+  /** Rising arpeggio — the bonus-life "1UP" lift. */
+  extraLife: () => void;
   ufoOn: () => void;
   ufoOff: () => void;
   /** Tear everything down (stop the siren, close the context). */
@@ -87,7 +89,9 @@ export function createAudioEngine(): AudioEngine {
      a known end, and are GC'd once stopped. No pooling needed at these
      rates. */
 
-  /** A pitched blip with an exponential frequency sweep + AD envelope. */
+  /** A pitched blip with an exponential frequency sweep + AD envelope.
+   *  `delay` schedules it that many seconds out — used to sequence the
+   *  rising notes of the 1UP chime on the audio clock. */
   function blip(
     type: OscillatorType,
     f0: number,
@@ -95,9 +99,10 @@ export function createAudioEngine(): AudioEngine {
     dur: number,
     peak: number,
     attack = 0.004,
+    delay = 0,
   ): void {
     if (!ctx || !master) return;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + delay;
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = type;
@@ -179,6 +184,15 @@ export function createAudioEngine(): AudioEngine {
       // A touch of square in the body would be lost low; triangle reads as
       // the classic thump. Pushed loud — it's the always-on pulse.
       blip("triangle", f, f * 0.92, 0.16, 0.6, 0.006);
+    },
+
+    extraLife() {
+      if (!live()) return;
+      // Three rising square notes (E5 → A5 → E6), each scheduled a beat
+      // after the last — the bright "1UP" lift, unmistakably a reward.
+      blip("square", 660, 660, 0.09, 0.4, 0.004, 0);
+      blip("square", 880, 880, 0.09, 0.4, 0.004, 0.08);
+      blip("square", 1320, 1320, 0.15, 0.45, 0.004, 0.16);
     },
 
     ufoOn() {

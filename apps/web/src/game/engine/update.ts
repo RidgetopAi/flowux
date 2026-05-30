@@ -19,6 +19,8 @@ import {
   COLOR_ALIEN_ROW,
   COLOR_PLAYER,
   COLOR_UFO_BODY,
+  EXTRA_LIFE_FLASH_S,
+  EXTRA_LIFE_SCORE,
   PARTICLE_PER_ALIEN,
   PARTICLE_PER_PLAYER,
   PLAYER_BULLET_SPEED,
@@ -80,6 +82,8 @@ export type UpdateNotice = {
   ufoKilled?: boolean;
   /** The formation took a march step (drives the heartbeat tempo). */
   marchStepped?: boolean;
+  /** A bonus life was just awarded (score crossed a threshold). */
+  extraLife?: boolean;
 };
 
 /** Tick the simulation forward by FIXED_STEP_S seconds. Returns a notice
@@ -332,6 +336,21 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
   // ── Particle simulation ──────────────────────────────────────────────
   stepParticles(state.particles, dt);
   stepPopups(state.scorePopups, dt);
+
+  // ── Extra life ───────────────────────────────────────────────────────
+  // Age out any active "1UP" flash, then award a bonus life for every score
+  // threshold crossed this step. The while-loop is belt-and-suspenders: a
+  // single award (max 300) can't span two 1000-point gaps, but it keeps the
+  // bookkeeping correct if EXTRA_LIFE_SCORE is ever tuned down.
+  if (state.extraLifeFlash > 0) {
+    state.extraLifeFlash = Math.max(0, state.extraLifeFlash - dt);
+  }
+  while (state.score >= state.nextExtraLife) {
+    state.lives += 1;
+    state.nextExtraLife += EXTRA_LIFE_SCORE;
+    state.extraLifeFlash = EXTRA_LIFE_FLASH_S;
+    notice.extraLife = true;
+  }
 
   return notice;
 }

@@ -36,6 +36,7 @@ function InvadersStage() {
     lives: 3,
     phase: "attract",
     waveActive: false,
+    extraLifeActive: false,
   });
 
   // Stable callback identity so the Game effect doesn't re-spin its

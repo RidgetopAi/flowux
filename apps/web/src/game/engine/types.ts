@@ -152,6 +152,12 @@ export type GameState = {
    *  then the next formation drops in. */
   waveFlash: number;
 
+  /** Score the next bonus life is awarded at. Bumped by EXTRA_LIFE_SCORE
+   *  each time it's crossed. */
+  nextExtraLife: number;
+  /** Seconds left on the "1UP" flash when a bonus life is earned. */
+  extraLifeFlash: number;
+
   bunkers: Bunker[];
   particles: Particle[];
   scorePopups: ScorePopup[];

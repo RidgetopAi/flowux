@@ -107,6 +107,14 @@ export const POPUP_LIFE_S = 0.9;
 /** Upward drift speed of a floating score, px/s. */
 export const POPUP_RISE_SPEED = 14;
 
+/* ── EXTRA LIFE ─────────────────────────────────────────────────────── */
+
+/** Award a bonus life each time the score crosses a multiple of this — the
+ *  classic arcade reward for sustained play. */
+export const EXTRA_LIFE_SCORE = 1000;
+/** "1UP" flash duration when a bonus life is earned. */
+export const EXTRA_LIFE_FLASH_S = 0.9;
+
 /* ── ALIEN BULLETS ──────────────────────────────────────────────────── */
 
 export const ALIEN_BULLET_SPEED = 60; // px/s, downward
