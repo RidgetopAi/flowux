@@ -116,10 +116,10 @@ function InvadersStage() {
 function statusLabel(phase: HudSnapshot["phase"]): string {
   switch (phase) {
     case "attract":
-      return "PHASE 4 · ATTRACT";
+      return "PHASE 5 · ATTRACT DEMO";
     case "playing":
-      return "PHASE 4 · WAVE IN PROGRESS";
+      return "PHASE 5 · WAVE IN PROGRESS";
     case "gameOver":
-      return "PHASE 4 · GAME OVER";
+      return "PHASE 5 · GAME OVER";
   }
 }
