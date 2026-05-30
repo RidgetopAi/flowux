@@ -39,6 +39,7 @@ import {
 import { demoInput } from "./demo";
 import type { InputState } from "./input";
 import { spawnBurst, stepParticles } from "./particles";
+import { spawnPopup, stepPopups } from "./popups";
 import { createAlienGrid, createBunkers, resetForNewGame } from "./state";
 import type { Alien, Bunker, GameState } from "./types";
 
@@ -267,6 +268,7 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
             count: PARTICLE_PER_ALIEN,
             color: COLOR_ALIEN_ROW[alien.row] ?? COLOR_PLAYER,
           });
+          spawnPopup(state.scorePopups, alien.x + ALIEN_W / 2, alien.y, points);
         }
       } else if (state.ufo.active && ufoHit(state.ufo.x, bx, by)) {
         state.playerBullet.alive = false;
@@ -278,6 +280,7 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
           color: COLOR_UFO_BODY,
           speedMax: 120,
         });
+        spawnPopup(state.scorePopups, state.ufo.x, UFO_Y, state.ufo.points);
         state.ufo.active = false;
       }
     }
@@ -328,6 +331,7 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
 
   // ── Particle simulation ──────────────────────────────────────────────
   stepParticles(state.particles, dt);
+  stepPopups(state.scorePopups, dt);
 
   return notice;
 }

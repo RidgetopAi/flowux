@@ -1,4 +1,5 @@
 import { alienSpriteForRow } from "../sprites/aliens";
+import { DIGIT_ADVANCE, DIGIT_H, DIGIT_W, digitGrid, numberWidth } from "../sprites/digits";
 import { PLAYER } from "../sprites/player";
 import type { PixelSprite } from "../sprites/types";
 import { UFO_BODY, UFO_DOME } from "../sprites/ufo";
@@ -11,6 +12,7 @@ import {
   COLOR_BULLET,
   COLOR_BUNKER,
   COLOR_PLAYER,
+  COLOR_POPUP,
   COLOR_UFO_BODY,
   COLOR_UFO_DOME,
   PLAYER_H,
@@ -126,6 +128,47 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillStyle = p.color;
     ctx.fillRect(p.x | 0, p.y | 0, 1, 1);
   }
+  ctx.restore();
+
+  // ── Score popups ───────────────────────────────────────────────────
+  // Drawn last so floating points sit on top of the debris they rose from.
+  for (const sp of state.scorePopups) {
+    if (!sp.alive) continue;
+    const alpha = Math.max(0, Math.min(1, sp.life / sp.maxLife));
+    drawNumber(ctx, sp.value, sp.x, sp.y, COLOR_POPUP, alpha);
+  }
+}
+
+/* Draw a non-negative integer centered horizontally on `cx`, top at `y`,
+ * using the 3×5 pixel digit font. One Path2D + one shadow pass for the
+ * whole number, faded by `alpha` for the rise-and-vanish popups. */
+function drawNumber(
+  ctx: CanvasRenderingContext2D,
+  value: number,
+  cx: number,
+  y: number,
+  color: string,
+  alpha: number,
+): void {
+  const str = String(value);
+  let x = Math.round(cx - numberWidth(value) / 2);
+  const top = y | 0;
+  const path = new Path2D();
+  for (let i = 0; i < str.length; i++) {
+    const grid = digitGrid(str.charCodeAt(i) - 48);
+    for (let py = 0; py < DIGIT_H; py++) {
+      for (let px = 0; px < DIGIT_W; px++) {
+        if (grid[py * DIGIT_W + px]) path.rect(x + px, top + py, 1, 1);
+      }
+    }
+    x += DIGIT_ADVANCE;
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 2;
+  ctx.fillStyle = color;
+  ctx.fill(path);
   ctx.restore();
 }
 

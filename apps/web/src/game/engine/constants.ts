@@ -99,6 +99,14 @@ export const PARTICLE_GRAVITY = 80; // px/s² downward pull on sparks
 export const PARTICLE_PER_ALIEN = 6;
 export const PARTICLE_PER_PLAYER = 14;
 
+/* ── SCORE POPUPS ───────────────────────────────────────────────────── */
+
+export const POPUP_POOL_SIZE = 8;
+/** How long a "+points" readout lingers before it fully fades. */
+export const POPUP_LIFE_S = 0.9;
+/** Upward drift speed of a floating score, px/s. */
+export const POPUP_RISE_SPEED = 14;
+
 /* ── ALIEN BULLETS ──────────────────────────────────────────────────── */
 
 export const ALIEN_BULLET_SPEED = 60; // px/s, downward
@@ -129,3 +137,6 @@ export const COLOR_UFO_DOME = "#ffcf8b";
 /** Bunker phosphor — a distinct green from the bottom alien rows so the
  *  shields read as a separate object class, not stray aliens. */
 export const COLOR_BUNKER = "#74f7a0";
+/** Score popups — a warm gold so floating points read as "score", clearly
+ *  distinct from the cool phosphor entities and the hot explosion sparks. */
+export const COLOR_POPUP = "#ffe7a8";

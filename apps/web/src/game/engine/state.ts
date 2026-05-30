@@ -17,6 +17,7 @@ import {
   UFO_INTERVAL_S,
 } from "./constants";
 import { createParticlePool } from "./particles";
+import { createScorePopupPool } from "./popups";
 import type { Alien, AlienBullet, Bunker, GameState, Player, Ufo } from "./types";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export function createInitialState(hiScore = 0): GameState {
     waveFlash: 0,
     bunkers: createBunkers(),
     particles: createParticlePool(),
+    scorePopups: createScorePopupPool(),
   };
 }
 
@@ -83,6 +85,7 @@ export function resetForPlay(state: GameState, wave: number): void {
   state.untilUfo = UFO_INTERVAL_S;
   state.bunkers = createBunkers();
   for (const p of state.particles) p.alive = false;
+  for (const p of state.scorePopups) p.alive = false;
   state.time = 0;
   state.waveFlash = 0;
 }

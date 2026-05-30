@@ -86,6 +86,20 @@ export type Particle = {
   alive: boolean;
 };
 
+/** A floating "+points" readout that rises off a kill and fades. Pooled —
+ *  `alive` toggles reuse, same as particles. */
+export type ScorePopup = {
+  /** Center-x of the number; render lays digits out symmetrically about it. */
+  x: number;
+  y: number;
+  value: number;
+  /** Seconds of life remaining. */
+  life: number;
+  /** Life at spawn — drives the fade-out alpha. */
+  maxLife: number;
+  alive: boolean;
+};
+
 export type GameState = {
   phase: GamePhase;
   /** Seconds elapsed since the current play session started. Resets on
@@ -140,4 +154,5 @@ export type GameState = {
 
   bunkers: Bunker[];
   particles: Particle[];
+  scorePopups: ScorePopup[];
 };
