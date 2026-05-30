@@ -29,7 +29,7 @@
     background var(--dur-base) var(--ease-out-quart),
     box-shadow var(--dur-base) var(--ease-out-quart);
 }
-.tl-lamp svg { position: relative; z-index: 1; width: 13px; height: 13px; }
+.tl-lamp svg { position: relative; z-index: 1; width: 18px; height: 18px; }
 
 .tl-lamp__glow {
   position: absolute;

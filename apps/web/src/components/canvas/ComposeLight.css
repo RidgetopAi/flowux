@@ -39,8 +39,8 @@
 .compose-light svg {
   position: relative;
   z-index: 1;
-  width: 13px;
-  height: 13px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Backlit bloom — a large blurred radial behind the lamp that spills onto
