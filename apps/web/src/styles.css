@@ -1,4 +1,8 @@
 :root {
+  /* Reserved right-edge "control strip" the lamp buttons live in. Expanded
+     overlays (MRP backdrop, tool stream) stay clear of it so it reads as a
+     persistent edge rather than something cards paint over. */
+  --control-edge: 64px;
   --hud-bg: #050606;
   --hud-ink: #e9ede8;
   --hud-soft: #b7beb7;

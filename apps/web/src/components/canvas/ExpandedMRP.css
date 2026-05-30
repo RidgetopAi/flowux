@@ -9,6 +9,8 @@
   display: grid;
   place-items: center;
   padding: 56px;
+  /* Card centers in the space LEFT of the reserved control strip. */
+  padding-right: var(--control-edge, 64px);
   pointer-events: none;
 }
 
@@ -16,7 +18,7 @@
    vertical space at the bottom for the dock to stay visible underneath. */
 .canvas[data-has-dock="true"] .xmrp-portal {
   place-items: start center;
-  padding: 24px 40px var(--dock-reserve, 56px);
+  padding: 24px var(--control-edge, 64px) var(--dock-reserve, 56px) 40px;
 }
 
 /* When the tool-telemetry panel is open, reserve its right column so the
@@ -30,6 +32,9 @@
 .xmrp-backdrop {
   position: absolute;
   inset: 0;
+  /* Keep the dim/blur off the right-edge control strip so the lamp buttons
+     sit on clear canvas — that edge is reserved, never covered. */
+  right: var(--control-edge, 64px);
   background: rgba(2, 3, 3, 0.62);
   backdrop-filter: blur(14px) saturate(0.7);
   -webkit-backdrop-filter: blur(14px) saturate(0.7);
