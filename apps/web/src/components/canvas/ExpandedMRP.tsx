@@ -94,14 +94,17 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
 
   return (
     <div className="xmrp-portal">
-      {/* Backdrop — dims + blurs the canvas stack */}
+      {/* Backdrop — dims + blurs the canvas stack. Purely visual: clicking it
+          no longer dismisses, so the expanded MRP stays up as a persistent
+          reference (close via Esc or the X). pointer-events:none lets clicks
+          pass through to cards behind, so double-clicking another card swaps
+          which MRP you're referencing without closing first. */}
       <motion.div
         className="xmrp-backdrop"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        onClick={onDismiss}
       />
 
       {/* Independent entrance — no layoutId. The expanded view always animates
@@ -215,7 +218,7 @@ function ExpandedMRP({ mrp, onDismiss }: { mrp: MRP; onDismiss: () => void }) {
               : "trunk"}
           </Label>
           <Label size="micro" tone="muted">
-            ESC · CLICK BACKDROP · or X to close
+            stays up for reference · ESC or X to close
           </Label>
         </footer>
       </motion.div>

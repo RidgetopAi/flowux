@@ -25,7 +25,6 @@ export function Canvas() {
   const pan = useCanvas((s) => s.viewport.pan);
   const zoom = useCanvas((s) => s.viewport.zoom);
   const expandedId = useCanvas((s) => s.expandedId);
-  const setExpanded = useCanvas((s) => s.setExpanded);
   const dockOpen = useCanvas((s) => s.dockOpen);
   const telemetryOpen = useCanvas((s) => s.telemetryOpen);
   const panBy = useCanvas((s) => s.panBy);
@@ -377,14 +376,28 @@ export function Canvas() {
     // If the pointer is on a card (or its descendants), don't pan/select.
     const target = e.target as HTMLElement;
     if (target.closest("[data-canvas-card]")) return;
-    // If an expanded overlay is up and the pointer is inside it, don't
-    // pan (and don't dismiss via setExpanded(null) below). Backdrop click
-    // handles its own dismiss; pane scrollbars need pointer events. Both
-    // MRP and STATE overlays use the .x*-portal pattern.
+    // If an expanded overlay is up and the pointer is inside it, don't pan.
+    // Pane scrollbars need pointer events. Both MRP and STATE overlays use
+    // the .x*-portal pattern.
     if (target.closest(".xmrp-portal")) return;
     if (target.closest(".xstate-portal")) return;
 
-    setExpanded(null);
+    // Floating chrome (chat dock, tool stream, lamps, HUD, minimap) handle
+    // their own pointer events. Pressing — or drag-selecting text — inside
+    // them must never pan the canvas or dismiss an expanded overlay. As we
+    // add more controls to the right-edge area, tag their root with one of
+    // these classes (or extend this list).
+    if (
+      target.closest(
+        ".dock-layer, .tl-panel, .canvas-hud, .compose-light, .tl-lamp, .canvas-minimap",
+      )
+    )
+      return;
+
+    // An expanded MRP is a focused reference view: clicking the canvas behind
+    // it neither pans nor dismisses — it stays up until Esc or the X. (When
+    // nothing is expanded this is a no-op and panning proceeds below.)
+    if (useCanvas.getState().expandedId) return;
 
     // Shift+drag → rubber-band selection (additive). We capture the start
     // point in PAGE coords; conversion to world coords happens at pointerup

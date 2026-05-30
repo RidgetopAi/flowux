@@ -101,8 +101,11 @@ export function App() {
 
   useEffect(() => {
     const handler: SubmitPromptHandler = ({ prompt }) => {
+      // If an MRP is already expanded the user is referencing it — don't
+      // hijack the expanded view to the new message when its snapshot lands.
+      const keepReference = Boolean(useCanvas.getState().expandedId);
       void submitPrompt(prompt, undefined, undefined, ({ placement }) => {
-        pendingFocusId.current = placement.id;
+        if (!keepReference) pendingFocusId.current = placement.id;
       });
       return `pending-${Date.now().toString(36)}`;
     };
