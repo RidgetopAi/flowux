@@ -19,6 +19,14 @@
   padding: 24px 40px var(--dock-reserve, 56px);
 }
 
+/* When the tool-telemetry panel is open, reserve its right column so the
+   expanded card centers in the space to the LEFT of the panel. The panel
+   paints on top (z-index 210) and stays fully visible streaming beside the
+   card instead of being covered by it. (348px panel + 14 inset + ~12 gutter.) */
+.canvas[data-telemetry="true"] .xmrp-portal {
+  padding-right: 374px;
+}
+
 .xmrp-backdrop {
   position: absolute;
   inset: 0;
@@ -104,7 +112,10 @@
 /* ── 2-pane body ──────────────────────────────────────────────────────── */
 .xmrp__body {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
+  /* Right telemetry column is now a compact rail — Call Stats + the Tool
+     Calls / Files Touched pop-out buttons (their detail lives in side panels,
+     so the column no longer needs to be wide). Conversation takes the slack. */
+  grid-template-columns: minmax(0, 1fr) minmax(232px, 284px);
   min-height: 0;
 }
 
@@ -115,7 +126,7 @@
    user's cursor. */
 .xmrp__body[data-sidecar="tools"],
 .xmrp__body[data-sidecar="files"] {
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px) minmax(280px, 0.6fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 360px) minmax(232px, 284px);
 }
 
 .xmrp__pane {

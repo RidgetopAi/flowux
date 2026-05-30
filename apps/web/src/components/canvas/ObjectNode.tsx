@@ -1,7 +1,6 @@
 import type { CanvasObject } from "../../lib/store";
 import { MRPCard } from "./MRPCard";
 import { ImageCard } from "./ImageCard";
-import { ToolCallChip } from "./ToolCallChip";
 
 /**
  * Dispatcher for canvas objects. Switches on the discriminated union's
@@ -18,7 +17,9 @@ export function ObjectNode({ object }: Props) {
     case "image":
       return <ImageCard image={object} />;
     case "tool_call":
-      return <ToolCallChip tool={object} />;
+      // Tool calls are no longer canvas nodes — they stream into the telemetry
+      // panel (TelemetryPanel.tsx). canvasAdapter no longer emits these.
+      return null;
     case "state":
       // STATE snapshots are no longer canvas tiles — they're opened from the
       // COMPACTED chip on an MRP via the stateSnapshots lookup. Should never

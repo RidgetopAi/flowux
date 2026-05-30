@@ -8,6 +8,8 @@ import { ConnectionLayer } from "./ConnectionLayer";
 import { CanvasControls } from "./CanvasControls";
 import { CanvasHud } from "./CanvasHud";
 import { ComposeLight } from "./ComposeLight";
+import { TelemetryLamp } from "./TelemetryLamp";
+import { TelemetryPanel } from "./TelemetryPanel";
 import { ExpandedMRPLayer } from "./ExpandedMRP";
 import { ExpandedStateLayer } from "./ExpandedState";
 import { FloatingDockLayer } from "./FloatingDock";
@@ -26,6 +28,7 @@ export function Canvas() {
   const expandedId = useCanvas((s) => s.expandedId);
   const setExpanded = useCanvas((s) => s.setExpanded);
   const dockOpen = useCanvas((s) => s.dockOpen);
+  const telemetryOpen = useCanvas((s) => s.telemetryOpen);
   const panBy = useCanvas((s) => s.panBy);
   const loadFixtures = useCanvas((s) => s.loadFixtures);
   const setViewportRect = useCanvas((s) => s.setViewportRect);
@@ -505,6 +508,7 @@ export function Canvas() {
       data-panning={isPanning ? "true" : undefined}
       data-has-expanded={hasExpanded ? "true" : undefined}
       data-has-dock={dockOpen ? "true" : undefined}
+      data-telemetry={telemetryOpen ? "true" : undefined}
       onPointerDown={onPointerDown}
     >
       {/* ── Atmosphere: radial wash + scan sweep + Braille noise ──────── */}
@@ -575,6 +579,10 @@ export function Canvas() {
 
       {/* ── Compose light: standalone top-right new-message lamp ──────── */}
       <ComposeLight />
+
+      {/* ── Tool telemetry: lamp (below compose) + streaming side panel ── */}
+      <TelemetryLamp />
+      <TelemetryPanel />
 
       {/* ── Minimap: bottom-right birds-eye + viewport tracker ────────── */}
       <Minimap />

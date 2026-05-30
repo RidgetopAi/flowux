@@ -553,6 +553,13 @@ app.post<{
             toolCall: event.toolCall,
             ...(event.type === "tool_call_delta" ? { delta: event.delta } : {})
           });
+          // Forward to the client so the telemetry panel streams in real time.
+          send("tool", {
+            mrpId: created.mrp.id,
+            type: event.type,
+            toolCall: event.toolCall,
+            ...(event.type === "tool_call_delta" ? { delta: event.delta } : {})
+          });
           continue;
         }
 
@@ -562,6 +569,11 @@ app.post<{
             toolResult: event.toolResult
           });
           await appendMrpEvent(created.mrp.id, created.modelRun.id, event.type, {
+            toolResult: event.toolResult
+          });
+          send("tool_result", {
+            mrpId: created.mrp.id,
+            type: event.type,
             toolResult: event.toolResult
           });
           continue;

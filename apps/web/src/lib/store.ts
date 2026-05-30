@@ -247,6 +247,9 @@ type State = {
    *  means "use the default (bottom-center)" so the layout can recompute
    *  on resize. dockDraft persists across close/reopen. */
   dockOpen: boolean;
+  /** Tool-telemetry panel visibility (the streaming side panel, toggled by
+   *  the telemetry lamp below the compose lamp). */
+  telemetryOpen: boolean;
   dockPosition: { x: number; y: number } | null;
   dockDraft: string;
   /** Sent prompts in chronological order (oldest → newest). The dock's
@@ -324,6 +327,7 @@ type State = {
   setCursor: (id: string | null) => void;
   openDock: () => void;
   closeDock: () => void;
+  toggleTelemetry: () => void;
   setDockPosition: (pos: { x: number; y: number } | null) => void;
   setDockDraft: (text: string) => void;
   /** Append a sent prompt to history. Dedupes against the immediate previous
@@ -392,6 +396,7 @@ export const useCanvas = create<State>((set, get) => ({
   draggingId: null,
   cursorId: null,
   dockOpen: false,
+  telemetryOpen: false,
   dockPosition: null,
   dockDraft: "",
   promptHistory: [],
@@ -583,6 +588,7 @@ export const useCanvas = create<State>((set, get) => ({
 
   openDock: () => set({ dockOpen: true }),
   closeDock: () => set({ dockOpen: false }),
+  toggleTelemetry: () => set((s) => ({ telemetryOpen: !s.telemetryOpen })),
   setDockPosition: (pos) => set({ dockPosition: pos }),
   setDockDraft: (text) => set({ dockDraft: text }),
   pushPromptHistory: (text) =>

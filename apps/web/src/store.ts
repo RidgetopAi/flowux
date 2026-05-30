@@ -6,6 +6,7 @@ import type {
   ContextBudget,
   ExecutionContext,
   Mrp,
+  MrpEvent,
   SearchResult,
   UploadedAttachment
 } from "@flowux/shared";
@@ -14,11 +15,31 @@ import * as api from "./api.js";
 
 const activeCanvasStorageKey = "flowux.activeCanvasId";
 
+// Live SSE tool events aren't persisted with a DB id/sequence yet, so we mint a
+// monotonic sequence here purely to keep them ordered after snapshot.events.
+let liveEventSeq = 0;
+function toLiveEvent(mrpId: string, type: string, payload: Record<string, unknown>): MrpEvent {
+  liveEventSeq += 1;
+  return {
+    id: `live-${liveEventSeq}`,
+    mrpId,
+    type,
+    sequence: 1_000_000 + liveEventSeq,
+    payload,
+    createdAt: new Date().toISOString()
+  };
+}
+
 interface FlowuxState {
   snapshot?: CanvasSnapshot;
   canvases: CanvasThread[];
   loading: boolean;
   promptRunning: boolean;
+  /** Tool-call / tool-result events received over SSE during the active run.
+   *  These aren't in `snapshot.events` until the post-run reload, so the
+   *  telemetry panel merges this buffer to stream tools live. Cleared when a
+   *  new run starts and once the reloaded snapshot makes them authoritative. */
+  liveToolEvents: MrpEvent[];
   contextBudget?: ContextBudget;
   searchResults: SearchResult[];
   executionContext?: ExecutionContext;
@@ -83,6 +104,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
   canvases: [],
   loading: false,
   promptRunning: false,
+  liveToolEvents: [],
   searchResults: [],
   piTargets: [],
   piPing: {},
@@ -371,7 +393,7 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
     const canvasId = get().snapshot?.canvas.id;
     if (!canvasId) return;
 
-    set({ promptRunning: true, error: undefined });
+    set({ promptRunning: true, error: undefined, liveToolEvents: [] });
     await api.streamPrompt(canvasId, prompt, layout, attachments.map((attachment) => attachment.id), {
       onCreated(payload) {
         onCreated?.(payload);
@@ -409,6 +431,16 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
               : state.snapshot
         }));
       },
+      onTool(payload) {
+        set((state) => ({
+          liveToolEvents: [...state.liveToolEvents, toLiveEvent(payload.mrpId, payload.type, { toolCall: payload.toolCall, delta: payload.delta })]
+        }));
+      },
+      onToolResult(payload) {
+        set((state) => ({
+          liveToolEvents: [...state.liveToolEvents, toLiveEvent(payload.mrpId, payload.type, { toolResult: payload.toolResult })]
+        }));
+      },
       onComplete(payload) {
         set((state) => ({
           promptRunning: false,
@@ -420,7 +452,9 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
                 }
               : state.snapshot
         }));
-        void get().reloadCanvas(canvasId);
+        // Reload pulls the persisted tool events into snapshot.events; once that
+        // lands, drop the live buffer so the panel reads a single source of truth.
+        void get().reloadCanvas(canvasId).then(() => set({ liveToolEvents: [] }));
       },
       onError(message) {
         set({ error: message });

@@ -278,6 +278,17 @@ export async function streamPrompt(
   handlers: {
     onCreated: (payload: CreatePromptResponse) => void;
     onToken: (payload: { mrpId: string; token: string }) => void;
+    onTool?: (payload: {
+      mrpId: string;
+      type: "tool_call_started" | "tool_call_delta" | "tool_call_completed";
+      toolCall: import("@flowux/shared").FlowuxToolCall;
+      delta?: unknown;
+    }) => void;
+    onToolResult?: (payload: {
+      mrpId: string;
+      type: "tool_result_delta" | "tool_result_completed";
+      toolResult: import("@flowux/shared").FlowuxToolResult;
+    }) => void;
     onComplete: (payload: { mrp: import("@flowux/shared").Mrp }) => void;
     onError: (message: string) => void;
   }
@@ -311,6 +322,8 @@ export async function streamPrompt(
       const payload = JSON.parse(data) as unknown;
       if (eventName === "created") handlers.onCreated(payload as CreatePromptResponse);
       if (eventName === "token") handlers.onToken(payload as { mrpId: string; token: string });
+      if (eventName === "tool") handlers.onTool?.(payload as Parameters<NonNullable<typeof handlers.onTool>>[0]);
+      if (eventName === "tool_result") handlers.onToolResult?.(payload as Parameters<NonNullable<typeof handlers.onToolResult>>[0]);
       if (eventName === "complete") handlers.onComplete(payload as { mrp: import("@flowux/shared").Mrp });
       if (eventName === "error") handlers.onError((payload as { message?: string }).message ?? "Stream error");
     }
