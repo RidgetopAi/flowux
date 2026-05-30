@@ -12,7 +12,7 @@ import {
   X
 } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useCanvas } from "../../lib/store";
 import { useToolStream, type ToolStreamItem, type ToolStreamStatus } from "../../lib/toolStream";
 import "./TelemetryPanel.css";
@@ -30,6 +30,44 @@ export function TelemetryPanel() {
 
   const liveCount = items.filter((t) => t.status === "started" || t.status === "streaming").length;
 
+  // Tail-follow: keep the newest tool calls in view as they stream. The
+  // content grows two ways — new rows appear AND result text types on
+  // char-by-char (TypeOn) — so we can't just react to items.length. A
+  // MutationObserver catches both (childList + characterData) and we scroll
+  // to the bottom on any mutation, but only while the user is pinned near
+  // the tail. If they scroll up to read, we stop following until they
+  // return to the bottom.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+
+  const handleScroll = () => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickRef.current = dist < 48;
+  };
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const followTail = () => {
+      if (stickRef.current) el.scrollTop = el.scrollHeight;
+    };
+    followTail();
+    const obs = new MutationObserver(followTail);
+    obs.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => obs.disconnect();
+  }, [open]);
+
+  // When the panel (re)opens, snap to the tail and resume following.
+  useEffect(() => {
+    if (!open) return;
+    const el = bodyRef.current;
+    if (!el) return;
+    stickRef.current = true;
+    el.scrollTop = el.scrollHeight;
+  }, [open]);
+
   return (
     <aside className="tl-panel" data-open={open ? "true" : "false"} aria-hidden={!open}>
       <div className="tl-panel__head">
@@ -43,7 +81,7 @@ export function TelemetryPanel() {
         </button>
       </div>
       <div className="tl-band" aria-hidden="true" />
-      <div className="tl-panel__body">
+      <div className="tl-panel__body" ref={bodyRef} onScroll={handleScroll}>
         {items.length === 0 ? (
           <p className="tl-empty">
             awaiting tool activity…
