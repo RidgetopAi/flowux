@@ -7,33 +7,28 @@
   inset: 0;
   z-index: 200;
   display: grid;
-  place-items: center;
-  padding: 56px;
-  /* Card centers in the space LEFT of the reserved control strip. */
-  padding-right: var(--control-edge, 64px);
+  place-items: stretch;
+  /* Fill the main content area: left margin → reserved stream column on the
+     right. The stream column is always reserved (open or not), so the card's
+     right edge is a fixed line that never shifts. */
+  padding: var(--rail-top, 18px) var(--content-right) var(--module-gap, 14px) var(--content-left, 40px);
   pointer-events: none;
 }
 
-/* When the floating dock is open, the overlay top-aligns and reserves
-   vertical space at the bottom for the dock to stay visible underneath. */
+/* When the chat dock is open it anchors to the bottom of this same content
+   area; reserve its height so the card stops above it and the two read as
+   one stacked module sharing the same left + right edges. */
 .canvas[data-has-dock="true"] .xmrp-portal {
-  place-items: start center;
-  padding: 24px var(--control-edge, 64px) var(--dock-reserve, 56px) 40px;
-}
-
-/* When the tool-telemetry panel is open, reserve its right column so the
-   expanded card centers in the space to the LEFT of the panel. The panel
-   paints on top (z-index 210) and stays fully visible streaming beside the
-   card instead of being covered by it. (348px panel + 14 inset + ~12 gutter.) */
-.canvas[data-telemetry="true"] .xmrp-portal {
-  padding-right: 374px;
+  padding-bottom: calc(var(--dock-height, 256px) + var(--module-gap, 14px) + 14px);
 }
 
 .xmrp-backdrop {
   position: absolute;
   inset: 0;
   /* Keep the dim/blur off the right-edge control strip so the lamp buttons
-     sit on clear canvas — that edge is reserved, never covered. */
+     sit on clear canvas — that edge is reserved, never covered. The dock
+     floats ABOVE this backdrop (higher z-index), so the backdrop can run
+     full height behind it without dimming or intercepting dock clicks. */
   right: var(--control-edge, 64px);
   background: rgba(2, 3, 3, 0.62);
   backdrop-filter: blur(14px) saturate(0.7);
@@ -41,22 +36,15 @@
   pointer-events: auto;
 }
 
-/* When the dock is open, the backdrop stops short of the dock area so
-   the dock sits over the clear canvas instead of behind the blur layer.
-   Coupled with the smaller card height defined below — the overlay reads
-   as the top region of the viewport, dock as the bottom region. */
-.canvas[data-has-dock="true"] .xmrp-backdrop {
-  bottom: var(--dock-reserve, 0);
-}
-
 /* ── The card itself ──────────────────────────────────────────────────── */
 .xmrp {
   position: relative;
-  width: min(1240px, 100%);
-  height: min(820px, calc(100vh - 112px));
+  /* Fills the padded content area (set on .xmrp-portal) so the card aligns
+     edge-for-edge with the chat dock below it. */
+  width: 100%;
+  height: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  transition: height var(--dur-base) var(--ease-out-quart);
   border: 1px solid rgba(168, 255, 241, 0.36);
   border-radius: var(--r-xl);
   background:
@@ -84,12 +72,6 @@
    their own pointer cursor. */
 .xmrp__msg-text {
   cursor: text;
-}
-
-/* Coexist with the dock: reclaim only the space above the dock area
-   (height ~ viewport - top padding - dock reserve - small gap). */
-.canvas[data-has-dock="true"] .xmrp {
-  height: min(680px, calc(100vh - 24px - var(--dock-reserve, 56px) - 8px));
 }
 
 .xmrp--external {

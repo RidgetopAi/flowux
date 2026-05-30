@@ -6,8 +6,10 @@
    the canvas while the dock is open. */
 
 .dock-layer {
-  /* Sits between CanvasControls (~50) and ExpandedMRP overlay (200) so
-     the expanded view always wins z-order when both happen. */
+  /* Pass-through wrapper anchored to the bottom of the content area; the
+     dock itself re-enables pointer events. Sits above the expanded-MRP
+     overlay (z-index on the inline style) so the dock is always the focused,
+     clickable surface and never gets covered by the expanded view. */
   pointer-events: none;
 }
 
@@ -33,9 +35,7 @@
   color: var(--ink);
 }
 
-/* ── Header ────────────────────────────────────────────────────────────
-   Draggable area. Cursor flips to grab/grabbing to telegraph that the
-   user can pick the dock up and reposition it. */
+/* ── Header ──────────────────────────────────────────────────────────── */
 .dock__head {
   display: flex;
   align-items: center;
@@ -45,12 +45,7 @@
   border-bottom: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.22);
   min-height: 40px;
-  cursor: grab;
   user-select: none;
-}
-
-.dock__head:active {
-  cursor: grabbing;
 }
 
 .dock__head-l,
@@ -77,28 +72,6 @@
   min-width: 0;
   max-width: 220px;
   opacity: 0.45;
-}
-
-.dock__grip {
-  display: inline-flex;
-  align-items: center;
-  color: var(--faint);
-  flex: 0 0 auto;
-}
-
-.dock__grip svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* Pin button lights up when the dock is locked to the canvas world coords.
-   Cyan tone + soft halation signals "anchored — pan/zoom moves me." */
-.dock__pin--on,
-.dock__pin--on:hover {
-  color: var(--cyan-bright);
-  border-color: rgba(168, 255, 241, 0.42);
-  background: rgba(168, 255, 241, 0.10);
-  box-shadow: 0 0 14px rgba(168, 255, 241, 0.16);
 }
 
 /* ── Body — the spacious textarea ──────────────────────────────────────

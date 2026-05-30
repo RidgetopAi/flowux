@@ -3,6 +3,20 @@
      overlays (MRP backdrop, tool stream) stay clear of it so it reads as a
      persistent edge rather than something cards paint over. */
   --control-edge: 64px;
+
+  /* Right-anchored module rail. Zones from the right edge inward:
+       [control-edge: lamps] [tool-stream column] [main content area]
+     The content area (expanded MRP + chat dock) always stops its right edge
+     at the stream column, so the boundary is ONE fixed vertical line whether
+     the tool stream is open or not. MRP fills the top of the content area,
+     the dock anchors to its bottom — same left + right edges = one module. */
+  --rail-gap: 12px;          /* breathing between rail zones */
+  --rail-top: 18px;          /* top line shared by content + stream */
+  --stream-col: 348px;       /* tool-stream panel width */
+  --content-left: 40px;      /* left margin of the content area */
+  --content-right: calc(var(--control-edge) + var(--rail-gap) + var(--stream-col) + var(--rail-gap));
+  --module-gap: 14px;        /* dock offset from viewport bottom */
+
   --hud-bg: #050606;
   --hud-ink: #e9ede8;
   --hud-soft: #b7beb7;

@@ -19,10 +19,13 @@
   --focus-dur:    520ms;  /* row focus-pull      */
 
   position: absolute;
-  top: 128px;   /* below both lamps (compose + telemetry) */
-  right: 14px;
-  bottom: 14px;
-  width: 348px;
+  /* Dock into the reserved stream column: right edge butts against the
+     lamp control strip (with a rail gap), full height from the rail top.
+     The lamps sit in the control strip to the RIGHT of this panel. */
+  top: var(--rail-top, 18px);
+  right: calc(var(--control-edge, 64px) + var(--rail-gap, 12px));
+  bottom: var(--module-gap, 14px);
+  width: var(--stream-col, 348px);
   /* Above the expanded-MRP overlay (.xmrp-portal z-index 200) so tool calls
      stay visible streaming on top while an MRP is expanded. The portal
      reserves right-column space (see ExpandedMRP.css [data-telemetry]) so the

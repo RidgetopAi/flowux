@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  AnimatePresence,
-  motion,
-  useDragControls,
-  useMotionValue,
-  type PanInfo,
-} from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   ChevronRight,
   Eraser,
   GitBranch,
-  GripHorizontal,
   History as HistoryIcon,
   Layers,
   Maximize2,
   Minimize2,
-  Pin,
   Search,
   X,
 } from "lucide-react";
@@ -179,29 +171,7 @@ export function FloatingDockLayer() {
   );
 }
 
-const DOCK_WIDTH = 720;
-/* Measured at runtime; ~253px with current padding + 3-row textarea +
- * footer button height. Treated as an estimate for initial position;
- * the actual rendered height is what determines coexistence layout. */
-const DOCK_HEIGHT_GUESS = 256;
-const DOCK_GAP_FROM_EDGE = 24;
-/* Space the expanded overlay needs to leave at the bottom of the viewport
- * for the dock to stay visible underneath it. Sum: dock height (~256) +
- * bottom edge gap (24) + small breathing buffer (8). */
-/** Visual gap between the dock and the expanded-MRP overlay above it.
- *  The reserve = dock height + this gap. Kept small so the overlay
- *  uses as much vertical space as possible. */
-const DOCK_RESERVE_GAP_PX = 12;
-
-function computeDefaultPos(): { x: number; y: number } {
-  const x = Math.max(16, (window.innerWidth - DOCK_WIDTH) / 2);
-  const y = Math.max(16, window.innerHeight - DOCK_HEIGHT_GUESS - DOCK_GAP_FROM_EDGE);
-  return { x, y };
-}
-
 function FloatingDock() {
-  const dockPosition = useCanvas((s) => s.dockPosition);
-  const setDockPosition = useCanvas((s) => s.setDockPosition);
   const draft = useCanvas((s) => s.dockDraft);
   const setDraft = useCanvas((s) => s.setDockDraft);
   const closeDock = useCanvas((s) => s.closeDock);
@@ -212,10 +182,6 @@ function FloatingDock() {
   const revealMRP = useCanvas((s) => s.revealMRP);
   const promptHistory = useCanvas((s) => s.promptHistory);
   const pushPromptHistory = useCanvas((s) => s.pushPromptHistory);
-  const dockLockAnchor = useCanvas((s) => s.dockLockAnchor);
-  const setDockLockAnchor = useCanvas((s) => s.setDockLockAnchor);
-  const toggleDockLock = useCanvas((s) => s.toggleDockLock);
-  const viewport = useCanvas((s) => s.viewport);
   const dockAttachments = useCanvas((s) => s.dockAttachments);
   const removeDockAttachment = useCanvas((s) => s.removeDockAttachment);
   const clearDockAttachments = useCanvas((s) => s.clearDockAttachments);
@@ -275,61 +241,10 @@ function FloatingDock() {
     });
   };
 
-  /* Default position — recomputed on resize ONLY when the user hasn't
-   * committed an explicit drag position. Once they drag, their position
-   * sticks (until the next session/reset). */
-  const [defaultPos, setDefaultPos] = useState(computeDefaultPos);
-  useEffect(() => {
-    if (dockPosition !== null) return;
-    const update = () => setDefaultPos(computeDefaultPos());
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [dockPosition]);
-
-  /* Resolve the dock's effective viewport position:
-   *   - LOCKED: compute from the world anchor + current pan/zoom + canvas
-   *     surface offset. Pan/zoom changes re-position the dock automatically.
-   *     Size stays constant (dock is rendered outside the scaled canvas
-   *     layer), only position moves.
-   *   - UNLOCKED: use the user-dragged dockPosition (or the centered
-   *     default if they haven't dragged it). Current viewport-fixed behavior. */
-  const pos = dockLockAnchor
-    ? {
-        x:
-          viewport.left +
-          viewport.width / 2 +
-          viewport.pan.x +
-          dockLockAnchor.x * viewport.zoom,
-        y:
-          viewport.top +
-          viewport.height / 2 +
-          viewport.pan.y +
-          dockLockAnchor.y * viewport.zoom,
-      }
-    : (dockPosition ?? defaultPos);
-
-  /* Motion values for drag transform; reset to 0 after dragEnd so the
-   * commit lands at `pos` cleanly. Same two-layer pattern as MRPCard:
-   * outer owns mount/exit animation, inner owns drag. */
-  const dragX = useMotionValue(0);
-  const dragY = useMotionValue(0);
-  const dragControls = useDragControls();
-
-  const onDragEnd = (_e: PointerEvent, info: PanInfo) => {
-    if (dockLockAnchor) {
-      /* Locked: convert screen-delta back into world-delta (divide by zoom)
-       * and commit to the world anchor. Pan/zoom-driven repositioning then
-       * picks up the new spot on the next render. */
-      setDockLockAnchor({
-        x: dockLockAnchor.x + info.offset.x / viewport.zoom,
-        y: dockLockAnchor.y + info.offset.y / viewport.zoom,
-      });
-    } else {
-      setDockPosition({ x: pos.x + info.offset.x, y: pos.y + info.offset.y });
-    }
-    dragX.set(0);
-    dragY.set(0);
-  };
+  /* The dock is an anchored module: it pins to the bottom of the main
+   * content area (left margin → reserved stream column), full content width,
+   * directly under the expanded MRP. Position is driven entirely by the
+   * shared rail CSS variables, so there's no drag/lock state to resolve. */
 
   /* Autofocus textarea on mount so the user can start typing immediately,
    * and put the caret at the END of any existing draft (e.g. when "/"
@@ -344,11 +259,11 @@ function FloatingDock() {
     el.setSelectionRange(end, end);
   }, []);
 
-  /* Publish a CSS variable so the ExpandedMRP overlay knows how much
-   * vertical space to leave for the dock at the bottom. Tracks the dock's
-   * actual rendered height via ResizeObserver so the overlay stays as
-   * tall as possible regardless of dock state (attachments staged,
-   * slash palette open, draft growing, etc.). Cleared on unmount. */
+  /* Publish the dock's live rendered height as --dock-height so the
+   * ExpandedMRP overlay can reserve exactly that much at the bottom of the
+   * content area (it stacks the card above the dock). Tracks via
+   * ResizeObserver so the reserve follows the dock as attachments stage,
+   * the slash palette opens, or the draft grows. Cleared on unmount. */
   const dockSizeRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = dockSizeRef.current;
@@ -356,14 +271,14 @@ function FloatingDock() {
     if (!el) return;
     const update = () => {
       const h = el.getBoundingClientRect().height;
-      root.style.setProperty("--dock-reserve", `${Math.ceil(h + DOCK_RESERVE_GAP_PX)}px`);
+      root.style.setProperty("--dock-height", `${Math.ceil(h)}px`);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => {
       ro.disconnect();
-      root.style.removeProperty("--dock-reserve");
+      root.style.removeProperty("--dock-height");
     };
   }, []);
 
@@ -380,13 +295,6 @@ function FloatingDock() {
     }, 280);
     return () => window.clearTimeout(id);
   }, [draft, refreshContextBudget]);
-
-  /* Toggle the dock's lock-to-canvas state. Hands the store the current
-   * viewport top-left so it can convert to a world anchor (lock) or just
-   * keep the visible position (unlock). */
-  const onTogglePin = () => {
-    toggleDockLock(pos);
-  };
 
   const onTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(e.target.value);
@@ -560,62 +468,31 @@ function FloatingDock() {
   return (
     <motion.div
       className="dock-layer"
-      initial={{ opacity: 0, scale: 0.96, y: 24 }}
+      initial={{ opacity: 0, scale: 0.98, y: 24 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97, y: 16 }}
+      exit={{ opacity: 0, scale: 0.99, y: 16 }}
       transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
       style={{
         position: "fixed",
-        left: pos.x,
-        top: pos.y,
-        width: DOCK_WIDTH,
-        zIndex: 150,
+        left: "var(--content-left, 40px)",
+        right: "var(--content-right)",
+        bottom: "var(--module-gap, 14px)",
+        /* Above the expanded-MRP overlay (200) and tool stream (210) so the
+           dock is always the focused, clickable surface — clicking it never
+           dismisses the MRP behind it. */
+        zIndex: 220,
       }}
     >
-      <motion.div
-        ref={dockSizeRef}
-        className="dock"
-        drag
-        dragListener={false}
-        dragControls={dragControls}
-        dragMomentum={false}
-        dragElastic={0}
-        onDragEnd={onDragEnd}
-        style={{ x: dragX, y: dragY }}
-      >
-        <header
-          className="dock__head"
-          onPointerDown={(e) => dragControls.start(e)}
-        >
+      <div ref={dockSizeRef} className="dock">
+        <header className="dock__head">
           <div className="dock__head-l">
             <Label tone="cyan" size="micro">COMPOSE</Label>
             <span className="dock__head-divider" />
             <Label size="micro" tone="muted">draft</Label>
             <BrailleBand length={20} density={0.42} tone="cyan" seed={11} />
-            <span className="dock__grip" aria-hidden="true">
-              <GripHorizontal />
-            </span>
           </div>
           <div className="dock__head-r">
             <Pill tone="cyan">opus-4.7</Pill>
-            <Button
-              variant="ghost"
-              size="sm"
-              iconOnly
-              onClick={onTogglePin}
-              className={cn("dock__pin", dockLockAnchor && "dock__pin--on")}
-              aria-label={
-                dockLockAnchor
-                  ? "Unpin from canvas (return to viewport)"
-                  : "Pin to canvas (pan/zoom with cards)"
-              }
-              title={
-                dockLockAnchor ? "Unpin from canvas" : "Pin to canvas"
-              }
-              aria-pressed={!!dockLockAnchor}
-            >
-              <Pin />
-            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -689,13 +566,13 @@ function FloatingDock() {
             Send
           </Button>
         </footer>
-      </motion.div>
+      </div>
 
       {/* Slash palette — portal-mounted ABOVE the dock so its growth pushes
           upward instead of stretching the dock past the viewport bottom.
-          Position is recomputed each render from `pos` (the dock's viewport
-          coords), so dragging the dock between sessions naturally moves the
-          drawer with it. z-index sits above .dock-layer's 150. */}
+          Anchored to the same content-area edges as the dock and sat just
+          above its live rendered height (--dock-height). z-index above the
+          dock's own 220. */}
       {isSlashMode && slashMatches.length > 0 &&
         createPortal(
           <div
@@ -704,10 +581,10 @@ function FloatingDock() {
             aria-label="Slash commands"
             style={{
               position: "fixed",
-              left: pos.x + 16,
-              width: DOCK_WIDTH - 32,
-              bottom: window.innerHeight - pos.y + 8,
-              zIndex: 160,
+              left: "calc(var(--content-left, 40px) + 16px)",
+              right: "calc(var(--content-right) + 16px)",
+              bottom: "calc(var(--dock-height, 256px) + var(--module-gap, 14px) + 8px)",
+              zIndex: 230,
             }}
           >
             {slashMatches.map((cmd, i) => {
