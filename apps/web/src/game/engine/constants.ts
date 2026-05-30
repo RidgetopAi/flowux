@@ -49,6 +49,9 @@ export const ALIEN_GRID_START_X = 14;
 export const ALIEN_GRID_START_Y = 30;
 /** Each wave bumps the starting Y down by this. */
 export const ALIEN_WAVE_DROP = 10;
+/** "WAVE N" announce duration between clearing a wave and the next
+ *  formation dropping in — a short arcade breather. */
+export const WAVE_FLASH_S = 1.6;
 /** Pixels the formation translates per march step. */
 export const ALIEN_MARCH_DX = 2;
 /** Pixels the formation drops when it hits a wall. */

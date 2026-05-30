@@ -48,6 +48,7 @@ export function createInitialState(hiScore = 0): GameState {
     ufo: createUfo(),
     untilUfo: UFO_INTERVAL_S,
     shotCount: 0,
+    waveFlash: 0,
     bunkers: createBunkers(),
     particles: createParticlePool(),
   };
@@ -83,6 +84,7 @@ export function resetForPlay(state: GameState, wave: number): void {
   state.bunkers = createBunkers();
   for (const p of state.particles) p.alive = false;
   state.time = 0;
+  state.waveFlash = 0;
 }
 
 /** Player ship at its spawn position — bottom center of the playfield. */

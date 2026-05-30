@@ -34,6 +34,7 @@ import {
   UFO_SPEED,
   UFO_W,
   UFO_Y,
+  WAVE_FLASH_S,
 } from "./constants";
 import { demoInput } from "./demo";
 import type { InputState } from "./input";
@@ -120,21 +121,24 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
     return notice;
   }
 
-  // ── Wave clear ───────────────────────────────────────────────────────
-  if (state.aliveCount === 0) {
+  // ── Wave transition ──────────────────────────────────────────────────
+  // Clearing a wave doesn't drop the next swarm instantly — it kicks off a
+  // brief "WAVE N" announce. While waveFlash counts down the board sits
+  // empty (all aliens dead); when it elapses the fresh formation drops in.
+  if (state.waveFlash > 0) {
+    state.waveFlash -= dt;
+    if (state.waveFlash <= 0) {
+      state.waveFlash = 0;
+      spawnWave(state, state.wave);
+    }
+  } else if (state.aliveCount === 0) {
     state.wave += 1;
-    state.aliens = createAlienGrid(state.wave);
-    state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
-    state.march.dir = 1;
-    state.march.untilStep = 1.0;
-    state.march.edgeHit = false;
-    state.march.frame = 0;
+    state.waveFlash = WAVE_FLASH_S;
+    // Clear the field so the announce reads clean — no stray alien fire,
+    // no leftover player shot, no saucer mid-pass.
     for (const b of state.alienBullets) b.alive = false;
-    state.untilAlienFire = 1.2;
-    // Fresh shields each wave — the player earns a clean slate of cover.
-    state.bunkers = createBunkers();
+    state.playerBullet.alive = false;
     state.ufo.active = false;
-    state.untilUfo = UFO_INTERVAL_S;
     notice.waveCleared = true;
   }
 
@@ -177,6 +181,22 @@ function aliensReachedPlayer(state: GameState): boolean {
     if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) return true;
   }
   return false;
+}
+
+/** Drop a fresh formation in for `wave` — new grid, reset march cadence,
+ *  fresh shields, saucer timer re-armed. Player position, score, lives, and
+ *  sim time carry over: this is a mid-game wave advance, not a new game. */
+function spawnWave(state: GameState, wave: number): void {
+  state.aliens = createAlienGrid(wave);
+  state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
+  state.march.dir = 1;
+  state.march.untilStep = 1.0;
+  state.march.edgeHit = false;
+  state.march.frame = 0;
+  state.untilAlienFire = 1.2;
+  // Fresh shields each wave — the player earns a clean slate of cover.
+  state.bunkers = createBunkers();
+  state.untilUfo = UFO_INTERVAL_S;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

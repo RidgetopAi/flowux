@@ -146,3 +146,41 @@
     animation: none;
   }
 }
+
+/* ── WAVE announce banner ─────────────────────────────────────────────
+   The brief "WAVE N" beat between waves, over the (momentarily empty)
+   playfield. Cyan to sit in the phosphor family; a quick scale-in pop so
+   it reads as a punctuation beat, distinct from the slow attract pulse. */
+.game-wave {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(20px, 2.8vw, 30px);
+  letter-spacing: 0.4em;
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-lg);
+  text-align: center;
+  animation: wave-flash 0.45s var(--ease-out, ease-out) both;
+}
+
+@keyframes wave-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-wave {
+    animation: none;
+  }
+}

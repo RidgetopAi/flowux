@@ -18,6 +18,8 @@ export type HudSnapshot = {
   wave: number;
   lives: number;
   phase: GamePhase;
+  /** True during the brief "WAVE N" announce between waves. */
+  waveActive: boolean;
 };
 
 type Props = {
@@ -38,6 +40,9 @@ export function Game({ onHud }: Props) {
   const audioRef = useRef<AudioEngine | null>(null);
   const [phase, setPhase] = useState<GamePhase>("attract");
   const [muted, setMuted] = useState<boolean>(readMuted);
+  // The wave being announced during a transition, or null when no banner
+  // should show. Driven from the loop via emit() below.
+  const [waveBanner, setWaveBanner] = useState<number | null>(null);
 
   // Mute toggle shared by the M key and the on-screen button. Stable
   // identity so the keydown effect below doesn't re-bind every render.
@@ -109,15 +114,18 @@ export function Game({ onHud }: Props) {
       wave: -1,
       lives: -1,
       phase: "attract",
+      waveActive: false,
     };
 
     const emit = (s: GameState) => {
+      const waveActive = s.waveFlash > 0;
       if (
         s.score === lastEmit.score &&
         s.hiScore === lastEmit.hiScore &&
         s.wave === lastEmit.wave &&
         s.lives === lastEmit.lives &&
-        s.phase === lastEmit.phase
+        s.phase === lastEmit.phase &&
+        waveActive === lastEmit.waveActive
       ) {
         return;
       }
@@ -127,8 +135,13 @@ export function Game({ onHud }: Props) {
         wave: s.wave,
         lives: s.lives,
         phase: s.phase,
+        waveActive,
       };
       if (next.phase !== lastEmit.phase) setPhase(next.phase);
+      // Show "WAVE N" while the announce is active; clear it when it ends.
+      if (next.waveActive !== lastEmit.waveActive || next.wave !== lastEmit.wave) {
+        setWaveBanner(next.waveActive ? next.wave : null);
+      }
       lastEmit = next;
       onHud(next);
     };
@@ -208,6 +221,11 @@ export function Game({ onHud }: Props) {
         <div className="game-attract">
           <div className="game-attract__over">GAME OVER</div>
           <Marquee />
+        </div>
+      )}
+      {waveBanner !== null && (
+        <div className="game-wave" aria-hidden="true">
+          WAVE {waveBanner}
         </div>
       )}
     </div>

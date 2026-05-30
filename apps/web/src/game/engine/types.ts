@@ -133,6 +133,11 @@ export type GameState = {
   /** Running count of player shots fired — drives deterministic UFO bonus. */
   shotCount: number;
 
+  /** Seconds left on the "WAVE N" announce between waves. 0 = inactive;
+   *  while > 0 the board sits empty (all aliens dead) and the banner shows,
+   *  then the next formation drops in. */
+  waveFlash: number;
+
   bunkers: Bunker[];
   particles: Particle[];
 };
