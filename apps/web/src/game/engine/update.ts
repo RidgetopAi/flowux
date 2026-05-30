@@ -82,8 +82,6 @@ export type UpdateNotice = {
 /** Tick the simulation forward by FIXED_STEP_S seconds. Returns a notice
  *  the loop uses to drive HUD updates and phase transitions. */
 export function update(state: GameState, dt: number, input: InputState): UpdateNotice {
-  const notice: UpdateNotice = {};
-
   // ── Phase transitions ────────────────────────────────────────────────
   if (state.phase === "attract" && input.startPressed) {
     input.startPressed = false;
@@ -112,12 +110,76 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
     state.phase = "attract";
   }
 
-  // While not playing, drain edge triggers and skip the rest of the sim.
-  // (Keeps the canvas alive for the future attract-mode demo dance.)
+  // While not playing, drain edge triggers and skip the sim. (Phase 5
+  // commit 2 wires the attract demo here — it drives simulate() with
+  // bot input instead of returning early.)
   if (state.phase !== "playing") {
     input.firePressed = false;
+    return {};
+  }
+
+  // Advance every entity one fixed step. Play-only policy below (game
+  // over, wave advance, hi-score) is intentionally kept OUT of simulate()
+  // so the Phase 5 attract demo can reuse the same core with bot input.
+  const notice = simulate(state, dt, input);
+
+  // ── Game over from depleted lives ─────────────────────────────────────
+  // Lifted out of simulate()'s alien-bullet loop (was an inline early-
+  // return there). Checked before wave-clear so a fatal hit still wins
+  // over a same-tick board clear, matching the original ordering.
+  if (state.lives <= 0) {
+    state.phase = "gameOver";
+    notice.gameOver = true;
     return notice;
   }
+
+  // ── Wave clear ───────────────────────────────────────────────────────
+  if (state.aliveCount === 0) {
+    state.wave += 1;
+    state.aliens = createAlienGrid(state.wave);
+    state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
+    state.march.dir = 1;
+    state.march.untilStep = 1.0;
+    state.march.edgeHit = false;
+    state.march.frame = 0;
+    for (const b of state.alienBullets) b.alive = false;
+    state.untilAlienFire = 1.2;
+    // Fresh shields each wave — the player earns a clean slate of cover.
+    state.bunkers = createBunkers();
+    state.ufo.active = false;
+    state.untilUfo = UFO_INTERVAL_S;
+    notice.waveCleared = true;
+  }
+
+  // ── Aliens reach player Y → instant game over ────────────────────────
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) {
+      state.phase = "gameOver";
+      state.lives = 0;
+      notice.gameOver = true;
+      break;
+    }
+  }
+
+  // Hi-score bookkeeping.
+  if (state.score > state.hiScore) state.hiScore = state.score;
+
+  return notice;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ENTITY SIMULATION CORE
+   Advances every live entity one fixed step — player, bullets, UFO, the
+   alien march, alien fire, particles — and returns the entity-level notice
+   (sound + score facts). Deliberately policy-free: it never sets phase,
+   advances waves, ends the game, or touches the hi-score. Those are the
+   caller's job (update() for real play; the Phase 5 attract demo for its
+   self-looping reset), which is exactly what lets BOTH share one core.
+   ──────────────────────────────────────────────────────────────────────── */
+
+function simulate(state: GameState, dt: number, input: InputState): UpdateNotice {
+  const notice: UpdateNotice = {};
 
   state.time += dt;
 
@@ -229,48 +291,12 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
       b.alive = false;
       onPlayerHit(state);
       notice.playerKilled = true;
-      if (state.lives <= 0) {
-        state.phase = "gameOver";
-        notice.gameOver = true;
-        return notice;
-      }
+      // Lives→0 is promoted to game-over by the caller's policy layer.
     }
   }
 
   // ── Particle simulation ──────────────────────────────────────────────
   stepParticles(state.particles, dt);
-
-  // ── Wave clear ───────────────────────────────────────────────────────
-  if (state.aliveCount === 0) {
-    state.wave += 1;
-    state.aliens = createAlienGrid(state.wave);
-    state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
-    state.march.dir = 1;
-    state.march.untilStep = 1.0;
-    state.march.edgeHit = false;
-    state.march.frame = 0;
-    for (const b of state.alienBullets) b.alive = false;
-    state.untilAlienFire = 1.2;
-    // Fresh shields each wave — the player earns a clean slate of cover.
-    state.bunkers = createBunkers();
-    state.ufo.active = false;
-    state.untilUfo = UFO_INTERVAL_S;
-    notice.waveCleared = true;
-  }
-
-  // ── Aliens reach player Y → instant game over ────────────────────────
-  for (const a of state.aliens) {
-    if (!a.alive) continue;
-    if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) {
-      state.phase = "gameOver";
-      state.lives = 0;
-      notice.gameOver = true;
-      break;
-    }
-  }
-
-  // Hi-score bookkeeping.
-  if (state.score > state.hiScore) state.hiScore = state.score;
 
   return notice;
 }
