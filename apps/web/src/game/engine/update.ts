@@ -35,9 +35,10 @@ import {
   UFO_W,
   UFO_Y,
 } from "./constants";
+import { demoInput } from "./demo";
 import type { InputState } from "./input";
 import { spawnBurst, stepParticles } from "./particles";
-import { createAlienGrid, createBunkers, createPlayer } from "./state";
+import { createAlienGrid, createBunkers, resetForNewGame } from "./state";
 import type { Alien, Bunker, GameState } from "./types";
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -85,36 +86,22 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
   // ── Phase transitions ────────────────────────────────────────────────
   if (state.phase === "attract" && input.startPressed) {
     input.startPressed = false;
+    resetForNewGame(state);
     state.phase = "playing";
-    state.score = 0;
-    state.wave = 1;
-    state.lives = 3;
-    state.time = 0;
-    state.aliens = createAlienGrid(1);
-    state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
-    state.player = createPlayer();
-    state.playerBullet.alive = false;
-    state.march.dir = 1;
-    state.march.untilStep = 1.0;
-    state.march.edgeHit = false;
-    state.march.frame = 0;
-    for (const b of state.alienBullets) b.alive = false;
-    state.untilAlienFire = 1.5;
-    state.ufo.active = false;
-    state.untilUfo = UFO_INTERVAL_S;
-    state.shotCount = 0;
-    state.bunkers = createBunkers();
-    for (const p of state.particles) p.alive = false;
   } else if (state.phase === "gameOver" && input.startPressed) {
     input.startPressed = false;
+    // Re-arm a fresh board so the attract demo plays immediately on return.
+    resetForNewGame(state);
     state.phase = "attract";
   }
 
-  // While not playing, drain edge triggers and skip the sim. (Phase 5
-  // commit 2 wires the attract demo here — it drives simulate() with
-  // bot input instead of returning early.)
+  // Not playing: drain the real fire edge so a held key can't leak into the
+  // next game. During attract the bot takes over — it drives the same
+  // simulate() so the board plays itself behind the PRESS START prompt.
+  // Game-over just freezes (the DOM "GAME OVER" overlay owns that screen).
   if (state.phase !== "playing") {
     input.firePressed = false;
+    if (state.phase === "attract") return tickDemo(state, dt);
     return {};
   }
 
@@ -152,20 +139,44 @@ export function update(state: GameState, dt: number, input: InputState): UpdateN
   }
 
   // ── Aliens reach player Y → instant game over ────────────────────────
-  for (const a of state.aliens) {
-    if (!a.alive) continue;
-    if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) {
-      state.phase = "gameOver";
-      state.lives = 0;
-      notice.gameOver = true;
-      break;
-    }
+  if (aliensReachedPlayer(state)) {
+    state.phase = "gameOver";
+    state.lives = 0;
+    notice.gameOver = true;
   }
 
   // Hi-score bookkeeping.
   if (state.score > state.hiScore) state.hiScore = state.score;
 
   return notice;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ATTRACT DEMO
+   The attract screen's self-playing round. Drives the shared simulate()
+   with bot input, then applies demo-only policy: a demo never ends the
+   game or writes the hi-score — when the bot dies out, clears the board,
+   or lets the aliens land, it just re-arms a fresh round and loops. The
+   returned notice is empty so the demo stays silent (no sound, no HUD
+   game-over / wave flags); the HUD still animates from `state` directly.
+   ──────────────────────────────────────────────────────────────────────── */
+
+function tickDemo(state: GameState, dt: number): UpdateNotice {
+  simulate(state, dt, demoInput(state));
+  if (state.lives <= 0 || state.aliveCount === 0 || aliensReachedPlayer(state)) {
+    resetForNewGame(state);
+  }
+  return {};
+}
+
+/** True once any alive alien has descended to the turret's row — the lose
+ *  condition that ends a real game and loops the demo. */
+function aliensReachedPlayer(state: GameState): boolean {
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) return true;
+  }
+  return false;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────

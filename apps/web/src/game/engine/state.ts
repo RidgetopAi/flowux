@@ -53,6 +53,18 @@ export function createInitialState(hiScore = 0): GameState {
   };
 }
 
+/** Full brand-new-game reset, in place — score / wave / lives / shot
+ *  count back to start, board rebuilt at wave 1. Hi-score is the one thing
+ *  preserved (it's the persisted record). Shared by the real attract→play
+ *  start and the attract demo's self-loop, so both stay identical. */
+export function resetForNewGame(state: GameState): void {
+  state.score = 0;
+  state.wave = 1;
+  state.lives = 3;
+  state.shotCount = 0;
+  resetForPlay(state, 1);
+}
+
 /** Reset to a "fresh play" but keep score / hi-score / wave / lives.
  *  Used after a player death or starting from the attract screen. */
 export function resetForPlay(state: GameState, wave: number): void {

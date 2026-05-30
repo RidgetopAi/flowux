@@ -100,3 +100,49 @@
     animation: none;
   }
 }
+
+/* ── ATTRACT DEMO prompt ──────────────────────────────────────────────
+   During attract the self-playing demo owns the canvas, so the prompt
+   shrinks well below the game-over marquee's scale and just pulses —
+   present and readable, but never competing with the dancing formation
+   behind it. */
+.game-attract--demo {
+  gap: var(--s-3);
+}
+
+.game-prompt {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 26px);
+  letter-spacing: 0.42em;
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-md);
+  animation: prompt-pulse 1.6s var(--ease-in-out) infinite;
+}
+
+.game-prompt__coin {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: var(--fs-body-sm);
+  letter-spacing: 0.34em;
+  color: var(--soft);
+  text-shadow: var(--glow-cyan-sm);
+  opacity: 0.72;
+}
+
+@keyframes prompt-pulse {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: var(--glow-cyan-lg);
+  }
+  50% {
+    opacity: 0.5;
+    text-shadow: var(--glow-cyan-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-prompt {
+    animation: none;
+  }
+}

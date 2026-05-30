@@ -41,12 +41,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = "#020303";
   ctx.fillRect(0, 0, PLAYFIELD_W, PLAYFIELD_H);
 
-  // Don't render game entities during attract / game-over. The DOM
-  // marquee owns those phases visually; the canvas is just a black
-  // surface waiting for "playing" to start. Phase 5 will wire the
-  // attract demo (aliens dancing for the player) — until then keep it
-  // clean so the CSS marquee reads uncontested.
-  if (state.phase !== "playing") return;
+  // Game-over freezes to black — the DOM "GAME OVER" overlay owns that
+  // screen. Attract now renders the live board: the self-playing demo
+  // dances behind the PRESS START prompt. So only game-over skips drawing.
+  if (state.phase === "gameOver") return;
 
   // ── UFO ─────────────────────────────────────────────────────────────
   if (state.ufo.active) {

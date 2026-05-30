@@ -196,12 +196,18 @@ export function Game({ onHud }: Props) {
       >
         {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
       </button>
-      {phase !== "playing" && (
+      {phase === "attract" && (
+        <div className="game-attract game-attract--demo">
+          {/* The demo plays behind this — keep the prompt compact so it
+              never competes with the dancing formation. */}
+          <div className="game-prompt">PRESS START</div>
+          <div className="game-prompt__coin">INSERT 1 COIN</div>
+        </div>
+      )}
+      {phase === "gameOver" && (
         <div className="game-attract">
+          <div className="game-attract__over">GAME OVER</div>
           <Marquee />
-          {phase === "gameOver" && (
-            <div className="game-attract__over">GAME OVER</div>
-          )}
         </div>
       )}
     </div>
