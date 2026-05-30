@@ -67,6 +67,18 @@
   overflow: hidden;
   pointer-events: auto;
   color: var(--ink);
+  /* Reading view — re-enable text selection. The canvas surface sets
+     user-select:none + cursor:grab for panning, which otherwise cascades in
+     here and leaves the prompt/response unselectable (hand cursor, no focus). */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+/* I-beam over the actual message text so copy-by-selection reads naturally.
+   Scoped to the container — links/buttons (e.g. the code copy button) keep
+   their own pointer cursor. */
+.xmrp__msg-text {
+  cursor: text;
 }
 
 /* Coexist with the dock: reclaim only the space above the dock area

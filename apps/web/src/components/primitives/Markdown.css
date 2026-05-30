@@ -81,6 +81,47 @@
   color: var(--cyan-bright);
 }
 
+/* Fenced code block wrapper — positions the hover copy button. */
+.md-code {
+  position: relative;
+}
+.md-code__copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  background: rgba(10, 12, 11, 0.72);
+  border: 1px solid var(--line-warm);
+  border-radius: var(--r-xs, 4px);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast, 120ms) ease,
+    color var(--dur-fast, 120ms) ease,
+    background var(--dur-fast, 120ms) ease,
+    box-shadow var(--dur-fast, 120ms) ease;
+}
+.md-code:hover .md-code__copy,
+.md-code__copy:focus-visible {
+  opacity: 1;
+}
+.md-code__copy:hover {
+  color: var(--cyan-bright);
+  background: rgba(168, 255, 241, 0.12);
+  box-shadow: 0 0 10px rgba(168, 255, 241, 0.25);
+}
+.md-code__copy svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* Fenced code blocks — the code element inside resets to a bare span. */
 .md pre {
   margin: 0 0 0.85em;

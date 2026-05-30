@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, type HTMLAttributes } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Check, Copy } from "lucide-react";
 import type { Plugin, PluggableList } from "unified";
 import type { Element, Root, RootContent, Text } from "hast";
 import { cn } from "../../lib/cn";
@@ -46,10 +47,55 @@ export function Markdown({ text, highlight, className }: Props) {
           a: ({ node: _node, ...props }) => (
             <a {...props} target="_blank" rel="noreferrer noopener" />
           ),
+          // Fenced code blocks get a hover copy button (react-markdown renders
+          // the fence as <pre><code>…). Inline code (no <pre>) is untouched.
+          pre: ({ node: _node, children, ...props }) => (
+            <CodeBlock {...props}>{children}</CodeBlock>
+          ),
         }}
       >
         {text}
       </ReactMarkdown>
+    </div>
+  );
+}
+
+/* ── Code block with copy button ────────────────────────────────────────────
+   Wraps a fenced code block and adds a copy affordance that reads the rendered
+   text straight off the <pre> (so syntax/whitespace is preserved exactly). The
+   button reveals on hover/focus and flips to a check for ~1.4s after copying. */
+function CodeBlock({ children, ...props }: HTMLAttributes<HTMLPreElement>) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    const text = preRef.current?.innerText ?? "";
+    if (!text) return;
+    void navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1400);
+      })
+      .catch(() => {
+        /* Clipboard blocked (insecure context / denied) — fail silently. */
+      });
+  };
+
+  return (
+    <div className="md-code">
+      <button
+        type="button"
+        className="md-code__copy"
+        onClick={copy}
+        aria-label={copied ? "Copied" : "Copy code"}
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+      <pre ref={preRef} {...props}>
+        {children}
+      </pre>
     </div>
   );
 }
