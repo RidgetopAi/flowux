@@ -15,14 +15,31 @@ import {
   COLOR_POPUP,
   COLOR_UFO_BODY,
   COLOR_UFO_DOME,
+  HIT_FLASH_MAX_ALPHA,
   PLAYER_H,
   PLAYER_W,
   PLAYFIELD_H,
   PLAYFIELD_W,
+  SHAKE_FREQ_X,
+  SHAKE_FREQ_Y,
+  SHAKE_MAX_PX,
   UFO_W,
   UFO_Y,
 } from "./constants";
 import type { GameState } from "./types";
+
+/* Honor the OS "reduce motion" setting for the Phase 6 game-feel effects
+ * (screen shake + hit flash). Read once at module load and kept current via
+ * a change listener so toggling the setting takes effect without a reload.
+ * Guarded for non-browser contexts (tests). */
+let reducedMotion = false;
+if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+  const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  reducedMotion = mq.matches;
+  mq.addEventListener?.("change", (e) => {
+    reducedMotion = e.matches;
+  });
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    ENGINE · RENDER
@@ -47,6 +64,12 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   // screen. Attract now renders the live board: the self-playing demo
   // dances behind the PRESS START prompt. So only game-over skips drawing.
   if (state.phase === "gameOver") return;
+
+  // Everything below is drawn under the shake offset. The black wash above
+  // already covered the full canvas untranslated, so the offset just slides
+  // the live board over a clean black border — no smear at the edges.
+  ctx.save();
+  applyShake(ctx, state);
 
   // ── UFO ─────────────────────────────────────────────────────────────
   if (state.ufo.active) {
@@ -137,6 +160,37 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
     const alpha = Math.max(0, Math.min(1, sp.life / sp.maxLife));
     drawNumber(ctx, sp.value, sp.x, sp.y, COLOR_POPUP, alpha);
   }
+
+  ctx.restore();
+
+  // ── Hit flash ────────────────────────────────────────────────────────
+  // A single bright frame on impact. Drawn last and untranslated so the
+  // wash always covers the whole field regardless of the shake offset.
+  drawHitFlash(ctx, state);
+}
+
+/* Translate the canvas by a decaying shake offset. Trauma is squared so the
+ * kick falls off sharply (snappy, not seasick), and the offset is driven by
+ * sim time rather than Math.random so it stays smooth and reproducible.
+ * No-op under reduced-motion or when there's no trauma to spend. */
+function applyShake(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (reducedMotion || state.shake <= 0) return;
+  const amp = SHAKE_MAX_PX * state.shake * state.shake;
+  const dx = Math.sin(state.time * SHAKE_FREQ_X) * amp;
+  const dy = Math.cos(state.time * SHAKE_FREQ_Y) * amp;
+  ctx.translate(Math.round(dx), Math.round(dy));
+}
+
+/* Wash the whole field with the hit-flash color, faded by squared trauma so
+ * the flash is a brief blink rather than a lingering tint. No-op under
+ * reduced-motion or when spent. */
+function drawHitFlash(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (reducedMotion || state.hitFlash <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = HIT_FLASH_MAX_ALPHA * state.hitFlash * state.hitFlash;
+  ctx.fillStyle = state.hitFlashColor || "#ffffff";
+  ctx.fillRect(0, 0, PLAYFIELD_W, PLAYFIELD_H);
+  ctx.restore();
 }
 
 /* Draw a non-negative integer centered horizontally on `cx`, top at `y`,

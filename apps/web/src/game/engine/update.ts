@@ -17,10 +17,14 @@ import {
   BUNKER_H,
   BUNKER_W,
   COLOR_ALIEN_ROW,
+  COLOR_HIT_PLAYER,
   COLOR_PLAYER,
   COLOR_UFO_BODY,
   EXTRA_LIFE_FLASH_S,
   EXTRA_LIFE_SCORE,
+  HIT_FLASH_DECAY_S,
+  HIT_FLASH_TRAUMA_PLAYER,
+  HIT_FLASH_TRAUMA_UFO,
   PARTICLE_PER_ALIEN,
   PARTICLE_PER_PLAYER,
   PLAYER_BULLET_SPEED,
@@ -30,6 +34,9 @@ import {
   PLAYER_W,
   PLAYFIELD_H,
   PLAYFIELD_W,
+  SHAKE_DECAY_S,
+  SHAKE_TRAUMA_PLAYER,
+  SHAKE_TRAUMA_UFO,
   UFO_H,
   UFO_INTERVAL_S,
   UFO_POINTS_TABLE,
@@ -285,6 +292,11 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
           speedMax: 120,
         });
         spawnPopup(state.scorePopups, state.ufo.x, UFO_Y, state.ufo.points);
+        // Lighter kick + cyan flash — the saucer is a treat, not a threat.
+        // max() so a same-tick player death (full trauma) still wins.
+        state.shake = Math.max(state.shake, SHAKE_TRAUMA_UFO);
+        state.hitFlash = Math.max(state.hitFlash, HIT_FLASH_TRAUMA_UFO);
+        state.hitFlashColor = COLOR_UFO_BODY;
         state.ufo.active = false;
       }
     }
@@ -336,6 +348,16 @@ function simulate(state: GameState, dt: number, input: InputState): UpdateNotice
   // ── Particle simulation ──────────────────────────────────────────────
   stepParticles(state.particles, dt);
   stepPopups(state.scorePopups, dt);
+
+  // ── Game-feel decay ───────────────────────────────────────────────────
+  // Shake and hit-flash are trauma values (0..1) injected at impact sites
+  // above; bleed them off linearly here. Render turns whatever's left into
+  // a camera offset / bright wash. Lives in simulate() so the attract demo
+  // gets the same juice from the same code.
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt / SHAKE_DECAY_S);
+  if (state.hitFlash > 0) {
+    state.hitFlash = Math.max(0, state.hitFlash - dt / HIT_FLASH_DECAY_S);
+  }
 
   // ── Extra life ───────────────────────────────────────────────────────
   // Age out any active "1UP" flash, then award a bonus life for every score
@@ -486,6 +508,10 @@ function onPlayerHit(state: GameState): void {
     speedMax: 55,
     life: 0.7,
   });
+  // Full-strength kick + white flash — death is the heaviest hit in the game.
+  state.shake = SHAKE_TRAUMA_PLAYER;
+  state.hitFlash = HIT_FLASH_TRAUMA_PLAYER;
+  state.hitFlashColor = COLOR_HIT_PLAYER;
 }
 
 /* ── UFO mechanics ───────────────────────────────────────────────────── */

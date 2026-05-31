@@ -53,6 +53,9 @@ export function createInitialState(hiScore = 0): GameState {
     waveFlash: 0,
     nextExtraLife: EXTRA_LIFE_SCORE,
     extraLifeFlash: 0,
+    shake: 0,
+    hitFlash: 0,
+    hitFlashColor: "",
     bunkers: createBunkers(),
     particles: createParticlePool(),
     scorePopups: createScorePopupPool(),
@@ -93,6 +96,8 @@ export function resetForPlay(state: GameState, wave: number): void {
   state.time = 0;
   state.waveFlash = 0;
   state.extraLifeFlash = 0;
+  state.shake = 0;
+  state.hitFlash = 0;
 }
 
 /** Player ship at its spawn position — bottom center of the playfield. */

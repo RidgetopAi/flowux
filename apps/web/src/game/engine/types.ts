@@ -158,6 +158,16 @@ export type GameState = {
   /** Seconds left on the "1UP" flash when a bonus life is earned. */
   extraLifeFlash: number;
 
+  /** Screen-shake trauma, 0..1. Set high on impact (player death, UFO
+   *  kill), decays each tick; render squares it into a camera offset.
+   *  Reduced-motion ignores it entirely. */
+  shake: number;
+  /** Hit-flash trauma, 0..1 — a brief full-frame bright wash on impact,
+   *  decayed faster than the shake. Reduced-motion ignores it too. */
+  hitFlash: number;
+  /** Color of the active hit flash (white = player death, cyan = UFO). */
+  hitFlashColor: string;
+
   bunkers: Bunker[];
   particles: Particle[];
   scorePopups: ScorePopup[];

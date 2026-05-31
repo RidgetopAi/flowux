@@ -115,6 +115,32 @@ export const EXTRA_LIFE_SCORE = 1000;
 /** "1UP" flash duration when a bonus life is earned. */
 export const EXTRA_LIFE_FLASH_S = 0.9;
 
+/* ── SCREEN SHAKE & HIT FLASH (Phase 6 — game feel) ─────────────────── */
+
+/** Camera-shake is a "trauma" value (0..1) set on impact that decays each
+ *  tick; render squares it into a pixel offset so the kick falls off fast.
+ *  One field, no per-event duration bookkeeping. */
+export const SHAKE_MAX_PX = 4; // peak camera offset at trauma = 1
+export const SHAKE_DECAY_S = 0.45; // seconds for trauma 1 → 0
+/** Wobble frequencies (rad/s) for the two axes — coprime-ish so the
+ *  offset doesn't trace a tidy line. Driven off sim time, not Math.random,
+ *  so the shake is smooth and reproducible. */
+export const SHAKE_FREQ_X = 49;
+export const SHAKE_FREQ_Y = 41;
+/** Trauma injected per event — death is a full kick, the saucer a pop. */
+export const SHAKE_TRAUMA_PLAYER = 1.0;
+export const SHAKE_TRAUMA_UFO = 0.5;
+
+/** Hit-flash is the same trauma idea: a brief full-frame bright wash,
+ *  decayed faster than the shake so it reads as a single impact frame. */
+export const HIT_FLASH_DECAY_S = 0.18;
+export const HIT_FLASH_MAX_ALPHA = 0.55; // peak wash opacity at trauma = 1
+export const HIT_FLASH_TRAUMA_PLAYER = 1.0;
+export const HIT_FLASH_TRAUMA_UFO = 0.5;
+/** Player death flashes white (the classic kill-screen blink); the UFO
+ *  flash reuses COLOR_UFO_BODY (cyan) so each impact reads as its source. */
+export const COLOR_HIT_PLAYER = "#ffffff";
+
 /* ── ALIEN BULLETS ──────────────────────────────────────────────────── */
 
 export const ALIEN_BULLET_SPEED = 60; // px/s, downward
