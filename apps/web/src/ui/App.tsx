@@ -10,7 +10,16 @@ import { Button } from "../components/primitives/Button";
 import { Label } from "../components/primitives/Label";
 import { Pill } from "../components/primitives/Pill";
 import { arrangeGrid } from "../lib/layout";
-import { useCanvas, type ForkHandler, type MovePersistHandler, type SubmitPromptHandler } from "../lib/store";
+import {
+  fitImageEnvelope,
+  useCanvas,
+  type ForkHandler,
+  type ImageDeleteHandler,
+  type ImageDropHandler,
+  type MovePersistHandler,
+  type SubmitPromptHandler,
+} from "../lib/store";
+import { CANVAS_IMAGE_ID_PREFIX } from "../lib/canvasAdapter";
 import { useFlowuxStore } from "../store.js";
 
 export function App() {
@@ -30,7 +39,12 @@ export function App() {
   const loadFromSnapshot = useCanvas((s) => s.loadFromSnapshot);
   const setSubmitPromptHandler = useCanvas((s) => s.setSubmitPromptHandler);
   const setMovePersistHandler = useCanvas((s) => s.setMovePersistHandler);
+  const setImageDropHandler = useCanvas((s) => s.setImageDropHandler);
+  const setImageDeleteHandler = useCanvas((s) => s.setImageDeleteHandler);
   const setForkHandler = useCanvas((s) => s.setForkHandler);
+  const addCanvasImage = useFlowuxStore((s) => s.addCanvasImage);
+  const patchCanvasImage = useFlowuxStore((s) => s.patchCanvasImage);
+  const removeCanvasImage = useFlowuxStore((s) => s.removeCanvasImage);
   const createChildCanvasFromSelection = useFlowuxStore(
     (s) => s.createChildCanvasFromSelection,
   );
@@ -114,10 +128,16 @@ export function App() {
   }, [submitPrompt, setSubmitPromptHandler]);
 
   // Persist drag-end + arrange-all to apps/api. CanvasObject.id IS the
-  // placement.id (per canvasAdapter), but patchPlacement keys on mrpId
-  // so look it up from the current snapshot.
+  // placement.id for MRPs (per canvasAdapter), but patchPlacement keys on
+  // mrpId so look it up from the current snapshot. Parked images carry the
+  // `canvasimage-<id>` prefix and route to the images endpoint instead.
   useEffect(() => {
     const handler: MovePersistHandler = (objectId, x, y) => {
+      if (objectId.startsWith(CANVAS_IMAGE_ID_PREFIX)) {
+        const imageId = objectId.slice(CANVAS_IMAGE_ID_PREFIX.length);
+        void patchCanvasImage(imageId, { x, y });
+        return;
+      }
       const placement = useFlowuxStore
         .getState()
         .snapshot?.placements.find((p) => p.id === objectId);
@@ -126,7 +146,40 @@ export function App() {
     };
     setMovePersistHandler(handler);
     return () => setMovePersistHandler(null);
-  }, [patchPlacement, setMovePersistHandler]);
+  }, [patchPlacement, patchCanvasImage, setMovePersistHandler]);
+
+  // Parked-image drop/paste → upload + persist as a free-floating canvas
+  // image (server-authoritative; reappears via the next snapshot). pos is the
+  // world-coord drop point, or undefined for ambient paste — default to the
+  // current viewport center so it lands somewhere visible.
+  useEffect(() => {
+    const handler: ImageDropHandler = (file, pos, naturalWidth, naturalHeight) => {
+      const { width, height } = fitImageEnvelope(naturalWidth, naturalHeight);
+      let x: number;
+      let y: number;
+      if (pos) {
+        x = pos.x;
+        y = pos.y;
+      } else {
+        const { pan, zoom } = useCanvas.getState().viewport;
+        x = -pan.x / zoom - width / 2;
+        y = -pan.y / zoom - height / 2;
+      }
+      void addCanvasImage({ file, x, y, width, height, naturalWidth, naturalHeight });
+    };
+    setImageDropHandler(handler);
+    return () => setImageDropHandler(null);
+  }, [addCanvasImage, setImageDropHandler]);
+
+  // Parked-image delete → remove from server + snapshot (canvas-layer removal
+  // is optimistic inside ImageCard via removeObject).
+  useEffect(() => {
+    const handler: ImageDeleteHandler = (serverImageId) => {
+      void removeCanvasImage(serverImageId);
+    };
+    setImageDeleteHandler(handler);
+    return () => setImageDeleteHandler(null);
+  }, [removeCanvasImage, setImageDeleteHandler]);
 
   // Bundle-fork from an MRP card's fork button. MRPCard ships CanvasObject
   // ids (= placement.ids per canvasAdapter); resolve them to the underlying

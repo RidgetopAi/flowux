@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { motion, useMotionValue, type PanInfo } from "motion/react";
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
 import { useCanvas, type ImageObject } from "../../lib/store";
 import { cn } from "../../lib/cn";
 import "./ImageCard.css";
@@ -27,6 +27,8 @@ export function ImageCard({ image }: Props) {
   const setDragging = useCanvas((s) => s.setDragging);
   const setCursor = useCanvas((s) => s.setCursor);
   const toggleCheck = useCanvas((s) => s.toggleCheck);
+  const removeObject = useCanvas((s) => s.removeObject);
+  const imageDeleteHandler = useCanvas((s) => s.imageDeleteHandler);
 
   const isDragging = draggingId === image.id;
   const isCursor = cursorId === image.id;
@@ -144,6 +146,17 @@ export function ImageCard({ image }: Props) {
     toggleCheck(image.id);
   };
 
+  // Delete is only offered for PARKED images (persisted, server-backed).
+  // Anchored artifact images + client-only materializations have no
+  // serverImageId and aren't independently deletable here.
+  const isParked = Boolean(image.serverImageId);
+  const onDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Optimistic canvas-layer removal; the handler clears server + snapshot.
+    removeObject(image.id);
+    if (image.serverImageId) imageDeleteHandler?.(image.serverImageId);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -196,6 +209,18 @@ export function ImageCard({ image }: Props) {
           >
             {image.checked && <Check />}
           </button>
+          {isParked && (
+            <button
+              type="button"
+              className="img-card-delete"
+              onClick={onDeleteClick}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="Delete image"
+              title="Delete image"
+            >
+              <Trash2 />
+            </button>
+          )}
           <img
             src={image.src}
             alt={image.alt ?? ""}

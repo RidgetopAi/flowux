@@ -1,5 +1,6 @@
 import type {
   Artifact,
+  CanvasImage,
   CanvasPlacement,
   CanvasSnapshot,
   ModelRun,
@@ -72,7 +73,35 @@ export function snapshotToCanvasObjects(snapshot: CanvasSnapshot): CanvasObject[
     objects.push(toImageObject(artifact, anchor));
   }
 
+  // Parked images — free-floating, user-placed, persisted independently of any
+  // MRP (the planning surface). Server-authoritative: they ride in
+  // snapshot.canvasImages with their own x/y, so a reload restores the board.
+  for (const canvasImage of snapshot.canvasImages ?? []) {
+    objects.push(toCanvasImageObject(canvasImage));
+  }
+
   return objects;
+}
+
+/** Stable canvas-object id prefix for parked images. The MovePersistHandler +
+ *  delete affordance strip this to recover the canvas_images.id. */
+export const CANVAS_IMAGE_ID_PREFIX = "canvasimage-";
+
+export function toCanvasImageObject(canvasImage: CanvasImage): ImageObject {
+  return {
+    type: "image",
+    id: `${CANVAS_IMAGE_ID_PREFIX}${canvasImage.id}`,
+    x: canvasImage.x,
+    y: canvasImage.y,
+    width: canvasImage.width,
+    height: canvasImage.height,
+    checked: false,
+    src: canvasImage.uri,
+    alt: canvasImage.name,
+    ...(canvasImage.naturalWidth !== undefined ? { naturalWidth: canvasImage.naturalWidth } : {}),
+    ...(canvasImage.naturalHeight !== undefined ? { naturalHeight: canvasImage.naturalHeight } : {}),
+    serverImageId: canvasImage.id
+  };
 }
 
 export function toMRPObject(

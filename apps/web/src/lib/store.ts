@@ -21,6 +21,24 @@ export type SubmitPromptHandler = (input: {
  *  — failures should be handled by the handler, not propagated. */
 export type MovePersistHandler = (objectId: string, x: number, y: number) => void;
 
+/** Called when the user drops/pastes an image onto the canvas (NOT into the
+ *  dock). The real app wires this to upload + persist as a parked canvas_image
+ *  (server-authoritative; reappears via the next snapshot). pos is the world-
+ *  coord drop point, or undefined to let the handler pick (e.g. viewport
+ *  center). Playground/mock stores can leave it null → ingest falls back to a
+ *  client-only addImage. */
+export type ImageDropHandler = (
+  file: File,
+  pos: { x: number; y: number } | undefined,
+  naturalWidth: number,
+  naturalHeight: number,
+) => void;
+
+/** Called when the user deletes a PARKED image. Receives the server-side
+ *  canvas_images.id so the handler can DELETE it and drop it from the snapshot
+ *  (canvas-layer removal happens optimistically via removeObject). */
+export type ImageDeleteHandler = (serverImageId: string) => void;
+
 /** Called when the user clicks a fork button on an MRP card (or bundle).
  *  Receives the CanvasObject ids that should seed the new child canvas.
  *  Real apps wire this to a backend-driven branch creation; playground/
@@ -109,6 +127,11 @@ export type ImageObject = ObjectBase & {
   /** Optional anchor to an MRP — semantically "attached to this prompt".
    *  Different from MRP.parentId (which is "branched from"). */
   anchoredToId?: string;
+  /** Server-side canvas_images.id when this is a PARKED image (free-floating,
+   *  persisted, not MRP-bound). Present only for images projected from
+   *  snapshot.canvasImages — drives move/delete persistence routing. Absent
+   *  on MRP-anchored artifact images and on client-only dock materializations. */
+  serverImageId?: string;
 };
 
 /** Per-tool-call canvas node. Rendered as a thin chip stacked below the
@@ -227,6 +250,13 @@ function fitInside(
   if (!nw || !nh) return { width: maxW, height: maxH };
   const scale = Math.min(maxW / nw, maxH / nh, 1);
   return { width: Math.round(nw * scale), height: Math.round(nh * scale) };
+}
+
+/** Fit natural image dimensions into the standard canvas image-tile envelope
+ *  (the same 320×240 box ImageCard renders within). Exported so the parked-
+ *  image drop flow can size tiles identically to anchored artifact images. */
+export function fitImageEnvelope(nw?: number, nh?: number): { width: number; height: number } {
+  return fitInside(nw, nh, IMG_MAX_WIDTH, IMG_MAX_HEIGHT);
 }
 
 type State = {
@@ -380,6 +410,10 @@ type State = {
   setSubmitPromptHandler: (handler: SubmitPromptHandler | null) => void;
   movePersistHandler: MovePersistHandler | null;
   setMovePersistHandler: (handler: MovePersistHandler | null) => void;
+  imageDropHandler: ImageDropHandler | null;
+  setImageDropHandler: (handler: ImageDropHandler | null) => void;
+  imageDeleteHandler: ImageDeleteHandler | null;
+  setImageDeleteHandler: (handler: ImageDeleteHandler | null) => void;
   forkHandler: ForkHandler | null;
   setForkHandler: (handler: ForkHandler | null) => void;
 };
@@ -884,6 +918,12 @@ export const useCanvas = create<State>((set, get) => ({
 
   movePersistHandler: null,
   setMovePersistHandler: (handler) => set({ movePersistHandler: handler }),
+
+  imageDropHandler: null,
+  setImageDropHandler: (handler) => set({ imageDropHandler: handler }),
+
+  imageDeleteHandler: null,
+  setImageDeleteHandler: (handler) => set({ imageDeleteHandler: handler }),
 
   forkHandler: null,
   setForkHandler: (handler) => set({ forkHandler: handler }),

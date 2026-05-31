@@ -1,4 +1,5 @@
 import type {
+  CanvasImage,
   CanvasPlacement,
   CanvasSnapshot,
   CanvasThread,
@@ -215,6 +216,45 @@ export async function updateCanvasSelection(canvasId: string, selectedForContext
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ selectedForContext })
+  });
+}
+
+export interface CreateCanvasImageRequest {
+  uploadId: string;
+  uri: string;
+  name: string;
+  mimeType?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+}
+
+export async function createCanvasImage(canvasId: string, body: CreateCanvasImageRequest): Promise<CanvasImage> {
+  return fetchJson(`/api/canvases/${canvasId}/images`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
+
+export async function updateCanvasImage(
+  canvasId: string,
+  imageId: string,
+  patch: Partial<Pick<CanvasImage, "x" | "y" | "width" | "height">>
+): Promise<CanvasImage> {
+  return fetchJson(`/api/canvases/${canvasId}/images/${imageId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch)
+  });
+}
+
+export async function deleteCanvasImage(canvasId: string, imageId: string): Promise<{ deletedImageId: string }> {
+  return fetchJson(`/api/canvases/${canvasId}/images/${imageId}`, {
+    method: "DELETE"
   });
 }
 

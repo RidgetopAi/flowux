@@ -1,4 +1,5 @@
 import type {
+  CanvasImage,
   CanvasPlacement,
   CanvasSnapshot,
   CanvasThread,
@@ -84,6 +85,25 @@ interface FlowuxState {
   ) => Promise<void>;
   cancelActivePrompt: () => Promise<void>;
   patchPlacement: (mrpId: string, patch: Partial<CanvasPlacement>) => Promise<void>;
+  /** Upload + persist a parked (free-floating) image at world coords x/y.
+   *  Server-authoritative: appends to snapshot.canvasImages so it reprojects
+   *  onto the canvas and survives reload. */
+  addCanvasImage: (input: {
+    file: File;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    naturalWidth?: number;
+    naturalHeight?: number;
+  }) => Promise<void>;
+  /** Persist a parked image's new position/size (optimistic + PATCH). */
+  patchCanvasImage: (
+    imageId: string,
+    patch: Partial<Pick<CanvasImage, "x" | "y" | "width" | "height">>
+  ) => Promise<void>;
+  /** Delete a parked image (optimistic removal from snapshot + DELETE). */
+  removeCanvasImage: (imageId: string) => Promise<void>;
   setAllContextSelection: (selectedForContext: boolean) => Promise<void>;
   snapBack: (layout?: api.LayoutRequest) => Promise<void>;
   /** Trigger compaction on the current canvas. Optional mrpIds scopes
@@ -620,6 +640,79 @@ export const useFlowuxStore = create<FlowuxState>((set, get) => ({
         placements: state.snapshot.placements.map((item) => (item.id === placement.id ? placement : item))
       }
     }));
+  },
+
+  async addCanvasImage(input) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+    set({ error: undefined });
+    try {
+      const upload = await api.uploadAttachment(input.file);
+      const created = await api.createCanvasImage(canvasId, {
+        uploadId: upload.id,
+        uri: upload.uri,
+        name: upload.name,
+        ...(upload.mimeType ? { mimeType: upload.mimeType } : {}),
+        ...(input.naturalWidth !== undefined ? { naturalWidth: input.naturalWidth } : {}),
+        ...(input.naturalHeight !== undefined ? { naturalHeight: input.naturalHeight } : {}),
+        x: input.x,
+        y: input.y,
+        width: input.width,
+        height: input.height
+      });
+      set((state) => ({
+        snapshot:
+          state.snapshot && state.snapshot.canvas.id === canvasId
+            ? { ...state.snapshot, canvasImages: [...state.snapshot.canvasImages, created] }
+            : state.snapshot
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to add image" });
+    }
+  },
+
+  async patchCanvasImage(imageId, patch) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+
+    set((state) => ({
+      snapshot: state.snapshot && {
+        ...state.snapshot,
+        canvasImages: state.snapshot.canvasImages.map((image) =>
+          image.id === imageId ? { ...image, ...patch } : image
+        )
+      }
+    }));
+
+    try {
+      const updated = await api.updateCanvasImage(canvasId, imageId, patch);
+      set((state) => ({
+        snapshot: state.snapshot && {
+          ...state.snapshot,
+          canvasImages: state.snapshot.canvasImages.map((image) => (image.id === updated.id ? updated : image))
+        }
+      }));
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to move image" });
+    }
+  },
+
+  async removeCanvasImage(imageId) {
+    const canvasId = get().snapshot?.canvas.id;
+    if (!canvasId) return;
+
+    set((state) => ({
+      snapshot: state.snapshot && {
+        ...state.snapshot,
+        canvasImages: state.snapshot.canvasImages.filter((image) => image.id !== imageId)
+      }
+    }));
+
+    try {
+      await api.deleteCanvasImage(canvasId, imageId);
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Failed to delete image" });
+    }
   },
 
   async setAllContextSelection(selectedForContext) {

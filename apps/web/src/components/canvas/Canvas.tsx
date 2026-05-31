@@ -251,12 +251,21 @@ export function Canvas() {
               naturalWidth: probe.naturalWidth,
               naturalHeight: probe.naturalHeight,
             });
+          } else if (state.imageDropHandler) {
+            // Land on the canvas as a STANDALONE, PERSISTED object — not in
+            // any conversation chain. The real app uploads + records it as a
+            // free-floating canvas_image (server-authoritative; survives
+            // reload). The board is for reference/notes; promotion into a
+            // conversation happens later by dragging into an open dock.
+            state.imageDropHandler(
+              file,
+              opts?.pos,
+              probe.naturalWidth,
+              probe.naturalHeight,
+            );
           } else {
-            // Land on the canvas as a STANDALONE object — not in any
-            // conversation chain. anchoredToId:null explicitly skips the
-            // default-anchor-to-last-MRP behavior. The board is for
-            // reference/notes; promotion into a conversation happens
-            // later by dragging or pasting into an open dock.
+            // No backend wired (playground/standalone): keep a client-only
+            // image so the canvas still works in isolation.
             const id = state.addImage({
               src,
               alt: file.name,
@@ -304,21 +313,15 @@ export function Canvas() {
         for (const f of images) ingest(f, { toDock: true });
         return;
       }
-      // Canvas-side: first image uses addImage's default MRP anchor
-      // (right edge of most-recent MRP + 24px gap). Subsequent images
-      // explicitly position to the right of that base so they march
-      // across in a single row instead of piling on the same anchor.
-      const state = useCanvas.getState();
-      const mrps = state.objects.filter((o) => o.type === "mrp");
-      const anchor = mrps[mrps.length - 1];
-      const baseX = anchor ? anchor.x + anchor.width + 24 : 0;
-      const baseY = anchor ? anchor.y : 0;
+      // Canvas-side ambient paste: parked images are free-floating (no MRP
+      // anchor), so stack them horizontally starting near the viewport center
+      // where they'll be visible regardless of pan/zoom. ~120 ≈ half a tile,
+      // so the first image lands roughly centered.
+      const { pan, zoom } = useCanvas.getState().viewport;
+      const baseX = -pan.x / zoom - 120;
+      const baseY = -pan.y / zoom - 120;
       images.forEach((f, i) => {
-        if (i === 0) {
-          ingest(f);
-        } else {
-          ingest(f, { pos: { x: baseX + i * STACK_DX, y: baseY } });
-        }
+        ingest(f, { pos: { x: baseX + i * STACK_DX, y: baseY } });
       });
     };
 
