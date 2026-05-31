@@ -5,6 +5,7 @@ import {
   estimateContextBudget,
   normalizeStateDocument,
   type Branch,
+  type CanvasImage,
   type CanvasPlacement,
   type CanvasSnapshot,
   type CanvasThread,
@@ -34,6 +35,7 @@ import { db } from "../db/client.js";
 import { createHarnessAdapter } from "../harness/index.js";
 import {
   branches,
+  canvasImages,
   canvasPlacements,
   canvasThreads,
   contextBundles,
@@ -126,6 +128,7 @@ export async function deleteCanvas(canvasId: string): Promise<{ deletedCanvasId:
   const removableMrpIds = nativeMrpIds.filter((mrpId) => !externallyReferencedMrpIds.has(mrpId));
 
   await db.delete(canvasPlacements).where(eq(canvasPlacements.canvasId, canvasId));
+  await db.delete(canvasImages).where(eq(canvasImages.canvasId, canvasId));
   await db.delete(contextBundles).where(eq(contextBundles.canvasId, canvasId));
   await db.delete(branches).where(eq(branches.parentCanvasId, canvasId));
   await db.delete(branches).where(eq(branches.childCanvasId, canvasId));
@@ -215,6 +218,7 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     .from(branches)
     .where(eq(branches.childCanvasId, canvasId));
   const bundleRows = await db.select().from(contextBundles).where(eq(contextBundles.canvasId, canvasId));
+  const canvasImageRows = await db.select().from(canvasImages).where(eq(canvasImages.canvasId, canvasId));
   const snapshotRows = await db
     .select()
     .from(stateSnapshots)
@@ -230,6 +234,7 @@ export async function getCanvasSnapshot(canvasId: string, options: SnapshotOptio
     blocks: blocks.map(toMrpBlock),
     events: events.map(toMrpEvent),
     artifacts: artifactRows.map(toArtifact),
+    canvasImages: canvasImageRows.map(toCanvasImage),
     branches: [...branchRows, ...parentBranchRows].map(toBranch),
     contextBundles: bundleRows.map(toContextBundle),
     stateSnapshots: snapshotRows.map(toStateSnapshot)
@@ -552,6 +557,83 @@ export async function updatePlacement(
     .from(canvasPlacements)
     .where(and(eq(canvasPlacements.canvasId, canvasId), eq(canvasPlacements.mrpId, mrpId)));
   return placement ? toPlacement(placement) : undefined;
+}
+
+/* ── Canvas images (parked, free-floating) ─────────────────────────────── */
+
+const CANVAS_IMAGE_DEFAULT_W = 240;
+const CANVAS_IMAGE_DEFAULT_H = 240;
+
+export interface CreateCanvasImageInput {
+  uploadId: string;
+  uri: string;
+  name: string;
+  mimeType?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+}
+
+export async function createCanvasImage(canvasId: string, input: CreateCanvasImageInput): Promise<CanvasImage> {
+  const [canvas] = await db.select().from(canvasThreads).where(eq(canvasThreads.id, canvasId));
+  if (!canvas) throw new Error("canvas_not_found");
+
+  const timestamp = now();
+  const row = {
+    id: id(),
+    canvasId,
+    uploadId: input.uploadId,
+    uri: input.uri,
+    name: input.name,
+    mimeType: input.mimeType ?? null,
+    naturalWidth: input.naturalWidth ?? null,
+    naturalHeight: input.naturalHeight ?? null,
+    x: Math.round(input.x),
+    y: Math.round(input.y),
+    width: Math.round(input.width ?? CANVAS_IMAGE_DEFAULT_W),
+    height: Math.round(input.height ?? CANVAS_IMAGE_DEFAULT_H),
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+  await db.insert(canvasImages).values(row);
+  await db.update(canvasThreads).set({ updatedAt: timestamp }).where(eq(canvasThreads.id, canvasId));
+  return toCanvasImage(row);
+}
+
+export async function updateCanvasImage(
+  canvasId: string,
+  imageId: string,
+  patch: Partial<Pick<CanvasImage, "x" | "y" | "width" | "height">>
+): Promise<CanvasImage | undefined> {
+  const rounded: Record<string, number> = {};
+  for (const key of ["x", "y", "width", "height"] as const) {
+    if (patch[key] !== undefined) rounded[key] = Math.round(patch[key] as number);
+  }
+  await db
+    .update(canvasImages)
+    .set({ ...rounded, updatedAt: now() })
+    .where(and(eq(canvasImages.canvasId, canvasId), eq(canvasImages.id, imageId)));
+
+  const [row] = await db
+    .select()
+    .from(canvasImages)
+    .where(and(eq(canvasImages.canvasId, canvasId), eq(canvasImages.id, imageId)));
+  return row ? toCanvasImage(row) : undefined;
+}
+
+export async function deleteCanvasImage(canvasId: string, imageId: string): Promise<{ deletedImageId: string }> {
+  const [row] = await db
+    .select()
+    .from(canvasImages)
+    .where(and(eq(canvasImages.canvasId, canvasId), eq(canvasImages.id, imageId)));
+  if (!row) throw new Error("canvas_image_not_found");
+
+  await db.delete(canvasImages).where(and(eq(canvasImages.canvasId, canvasId), eq(canvasImages.id, imageId)));
+  await db.update(canvasThreads).set({ updatedAt: now() }).where(eq(canvasThreads.id, canvasId));
+  return { deletedImageId: imageId };
 }
 
 export async function updateCanvasSelection(canvasId: string, selectedForContext: boolean): Promise<CanvasPlacement[]> {
@@ -1254,6 +1336,25 @@ function toContextBundle(row: typeof contextBundles.$inferSelect): ContextBundle
     ...(row.name ? { name: row.name } : {}),
     selectedMrpIds: row.selectedMrpIds,
     modeByMrpId: row.modeByMrpId as Record<string, ContextMode>,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
+  };
+}
+
+function toCanvasImage(row: typeof canvasImages.$inferSelect): CanvasImage {
+  return {
+    id: row.id,
+    canvasId: row.canvasId,
+    uploadId: row.uploadId,
+    uri: row.uri,
+    name: row.name,
+    ...(row.mimeType ? { mimeType: row.mimeType } : {}),
+    ...(row.naturalWidth !== null && row.naturalWidth !== undefined ? { naturalWidth: row.naturalWidth } : {}),
+    ...(row.naturalHeight !== null && row.naturalHeight !== undefined ? { naturalHeight: row.naturalHeight } : {}),
+    x: row.x,
+    y: row.y,
+    width: row.width,
+    height: row.height,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };

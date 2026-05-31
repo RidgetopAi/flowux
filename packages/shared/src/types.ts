@@ -365,6 +365,29 @@ export interface UploadedAttachment {
   createdAt: string;
 }
 
+/** A free-floating ("parked") image placed directly on the canvas by the
+ *  user — NOT tied to any MRP. It's a planning-surface object: it persists
+ *  with the canvas (survives reload) but is only promoted to model context
+ *  if the user drags it into the dock and sends. `uploadId` points at the
+ *  same /api/uploads-backed file an MRP attachment would use, so promoting
+ *  a parked image to a dock attachment reuses the upload (no re-upload). */
+export interface CanvasImage {
+  id: string;
+  canvasId: string;
+  uploadId: string;
+  uri: string;
+  name: string;
+  mimeType?: string;
+  naturalWidth?: number;
+  naturalHeight?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ModelRun {
   id: string;
   canvasId: string;
@@ -434,6 +457,8 @@ export interface CanvasSnapshot {
   blocks: MrpBlock[];
   events: MrpEvent[];
   artifacts: Artifact[];
+  /** Free-floating images parked on the canvas by the user (not MRP-bound). */
+  canvasImages: CanvasImage[];
   branches: Branch[];
   contextBundles: ContextBundle[];
   /** Every state snapshot ever taken on this canvas, oldest → newest.

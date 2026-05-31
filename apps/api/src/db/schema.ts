@@ -105,6 +105,29 @@ export const artifacts = sqliteTable("artifacts", {
   createdAt: text("created_at").notNull()
 });
 
+/* ── Canvas images ─────────────────────────────────────────────────────
+ * Free-floating ("parked") images the user drops/pastes on the canvas.
+ * NOT tied to an MRP (that's what `artifacts` are for). The backing file
+ * lives in /api/uploads keyed by upload_id; this row just records that the
+ * file is parked on a canvas at a position. Promoting one to model context
+ * (drag into dock → send) reuses upload_id, so no re-upload. */
+export const canvasImages = sqliteTable("canvas_images", {
+  id: text("id").primaryKey(),
+  canvasId: text("canvas_id").notNull(),
+  uploadId: text("upload_id").notNull(),
+  uri: text("uri").notNull(),
+  name: text("name").notNull(),
+  mimeType: text("mime_type"),
+  naturalWidth: integer("natural_width"),
+  naturalHeight: integer("natural_height"),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
 export const mrpSections = sqliteTable("mrp_sections", {
   id: text("id").primaryKey(),
   mrpId: text("mrp_id").notNull(),

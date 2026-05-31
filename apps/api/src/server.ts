@@ -11,8 +11,10 @@ import {
   compactCanvas,
   completePromptMrp,
   createCanvas,
+  createCanvasImage,
   createChildCanvasFromSelection,
   createPromptMrp,
+  deleteCanvasImage,
   deleteContextBundle,
   editStateSnapshot,
   failPromptMrp,
@@ -25,6 +27,7 @@ import {
   setMrpPinned,
   snapBack,
   deleteCanvas,
+  updateCanvasImage,
   updateCanvasStatus,
   updateCanvasTitle,
   updateCanvasSelection,
@@ -296,6 +299,74 @@ app.patch<{
   if (!placement) return reply.code(404).send({ error: "placement_not_found" });
   return placement;
 });
+
+/* ── Canvas images (parked, free-floating) ─────────────────────────────── */
+
+app.post<{
+  Params: { canvasId: string };
+  Body: {
+    uploadId?: string;
+    uri?: string;
+    name?: string;
+    mimeType?: string;
+    naturalWidth?: number;
+    naturalHeight?: number;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  };
+}>("/api/canvases/:canvasId/images", async (request, reply) => {
+  const body = request.body ?? {};
+  if (!body.uploadId || !body.uri || !body.name) {
+    return reply.code(400).send({ error: "upload_id_uri_name_required" });
+  }
+  if (typeof body.x !== "number" || typeof body.y !== "number") {
+    return reply.code(400).send({ error: "position_required" });
+  }
+  try {
+    return await createCanvasImage(request.params.canvasId, {
+      uploadId: body.uploadId,
+      uri: body.uri,
+      name: body.name,
+      ...(body.mimeType ? { mimeType: body.mimeType } : {}),
+      ...(typeof body.naturalWidth === "number" ? { naturalWidth: body.naturalWidth } : {}),
+      ...(typeof body.naturalHeight === "number" ? { naturalHeight: body.naturalHeight } : {}),
+      x: body.x,
+      y: body.y,
+      ...(typeof body.width === "number" ? { width: body.width } : {}),
+      ...(typeof body.height === "number" ? { height: body.height } : {})
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "canvas_not_found") {
+      return reply.code(404).send({ error: "canvas_not_found" });
+    }
+    throw error;
+  }
+});
+
+app.patch<{
+  Params: { canvasId: string; imageId: string };
+  Body: { x?: number; y?: number; width?: number; height?: number };
+}>("/api/canvases/:canvasId/images/:imageId", async (request, reply) => {
+  const image = await updateCanvasImage(request.params.canvasId, request.params.imageId, request.body ?? {});
+  if (!image) return reply.code(404).send({ error: "canvas_image_not_found" });
+  return image;
+});
+
+app.delete<{ Params: { canvasId: string; imageId: string } }>(
+  "/api/canvases/:canvasId/images/:imageId",
+  async (request, reply) => {
+    try {
+      return await deleteCanvasImage(request.params.canvasId, request.params.imageId);
+    } catch (error) {
+      if (error instanceof Error && error.message === "canvas_image_not_found") {
+        return reply.code(404).send({ error: "canvas_image_not_found" });
+      }
+      throw error;
+    }
+  }
+);
 
 app.post<{ Params: { canvasId: string } }>("/api/canvases/:canvasId/prompts/cancel", async (request, reply) => {
   const activeRun = activePromptRuns.get(request.params.canvasId);

@@ -144,7 +144,26 @@ const statements = [
     edit_history TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_state_snapshots_canvas
-   ON state_snapshots(canvas_id, version DESC)`
+   ON state_snapshots(canvas_id, version DESC)`,
+  /* canvas_images — free-floating images parked on the canvas (not MRP-bound).
+     Backing file is in /api/uploads keyed by upload_id. */
+  `CREATE TABLE IF NOT EXISTS canvas_images (
+    id TEXT PRIMARY KEY,
+    canvas_id TEXT NOT NULL,
+    upload_id TEXT NOT NULL,
+    uri TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mime_type TEXT,
+    natural_width INTEGER,
+    natural_height INTEGER,
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_canvas_images_canvas ON canvas_images(canvas_id)`
   /* idx_mrps_compacted_by lives after the ALTER below — sqlite refuses
      to index a column that doesn't exist yet on first run. */
 ];
