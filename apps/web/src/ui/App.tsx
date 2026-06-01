@@ -21,6 +21,7 @@ import {
 } from "../lib/store";
 import { CANVAS_IMAGE_ID_PREFIX } from "../lib/canvasAdapter";
 import { useFlowuxStore } from "../store.js";
+import * as api from "../api";
 
 export function App() {
   const snapshot = useFlowuxStore((s) => s.snapshot);
@@ -114,13 +115,31 @@ export function App() {
   }, [snapshot, loadFromSnapshot, patchPlacement]);
 
   useEffect(() => {
-    const handler: SubmitPromptHandler = ({ prompt }) => {
+    const handler: SubmitPromptHandler = ({ prompt, attachments }) => {
       // If an MRP is already expanded the user is referencing it — don't
       // hijack the expanded view to the new message when its snapshot lands.
       const keepReference = Boolean(useCanvas.getState().expandedId);
-      void submitPrompt(prompt, undefined, undefined, ({ placement }) => {
-        if (!keepReference) pendingFocusId.current = placement.id;
-      });
+      // Resolve every staged attachment to a server upload id, then send.
+      // Lazy: a chip carrying `uploadId` (parked-image promotion, P4) reuses
+      // it; one carrying a raw `file` uploads now. Uploads run in the
+      // background — the handler still returns a synchronous placeholder id
+      // because the real focus target arrives via the onCreated callback.
+      void (async () => {
+        const resolved = await Promise.all(
+          attachments.map(async (att) => {
+            if (att.uploadId) return { id: att.uploadId };
+            if (att.file) {
+              const uploaded = await api.uploadAttachment(att.file);
+              return { id: uploaded.id };
+            }
+            return null;
+          }),
+        );
+        const ids = resolved.filter((a): a is { id: string } => a !== null);
+        await submitPrompt(prompt, undefined, ids, ({ placement }) => {
+          if (!keepReference) pendingFocusId.current = placement.id;
+        });
+      })();
       return `pending-${Date.now().toString(36)}`;
     };
     setSubmitPromptHandler(handler);

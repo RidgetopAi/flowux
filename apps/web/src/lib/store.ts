@@ -191,6 +191,14 @@ export type DockAttachment = {
   alt?: string;
   naturalWidth?: number;
   naturalHeight?: number;
+  /** The raw File, kept so the real-app send path can upload it lazily
+   *  (only when the user actually sends). Absent for client-only/playground
+   *  stagings and for parked images promoted via uploadId reuse. */
+  file?: File;
+  /** Set when this attachment already has a server-side /api/uploads id —
+   *  e.g. a parked canvas image dragged into the dock (P4). The send path
+   *  reuses this id and skips re-uploading the bytes. */
+  uploadId?: string;
 };
 
 /** Backwards-compat alias. Component code that's specifically about the

@@ -80,7 +80,7 @@ interface FlowuxState {
   submitPrompt: (
     prompt: string,
     layout?: api.LayoutRequest,
-    attachments?: UploadedAttachment[],
+    attachments?: ReadonlyArray<{ id: string }>,
     onCreated?: (payload: CreatePromptResponse) => void
   ) => Promise<void>;
   cancelActivePrompt: () => Promise<void>;

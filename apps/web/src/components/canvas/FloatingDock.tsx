@@ -9,6 +9,7 @@ import {
   Layers,
   Maximize2,
   Minimize2,
+  Paperclip,
   Search,
   X,
 } from "lucide-react";
@@ -183,6 +184,7 @@ function FloatingDock() {
   const promptHistory = useCanvas((s) => s.promptHistory);
   const pushPromptHistory = useCanvas((s) => s.pushPromptHistory);
   const dockAttachments = useCanvas((s) => s.dockAttachments);
+  const addDockAttachment = useCanvas((s) => s.addDockAttachment);
   const removeDockAttachment = useCanvas((s) => s.removeDockAttachment);
   const clearDockAttachments = useCanvas((s) => s.clearDockAttachments);
   const addImage = useCanvas((s) => s.addImage);
@@ -259,6 +261,38 @@ function FloatingDock() {
     el.setSelectionRange(end, end);
   }, []);
 
+  /* Hidden file input behind the attach button. Picked images are staged
+   * exactly like a paste-into-dock: decode to a data URL for the thumbnail,
+   * probe natural dimensions, and keep the raw File so the send path can
+   * upload it lazily (images only — file/doc support is a later phase). */
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const onPickFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
+    // Reset so picking the same file twice still fires onChange.
+    e.target.value = "";
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const src = typeof reader.result === "string" ? reader.result : "";
+        if (!src) return;
+        const probe = new Image();
+        probe.onload = () => {
+          addDockAttachment({
+            src,
+            alt: file.name,
+            naturalWidth: probe.naturalWidth,
+            naturalHeight: probe.naturalHeight,
+            file,
+          });
+        };
+        probe.src = src;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   /* Publish the dock's live rendered height as --dock-height so the
    * ExpandedMRP overlay can reserve exactly that much at the bottom of the
    * content area (it stacks the card above the dock). Tracks via
@@ -332,18 +366,21 @@ function FloatingDock() {
     draftSnapshotRef.current = "";
 
     /* Materialize every staged attachment as a real ImageObject anchored
-     * to the new MRP. addImage's default anchor logic (right of most-
-     * recent MRP) lines up since the new MRP IS the most recent. Multi-
-     * image case stacks them via store math; for single image this just
-     * lands one to the right of the prompt card. */
-    for (const att of dockAttachments) {
-      addImage({
-        src: att.src,
-        alt: att.alt,
-        naturalWidth: att.naturalWidth,
-        naturalHeight: att.naturalHeight,
-        anchoredToId: id,
-      });
+     * to the new MRP — PLAYGROUND ONLY. With a real backend the send path
+     * uploads each attachment, the server records it as an MRP artifact, and
+     * the post-send snapshot reload reprojects it as an anchored image — so
+     * materializing here too would double-render it. (The placeholder `id`
+     * returned by submitPromptHandler isn't a real placement id anyway.) */
+    if (!submitPromptHandler) {
+      for (const att of dockAttachments) {
+        addImage({
+          src: att.src,
+          alt: att.alt,
+          naturalWidth: att.naturalWidth,
+          naturalHeight: att.naturalHeight,
+          anchoredToId: id,
+        });
+      }
     }
     clearDockAttachments();
 
@@ -547,6 +584,24 @@ function FloatingDock() {
 
         <footer className="dock__foot">
           <div className="dock__foot-l">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={onPickFiles}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach image"
+              title="Attach image"
+            >
+              <Paperclip />
+            </Button>
             <Label size="micro" tone="muted">
               {draft.length} chars
               {dockAttachments.length > 0 &&
