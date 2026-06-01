@@ -100,7 +100,8 @@ export function toCanvasImageObject(canvasImage: CanvasImage): ImageObject {
     alt: canvasImage.name,
     ...(canvasImage.naturalWidth !== undefined ? { naturalWidth: canvasImage.naturalWidth } : {}),
     ...(canvasImage.naturalHeight !== undefined ? { naturalHeight: canvasImage.naturalHeight } : {}),
-    serverImageId: canvasImage.id
+    serverImageId: canvasImage.id,
+    uploadId: canvasImage.uploadId
   };
 }
 

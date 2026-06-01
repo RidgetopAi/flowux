@@ -132,6 +132,11 @@ export type ImageObject = ObjectBase & {
    *  snapshot.canvasImages — drives move/delete persistence routing. Absent
    *  on MRP-anchored artifact images and on client-only dock materializations. */
   serverImageId?: string;
+  /** Server-side /api/uploads id backing this parked image. Carried so a
+   *  drag-into-dock promotion (P4) can stage it as a DockAttachment that
+   *  reuses the existing upload — no re-upload on send. Same source file an
+   *  MRP attachment would use (canvas_images.upload_id). */
+  uploadId?: string;
 };
 
 /** Per-tool-call canvas node. Rendered as a thin chip stacked below the

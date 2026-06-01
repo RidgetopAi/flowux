@@ -7,6 +7,22 @@ import "./ImageCard.css";
 
 type Props = { image: ImageObject };
 
+/** True when a viewport point falls inside the open compose dock. The dock
+ *  is position:fixed (.dock-layer), so its bounding rect is already in the
+ *  same viewport coordinate space as motion's PanInfo.point — no canvas
+ *  pan/zoom conversion needed. Returns false when the dock isn't mounted. */
+function isPointOverDock(point: { x: number; y: number }): boolean {
+  const el = document.querySelector(".dock-layer");
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return (
+    point.x >= r.left &&
+    point.x <= r.right &&
+    point.y >= r.top &&
+    point.y <= r.bottom
+  );
+}
+
 /**
  * Renders one ImageObject as a draggable canvas tile.
  *
@@ -29,6 +45,7 @@ export function ImageCard({ image }: Props) {
   const toggleCheck = useCanvas((s) => s.toggleCheck);
   const removeObject = useCanvas((s) => s.removeObject);
   const imageDeleteHandler = useCanvas((s) => s.imageDeleteHandler);
+  const addDockAttachment = useCanvas((s) => s.addDockAttachment);
 
   const isDragging = draggingId === image.id;
   const isCursor = cursorId === image.id;
@@ -95,6 +112,34 @@ export function ImageCard({ image }: Props) {
   };
 
   const onDragEnd = (_e: PointerEvent, info: PanInfo) => {
+    /* DROP-TARGET DETECTION (P4): a PARKED, promotable image (carries an
+     * uploadId) released over the OPEN dock stages as a dock attachment —
+     * reusing the existing upload, no re-upload. The parked tile STAYS on
+     * the board (only becomes "Used" when actually sent), so we snap x/y
+     * back to 0 and DON'T persist a move. Group drags (checked bundle) fall
+     * through to ordinary move — staging is a single-image gesture.
+     * info.point is viewport coords; the dock is position:fixed, so a plain
+     * bounding-rect hit-test works regardless of canvas pan/zoom. */
+    if (
+      !groupDragRef.current &&
+      image.uploadId &&
+      useCanvas.getState().dockOpen &&
+      isPointOverDock(info.point)
+    ) {
+      addDockAttachment({
+        src: image.src,
+        alt: image.alt,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        uploadId: image.uploadId,
+      });
+      x.set(0);
+      y.set(0);
+      setDragging(null);
+      groupDragRef.current = null;
+      return;
+    }
+
     moveObject(image.id, image.x + info.offset.x, image.y + info.offset.y);
     x.set(0);
     y.set(0);
