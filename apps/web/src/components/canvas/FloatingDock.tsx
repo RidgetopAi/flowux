@@ -345,9 +345,6 @@ function FloatingDock() {
     // Allow send when there's either a prompt OR staged attachments
     // (image-only "look at this" is a valid turn).
     if (!prompt && dockAttachments.length === 0) return;
-    // If the user already has an MRP expanded, they're using it as a
-    // reference while composing — sending must NOT yank them off it.
-    const hadReference = Boolean(useCanvas.getState().expandedId);
     // External handler (apps/api-bound) takes over when registered. The
     // sync addMRP fallback is used in playground/standalone mode where
     // there is no backend; it returns an id immediately for the image
@@ -384,14 +381,11 @@ function FloatingDock() {
     }
     clearDockAttachments();
 
-    /* Dock stays open across sends — this is a conversation surface,
-     * not a one-shot input. Only auto-focus the freshly-sent message when
-     * the user wasn't already referencing an expanded MRP; otherwise leave
-     * their reference card up (they can click the new one when ready). */
-    if (!hadReference) {
-      setExpanded(id);
-      revealMRP(id);
-    }
+    /* Dock stays open across sends — this is a conversation surface, not a
+     * one-shot input. Always promote the freshly-sent message to the expanded
+     * view, even if another MRP was open (it collapses back to its tile). */
+    setExpanded(id);
+    revealMRP(id);
     /* Standalone-mode "thinking" beat (no real backend). With an external
      * submitPromptHandler the real apps/api stream patches the snapshot
      * and loadFromSnapshot keeps the canvas in sync — no local stub. */

@@ -116,9 +116,6 @@ export function App() {
 
   useEffect(() => {
     const handler: SubmitPromptHandler = ({ prompt, attachments }) => {
-      // If an MRP is already expanded the user is referencing it — don't
-      // hijack the expanded view to the new message when its snapshot lands.
-      const keepReference = Boolean(useCanvas.getState().expandedId);
       // Resolve every staged attachment to a server upload id, then send.
       // Lazy: a chip carrying `uploadId` (parked-image promotion, P4) reuses
       // it; one carrying a raw `file` uploads now. Uploads run in the
@@ -137,7 +134,9 @@ export function App() {
         );
         const ids = resolved.filter((a): a is { id: string } => a !== null);
         await submitPrompt(prompt, undefined, ids, ({ placement }) => {
-          if (!keepReference) pendingFocusId.current = placement.id;
+          // Always promote the freshly-sent message to the expanded view —
+          // even if another MRP was open, it collapses back to its tile.
+          pendingFocusId.current = placement.id;
         });
       })();
       return `pending-${Date.now().toString(36)}`;
