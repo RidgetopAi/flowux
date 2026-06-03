@@ -99,12 +99,15 @@ export function Canvas() {
       const state = useCanvas.getState();
 
       // "/" opens the dock from anywhere on the page (not just when the
-      // canvas surface is focused). Skip when typing or when something
-      // already owns the keyboard. The draft stays empty so the dock
-      // opens at its natural size — the slash palette only appears
-      // when the user actually types `/` into the textarea.
+      // canvas surface is focused). Skip only when the dock is already open
+      // or the user is typing in an editable — NOT when an MRP is expanded:
+      // the dock and an expanded MRP coexist (an expanded reference is now the
+      // norm after every send), and you must be able to compose a new message
+      // while one is up. The draft stays empty so the dock opens at its
+      // natural size — the slash palette only appears when the user actually
+      // types `/` into the textarea.
       if (e.key === "/") {
-        if (state.dockOpen || state.expandedId || inInput) return;
+        if (state.dockOpen || inInput) return;
         e.preventDefault();
         state.openDock();
         return;
