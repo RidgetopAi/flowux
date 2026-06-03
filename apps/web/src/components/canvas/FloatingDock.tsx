@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   ChevronRight,
   Eraser,
+  Gamepad2,
   GitBranch,
   History as HistoryIcon,
   Layers,
@@ -64,6 +65,7 @@ type SlashExecContext = {
   /** Map placement.id → server mrpId. Bundle-scoped commands that
    *  speak to the server in MRP terms (like /compact) need this. */
   placementToMrpId: (placementId: string) => string | undefined;
+  openInvaders: () => void;
   flagError: (msg: string) => void;
 };
 
@@ -162,6 +164,18 @@ const SLASH_COMMANDS: SlashCommand[] = [
       closeDock();
     },
   },
+  {
+    name: "invaders",
+    label: "Project Space Invaders onto the board",
+    icon: Gamepad2,
+    exec: ({ openInvaders, setDraft, closeDock }) => {
+      setDraft("");
+      closeDock();
+      // Defer one tick so the dock unmount doesn't race the overlay mount
+      // and steal back the focus / keyboard authority.
+      window.setTimeout(() => openInvaders(), 0);
+    },
+  },
 ];
 
 /* Render the dock with mount/exit animation managed via AnimatePresence. */
@@ -192,6 +206,7 @@ function FloatingDock() {
   const zoomToFit = useCanvas((s) => s.zoomToFit);
   const setSidebarTab = useCanvas((s) => s.setSidebarTab);
   const focusSidebarSearch = useCanvas((s) => s.focusSidebarSearch);
+  const openInvaders = useCanvas((s) => s.openInvaders);
   const createChildCanvasFromSelection = useFlowuxStore((s) => s.createChildCanvasFromSelection);
   const compactCurrentCanvas = useFlowuxStore((s) => s.compactCurrentCanvas);
   // Stable handle to push a one-shot error into the topbar status pill.
@@ -234,6 +249,7 @@ function FloatingDock() {
       zoomToFit,
       setSidebarTab,
       focusSidebarSearch,
+      openInvaders,
       createChildFromSelection: createChildCanvasFromSelection,
       compactCanvas: compactCurrentCanvas,
       checkedObjectIds,

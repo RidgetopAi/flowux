@@ -1,0 +1,568 @@
+import { carveBunker, sampleBunker } from "../sprites/bunker";
+import {
+  ALIEN_BULLET_SPEED,
+  ALIEN_COLS,
+  ALIEN_FIRE_INTERVAL_MAX_S,
+  ALIEN_FIRE_INTERVAL_MIN_S,
+  ALIEN_H,
+  ALIEN_MARCH_DX,
+  ALIEN_MARCH_DY,
+  ALIEN_ROW_POINTS,
+  ALIEN_ROWS,
+  ALIEN_STEP_INTERVAL_MAX_S,
+  ALIEN_STEP_INTERVAL_MIN_S,
+  ALIEN_W,
+  BULLET_H,
+  BUNKER_DAMAGE_RADIUS_PX,
+  BUNKER_H,
+  BUNKER_W,
+  COLOR_ALIEN_ROW,
+  COLOR_HIT_PLAYER,
+  COLOR_PLAYER,
+  COLOR_UFO_BODY,
+  EXTRA_LIFE_FLASH_S,
+  EXTRA_LIFE_SCORE,
+  HIT_FLASH_DECAY_S,
+  HIT_FLASH_TRAUMA_PLAYER,
+  HIT_FLASH_TRAUMA_UFO,
+  PARTICLE_PER_ALIEN,
+  PARTICLE_PER_PLAYER,
+  PLAYER_BULLET_SPEED,
+  PLAYER_H,
+  PLAYER_INVULN_S,
+  PLAYER_SPEED,
+  PLAYER_W,
+  PLAYFIELD_H,
+  PLAYFIELD_W,
+  SHAKE_DECAY_S,
+  SHAKE_TRAUMA_PLAYER,
+  SHAKE_TRAUMA_UFO,
+  UFO_H,
+  UFO_INTERVAL_S,
+  UFO_POINTS_TABLE,
+  UFO_SPEED,
+  UFO_W,
+  UFO_Y,
+  WAVE_FLASH_S,
+} from "./constants";
+import { demoInput } from "./demo";
+import type { InputState } from "./input";
+import { spawnBurst, stepParticles } from "./particles";
+import { spawnPopup, stepPopups } from "./popups";
+import { createAlienGrid, createBunkers, resetForNewGame } from "./state";
+import type { Alien, Bunker, GameState } from "./types";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ENGINE · SIMULATION
+   Mutates GameState in place each fixed timestep. Pure of side effects
+   beyond the input state object (whose edge-trigger flags we consume).
+   Layout (in execution order):
+
+     phase transitions  →  time  →  player move
+     player fire        →  player bullet ↑  + collisions
+     alien march tick   →  side-step / drop+reverse
+     alien fire tick    →  spawn from bottom of random alive column
+     alien bullets ↓    +  collisions with player
+     wave clear / game over checks
+
+   The functions below are split out so each step is small and testable —
+   the simulation is the part that has to be right, so it has the most
+   structure.
+   ──────────────────────────────────────────────────────────────────────── */
+
+export type UpdateNotice = {
+  /** True when this step ended the game (lives → 0 or aliens landed). */
+  gameOver?: boolean;
+  /** True when this step cleared the wave (last alien killed). */
+  waveCleared?: boolean;
+  /** Score delta from this step's kills. Loop forwards to HUD. */
+  scoreDelta?: number;
+  /* ── Sound events (Phase 4). The sim stays pure — it only flags what
+     happened; the Game layer turns these into Web Audio. ── */
+  /** Player fired a bullet this step. */
+  shotFired?: boolean;
+  /** An alien was destroyed by the player bullet. */
+  alienKilled?: boolean;
+  /** The player ship was hit. */
+  playerKilled?: boolean;
+  /** The UFO was shot down. */
+  ufoKilled?: boolean;
+  /** The formation took a march step (drives the heartbeat tempo). */
+  marchStepped?: boolean;
+  /** A bonus life was just awarded (score crossed a threshold). */
+  extraLife?: boolean;
+};
+
+/** Tick the simulation forward by FIXED_STEP_S seconds. Returns a notice
+ *  the loop uses to drive HUD updates and phase transitions. */
+export function update(state: GameState, dt: number, input: InputState): UpdateNotice {
+  // ── Phase transitions ────────────────────────────────────────────────
+  if (state.phase === "attract" && input.startPressed) {
+    input.startPressed = false;
+    resetForNewGame(state);
+    state.phase = "playing";
+  } else if (state.phase === "gameOver" && input.startPressed) {
+    input.startPressed = false;
+    // Re-arm a fresh board so the attract demo plays immediately on return.
+    resetForNewGame(state);
+    state.phase = "attract";
+  }
+
+  // Not playing: drain the real fire edge so a held key can't leak into the
+  // next game. During attract the bot takes over — it drives the same
+  // simulate() so the board plays itself behind the PRESS START prompt.
+  // Game-over just freezes (the DOM "GAME OVER" overlay owns that screen).
+  if (state.phase !== "playing") {
+    input.firePressed = false;
+    if (state.phase === "attract") return tickDemo(state, dt);
+    return {};
+  }
+
+  // Advance every entity one fixed step. Play-only policy below (game
+  // over, wave advance, hi-score) is intentionally kept OUT of simulate()
+  // so the Phase 5 attract demo can reuse the same core with bot input.
+  const notice = simulate(state, dt, input);
+
+  // ── Game over from depleted lives ─────────────────────────────────────
+  // Lifted out of simulate()'s alien-bullet loop (was an inline early-
+  // return there). Checked before wave-clear so a fatal hit still wins
+  // over a same-tick board clear, matching the original ordering.
+  if (state.lives <= 0) {
+    state.phase = "gameOver";
+    notice.gameOver = true;
+    return notice;
+  }
+
+  // ── Wave transition ──────────────────────────────────────────────────
+  // Clearing a wave doesn't drop the next swarm instantly — it kicks off a
+  // brief "WAVE N" announce. While waveFlash counts down the board sits
+  // empty (all aliens dead); when it elapses the fresh formation drops in.
+  if (state.waveFlash > 0) {
+    state.waveFlash -= dt;
+    if (state.waveFlash <= 0) {
+      state.waveFlash = 0;
+      spawnWave(state, state.wave);
+    }
+  } else if (state.aliveCount === 0) {
+    state.wave += 1;
+    state.waveFlash = WAVE_FLASH_S;
+    // Clear the field so the announce reads clean — no stray alien fire,
+    // no leftover player shot, no saucer mid-pass.
+    for (const b of state.alienBullets) b.alive = false;
+    state.playerBullet.alive = false;
+    state.ufo.active = false;
+    notice.waveCleared = true;
+  }
+
+  // ── Aliens reach player Y → instant game over ────────────────────────
+  if (aliensReachedPlayer(state)) {
+    state.phase = "gameOver";
+    state.lives = 0;
+    notice.gameOver = true;
+  }
+
+  // Hi-score bookkeeping.
+  if (state.score > state.hiScore) state.hiScore = state.score;
+
+  return notice;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ATTRACT DEMO
+   The attract screen's self-playing round. Drives the shared simulate()
+   with bot input, then applies demo-only policy: a demo never ends the
+   game or writes the hi-score — when the bot dies out, clears the board,
+   or lets the aliens land, it just re-arms a fresh round and loops. The
+   returned notice is empty so the demo stays silent (no sound, no HUD
+   game-over / wave flags); the HUD still animates from `state` directly.
+   ──────────────────────────────────────────────────────────────────────── */
+
+function tickDemo(state: GameState, dt: number): UpdateNotice {
+  simulate(state, dt, demoInput(state));
+  if (state.lives <= 0 || state.aliveCount === 0 || aliensReachedPlayer(state)) {
+    resetForNewGame(state);
+  }
+  return {};
+}
+
+/** True once any alive alien has descended to the turret's row — the lose
+ *  condition that ends a real game and loops the demo. */
+function aliensReachedPlayer(state: GameState): boolean {
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    if (a.y + ALIEN_H >= state.player.y - PLAYER_H / 2) return true;
+  }
+  return false;
+}
+
+/** Drop a fresh formation in for `wave` — new grid, reset march cadence,
+ *  fresh shields, saucer timer re-armed. Player position, score, lives, and
+ *  sim time carry over: this is a mid-game wave advance, not a new game. */
+function spawnWave(state: GameState, wave: number): void {
+  state.aliens = createAlienGrid(wave);
+  state.aliveCount = ALIEN_COLS * ALIEN_ROWS;
+  state.march.dir = 1;
+  state.march.untilStep = 1.0;
+  state.march.edgeHit = false;
+  state.march.frame = 0;
+  state.untilAlienFire = 1.2;
+  // Fresh shields each wave — the player earns a clean slate of cover.
+  state.bunkers = createBunkers();
+  state.untilUfo = UFO_INTERVAL_S;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ENTITY SIMULATION CORE
+   Advances every live entity one fixed step — player, bullets, UFO, the
+   alien march, alien fire, particles — and returns the entity-level notice
+   (sound + score facts). Deliberately policy-free: it never sets phase,
+   advances waves, ends the game, or touches the hi-score. Those are the
+   caller's job (update() for real play; the Phase 5 attract demo for its
+   self-looping reset), which is exactly what lets BOTH share one core.
+   ──────────────────────────────────────────────────────────────────────── */
+
+function simulate(state: GameState, dt: number, input: InputState): UpdateNotice {
+  const notice: UpdateNotice = {};
+
+  state.time += dt;
+
+  // ── Player movement ──────────────────────────────────────────────────
+  if (input.left && !input.right) {
+    state.player.x -= PLAYER_SPEED * dt;
+  } else if (input.right && !input.left) {
+    state.player.x += PLAYER_SPEED * dt;
+  }
+  // Clamp to playfield bounds.
+  const halfW = PLAYER_W / 2;
+  if (state.player.x < halfW + 1) state.player.x = halfW + 1;
+  if (state.player.x > PLAYFIELD_W - halfW - 1) {
+    state.player.x = PLAYFIELD_W - halfW - 1;
+  }
+
+  // ── Player fire (single-bullet rule) ─────────────────────────────────
+  if (input.firePressed) {
+    input.firePressed = false;
+    if (!state.playerBullet.alive) {
+      state.playerBullet.alive = true;
+      state.playerBullet.x = state.player.x;
+      state.playerBullet.y = state.player.y - PLAYER_H / 2 - BULLET_H;
+      // Shot count drives the deterministic UFO bonus value (arcade trick).
+      state.shotCount += 1;
+      notice.shotFired = true;
+    }
+  }
+
+  // ── Player bullet step + collisions ──────────────────────────────────
+  // Travelling upward, so it meets bunkers (lowest) before aliens before
+  // the UFO (highest). First solid thing it touches consumes it.
+  if (state.playerBullet.alive) {
+    state.playerBullet.y -= PLAYER_BULLET_SPEED * dt;
+    const bx = state.playerBullet.x;
+    const by = state.playerBullet.y; // leading (top) edge going up
+    if (by + BULLET_H < 0) {
+      state.playerBullet.alive = false;
+    } else if (carveBunkerAt(state.bunkers, bx, by)) {
+      state.playerBullet.alive = false;
+    } else {
+      const kill = findAlienHit(state.aliens, bx, by);
+      if (kill !== null) {
+        const alien = state.aliens[kill];
+        if (alien) {
+          alien.alive = false;
+          state.aliveCount -= 1;
+          state.playerBullet.alive = false;
+          const points = ALIEN_ROW_POINTS[alien.row] ?? 10;
+          state.score += points;
+          notice.scoreDelta = (notice.scoreDelta ?? 0) + points;
+          notice.alienKilled = true;
+          spawnBurst(state.particles, alien.x + ALIEN_W / 2, alien.y + ALIEN_H / 2, {
+            count: PARTICLE_PER_ALIEN,
+            color: COLOR_ALIEN_ROW[alien.row] ?? COLOR_PLAYER,
+          });
+          spawnPopup(state.scorePopups, alien.x + ALIEN_W / 2, alien.y, points);
+        }
+      } else if (state.ufo.active && ufoHit(state.ufo.x, bx, by)) {
+        state.playerBullet.alive = false;
+        state.score += state.ufo.points;
+        notice.scoreDelta = (notice.scoreDelta ?? 0) + state.ufo.points;
+        notice.ufoKilled = true;
+        spawnBurst(state.particles, state.ufo.x, UFO_Y + UFO_H / 2, {
+          count: PARTICLE_PER_ALIEN + 4,
+          color: COLOR_UFO_BODY,
+          speedMax: 120,
+        });
+        spawnPopup(state.scorePopups, state.ufo.x, UFO_Y, state.ufo.points);
+        // Lighter kick + cyan flash — the saucer is a treat, not a threat.
+        // max() so a same-tick player death (full trauma) still wins.
+        state.shake = Math.max(state.shake, SHAKE_TRAUMA_UFO);
+        state.hitFlash = Math.max(state.hitFlash, HIT_FLASH_TRAUMA_UFO);
+        state.hitFlashColor = COLOR_UFO_BODY;
+        state.ufo.active = false;
+      }
+    }
+  }
+
+  // ── UFO pass ─────────────────────────────────────────────────────────
+  updateUfo(state, dt);
+
+  // ── Alien march ──────────────────────────────────────────────────────
+  state.march.untilStep -= dt;
+  if (state.march.untilStep <= 0) {
+    stepAliens(state);
+    state.march.untilStep += currentStepInterval(state.aliveCount);
+    notice.marchStepped = true;
+  }
+
+  // ── Alien fire ───────────────────────────────────────────────────────
+  state.untilAlienFire -= dt;
+  if (state.untilAlienFire <= 0) {
+    tryFireAlien(state);
+    state.untilAlienFire =
+      ALIEN_FIRE_INTERVAL_MIN_S +
+      Math.random() * (ALIEN_FIRE_INTERVAL_MAX_S - ALIEN_FIRE_INTERVAL_MIN_S);
+  }
+
+  // ── Alien bullets step + collisions ──────────────────────────────────
+  for (const b of state.alienBullets) {
+    if (!b.alive) continue;
+    b.y += ALIEN_BULLET_SPEED * dt;
+    if (b.y > PLAYFIELD_H) {
+      b.alive = false;
+      continue;
+    }
+    // Bunkers eat alien fire from above — sample at the bullet's leading
+    // (bottom) edge. Carving happens even during the player's invuln.
+    if (carveBunkerAt(state.bunkers, b.x, b.y + BULLET_H)) {
+      b.alive = false;
+      continue;
+    }
+    if (state.time < state.player.invulnUntil) continue;
+    if (playerHit(state, b.x, b.y)) {
+      b.alive = false;
+      onPlayerHit(state);
+      notice.playerKilled = true;
+      // Lives→0 is promoted to game-over by the caller's policy layer.
+    }
+  }
+
+  // ── Particle simulation ──────────────────────────────────────────────
+  stepParticles(state.particles, dt);
+  stepPopups(state.scorePopups, dt);
+
+  // ── Game-feel decay ───────────────────────────────────────────────────
+  // Shake and hit-flash are trauma values (0..1) injected at impact sites
+  // above; bleed them off linearly here. Render turns whatever's left into
+  // a camera offset / bright wash. Lives in simulate() so the attract demo
+  // gets the same juice from the same code.
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt / SHAKE_DECAY_S);
+  if (state.hitFlash > 0) {
+    state.hitFlash = Math.max(0, state.hitFlash - dt / HIT_FLASH_DECAY_S);
+  }
+
+  // ── Extra life ───────────────────────────────────────────────────────
+  // Age out any active "1UP" flash, then award a bonus life for every score
+  // threshold crossed this step. The while-loop is belt-and-suspenders: a
+  // single award (max 300) can't span two 1000-point gaps, but it keeps the
+  // bookkeeping correct if EXTRA_LIFE_SCORE is ever tuned down.
+  if (state.extraLifeFlash > 0) {
+    state.extraLifeFlash = Math.max(0, state.extraLifeFlash - dt);
+  }
+  while (state.score >= state.nextExtraLife) {
+    state.lives += 1;
+    state.nextExtraLife += EXTRA_LIFE_SCORE;
+    state.extraLifeFlash = EXTRA_LIFE_FLASH_S;
+    notice.extraLife = true;
+  }
+
+  return notice;
+}
+
+/* ── March mechanics ─────────────────────────────────────────────────── */
+
+function stepAliens(state: GameState): void {
+  // Every step is also an animation frame — flip the walk bit so the swarm
+  // shuffles in lockstep with its advance.
+  state.march.frame = state.march.frame === 0 ? 1 : 0;
+
+  if (state.march.edgeHit) {
+    // Drop + reverse this step.
+    for (const a of state.aliens) {
+      if (!a.alive) continue;
+      a.y += ALIEN_MARCH_DY;
+    }
+    state.march.dir = (state.march.dir * -1) as -1 | 1;
+    state.march.edgeHit = false;
+    return;
+  }
+
+  // Side-step.
+  const dx = ALIEN_MARCH_DX * state.march.dir;
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    a.x += dx;
+  }
+
+  // Edge detection AFTER the step. If any alive alien is now past the
+  // wall, queue a drop+reverse for next step. Classic behavior — the
+  // formation marches one step into the wall before dropping.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    if (a.x < minX) minX = a.x;
+    if (a.x > maxX) maxX = a.x;
+  }
+  if (state.march.dir === 1 && maxX + ALIEN_W >= PLAYFIELD_W - 1) {
+    state.march.edgeHit = true;
+  } else if (state.march.dir === -1 && minX <= 1) {
+    state.march.edgeHit = true;
+  }
+}
+
+/** Lerp the step interval between MAX (slow, many aliens) and MIN (fast,
+ *  few aliens). The (alive / total) ratio gives the iconic anxiety curve. */
+function currentStepInterval(aliveCount: number): number {
+  const total = ALIEN_COLS * ALIEN_ROWS;
+  const ratio = Math.max(0, Math.min(1, aliveCount / total));
+  return (
+    ALIEN_STEP_INTERVAL_MIN_S +
+    (ALIEN_STEP_INTERVAL_MAX_S - ALIEN_STEP_INTERVAL_MIN_S) * ratio
+  );
+}
+
+/* ── Alien fire pick ─────────────────────────────────────────────────── */
+
+function tryFireAlien(state: GameState): void {
+  // Find a free bullet slot.
+  const slot = state.alienBullets.find((b) => !b.alive);
+  if (!slot) return;
+
+  // Build a list of alive columns (each at most once). Then pick one
+  // uniformly. Within that column, the bottom-most alive alien fires.
+  const cols: number[] = [];
+  const seen = new Uint8Array(ALIEN_COLS);
+  for (const a of state.aliens) {
+    if (!a.alive) continue;
+    if (seen[a.col]) continue;
+    seen[a.col] = 1;
+    cols.push(a.col);
+  }
+  if (cols.length === 0) return;
+
+  const pickCol = cols[(Math.random() * cols.length) | 0];
+  let bottom: Alien | null = null;
+  for (const a of state.aliens) {
+    if (!a.alive || a.col !== pickCol) continue;
+    if (bottom === null || a.y > bottom.y) bottom = a;
+  }
+  if (!bottom) return;
+
+  slot.alive = true;
+  slot.x = bottom.x + ALIEN_W / 2;
+  slot.y = bottom.y + ALIEN_H;
+}
+
+/* ── Hit-tests (AABB) ────────────────────────────────────────────────── */
+
+/** Returns the index of the first alive alien whose AABB contains the
+ *  bullet head, or null. Player bullets are 1×N — we treat them as a
+ *  point at (x, y). */
+function findAlienHit(aliens: Alien[], bx: number, by: number): number | null {
+  for (let i = 0; i < aliens.length; i++) {
+    const a = aliens[i];
+    if (!a || !a.alive) continue;
+    if (
+      bx >= a.x &&
+      bx <= a.x + ALIEN_W &&
+      by >= a.y &&
+      by <= a.y + ALIEN_H
+    ) {
+      return i;
+    }
+  }
+  return null;
+}
+
+function playerHit(state: GameState, bx: number, by: number): boolean {
+  const halfW = PLAYER_W / 2;
+  const halfH = PLAYER_H / 2;
+  return (
+    bx >= state.player.x - halfW &&
+    bx <= state.player.x + halfW &&
+    by >= state.player.y - halfH &&
+    by <= state.player.y + halfH + BULLET_H
+  );
+}
+
+function onPlayerHit(state: GameState): void {
+  state.lives -= 1;
+  state.player.invulnUntil = state.time + PLAYER_INVULN_S;
+  // Bullet cleared so the player can shoot again immediately.
+  state.playerBullet.alive = false;
+  // A heavier, slower, longer-lived burst — the player's death should feel
+  // weightier than an alien pop.
+  spawnBurst(state.particles, state.player.x, state.player.y, {
+    count: PARTICLE_PER_PLAYER,
+    color: COLOR_PLAYER,
+    speedMin: 15,
+    speedMax: 55,
+    life: 0.7,
+  });
+  // Full-strength kick + white flash — death is the heaviest hit in the game.
+  state.shake = SHAKE_TRAUMA_PLAYER;
+  state.hitFlash = HIT_FLASH_TRAUMA_PLAYER;
+  state.hitFlashColor = COLOR_HIT_PLAYER;
+}
+
+/* ── UFO mechanics ───────────────────────────────────────────────────── */
+
+function updateUfo(state: GameState, dt: number): void {
+  const ufo = state.ufo;
+  if (!ufo.active) {
+    state.untilUfo -= dt;
+    if (state.untilUfo <= 0) {
+      // Alternate entry side each pass; bonus is deterministic by shot
+      // count so attentive players can time the 300.
+      ufo.dir = (ufo.dir * -1) as -1 | 1;
+      ufo.active = true;
+      ufo.y = UFO_Y;
+      ufo.x = ufo.dir === 1 ? -UFO_W / 2 : PLAYFIELD_W + UFO_W / 2;
+      ufo.points = UFO_POINTS_TABLE[state.shotCount % UFO_POINTS_TABLE.length] ?? 100;
+      state.untilUfo = UFO_INTERVAL_S;
+    }
+    return;
+  }
+
+  ufo.x += UFO_SPEED * ufo.dir * dt;
+  // Deactivate once fully off the far edge.
+  if (ufo.dir === 1 && ufo.x - UFO_W / 2 > PLAYFIELD_W) ufo.active = false;
+  if (ufo.dir === -1 && ufo.x + UFO_W / 2 < 0) ufo.active = false;
+}
+
+/** Point-in-UFO AABB test. The saucer is drawn centered on ufo.x with its
+ *  top at UFO_Y. */
+function ufoHit(ufoX: number, bx: number, by: number): boolean {
+  return (
+    bx >= ufoX - UFO_W / 2 &&
+    bx <= ufoX + UFO_W / 2 &&
+    by >= UFO_Y &&
+    by <= UFO_Y + UFO_H
+  );
+}
+
+/* ── Bunker collision ────────────────────────────────────────────────── */
+
+/** If (px, py) lands on a solid bunker pixel, erode a disc there and
+ *  report the hit. Walks bunkers in order; the first solid one wins. */
+function carveBunkerAt(bunkers: Bunker[], px: number, py: number): boolean {
+  for (const bk of bunkers) {
+    const lx = px - bk.x;
+    const ly = py - bk.y;
+    if (lx < 0 || ly < 0 || lx >= BUNKER_W || ly >= BUNKER_H) continue;
+    if (sampleBunker(bk.mask, lx, ly)) {
+      carveBunker(bk.mask, lx, ly, BUNKER_DAMAGE_RADIUS_PX);
+      return true;
+    }
+  }
+  return false;
+}

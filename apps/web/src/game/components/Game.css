@@ -1,0 +1,232 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   GAME HOST
+   Hosts the <canvas> + the conditional attract / game-over overlay.
+   Fills the Playfield's inner aspect-ratio box completely.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.game-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.game-canvas {
+  /* Stretch the canvas to fill the host. Internal resolution stays at
+   * PLAYFIELD_W × PLAYFIELD_H from canvas.width/height — CSS just upscales.
+   * imageRendering: pixelated keeps blits razor-sharp on upscale,
+   * matching the locked retro-pixel feel. */
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* ── Mute toggle ──────────────────────────────────────────────────────
+   Quiet phosphor affordance, top-right of the CRT. Dims to a whisper at
+   rest so it never competes with the canvas; lifts on hover/focus. The
+   muted state desaturates to a warning amber so the off-state reads at a
+   glance. M key mirrors it. */
+.game-mute {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--phosphor-cyan, #a8fff1);
+  background: rgba(2, 12, 12, 0.4);
+  border: 1px solid rgba(168, 255, 241, 0.18);
+  border-radius: var(--r-sm);
+  opacity: 0.45;
+  cursor: pointer;
+  transition:
+    opacity 0.18s var(--ease-out, ease),
+    border-color 0.18s var(--ease-out, ease),
+    color 0.18s var(--ease-out, ease);
+}
+
+.game-mute:hover,
+.game-mute:focus-visible {
+  opacity: 1;
+  border-color: rgba(168, 255, 241, 0.5);
+  outline: none;
+}
+
+.game-mute[data-muted="true"] {
+  color: var(--amber-bright, #ffcf8b);
+  border-color: rgba(255, 207, 139, 0.32);
+  opacity: 0.7;
+}
+
+/* ── ATTRACT / GAME-OVER overlay ─────────────────────────────────────
+   DOM-side text overlay above the canvas during non-playing phases.
+   The CSS pulse + font polish on <Marquee /> carries over instead of
+   re-implementing it as canvas pixels. */
+.game-attract {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--s-6);
+  pointer-events: none;
+  text-align: center;
+}
+
+/* "GAME OVER" message — stacks above the marquee when phase === gameOver.
+ * Steady amber glow so it reads as alarm vs the cyan attract pulse. */
+.game-attract__over {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: 0.36em;
+  color: var(--amber-bright);
+  text-shadow: var(--glow-amber-md);
+  /* Slow exhale — slower than the marquee pulse so they don't sync up
+   * visually. Different cadence reads as "two separate things." */
+  animation: gameover-breath 2.4s var(--ease-in-out) infinite;
+}
+
+@keyframes gameover-breath {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-attract__over {
+    animation: none;
+  }
+}
+
+/* ── ATTRACT DEMO prompt ──────────────────────────────────────────────
+   During attract the self-playing demo owns the canvas, so the prompt
+   shrinks well below the game-over marquee's scale and just pulses —
+   present and readable, but never competing with the dancing formation
+   behind it. */
+.game-attract--demo {
+  gap: var(--s-3);
+}
+
+.game-prompt {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 26px);
+  letter-spacing: 0.42em;
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-md);
+  animation: prompt-pulse 1.6s var(--ease-in-out) infinite;
+}
+
+.game-prompt__coin {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: var(--fs-body-sm);
+  letter-spacing: 0.34em;
+  color: var(--soft);
+  text-shadow: var(--glow-cyan-sm);
+  opacity: 0.72;
+}
+
+@keyframes prompt-pulse {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: var(--glow-cyan-lg);
+  }
+  50% {
+    opacity: 0.5;
+    text-shadow: var(--glow-cyan-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-prompt {
+    animation: none;
+  }
+}
+
+/* ── WAVE announce banner ─────────────────────────────────────────────
+   The brief "WAVE N" beat between waves, over the (momentarily empty)
+   playfield. Cyan to sit in the phosphor family; a quick scale-in pop so
+   it reads as a punctuation beat, distinct from the slow attract pulse. */
+.game-wave {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(20px, 2.8vw, 30px);
+  letter-spacing: 0.4em;
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-lg);
+  text-align: center;
+  animation: wave-flash 0.45s var(--ease-out, ease-out) both;
+}
+
+@keyframes wave-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-wave {
+    animation: none;
+  }
+}
+
+/* ── 1UP bonus-life flash ─────────────────────────────────────────────
+   A quick green lift when a bonus life is earned. Green (the life/positive
+   tone) sets it apart from the cyan wave beat and amber game-over; parked
+   in the upper third so it never collides with the centered WAVE banner. */
+.game-oneup {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: start center;
+  padding-top: 16%;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(18px, 2.4vw, 26px);
+  letter-spacing: 0.42em;
+  color: var(--green-bright);
+  text-shadow: var(--glow-green-sm);
+  text-align: center;
+  animation: oneup-rise 0.9s var(--ease-out, ease-out) both;
+}
+
+@keyframes oneup-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+  }
+  45% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-oneup {
+    animation: none;
+  }
+}

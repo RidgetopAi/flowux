@@ -313,6 +313,11 @@ type State = {
    *  search input to grab keyboard focus the next time SearchPanel
    *  renders. Treated as a tick (any change → focus once). */
   sidebarFocusTick: number;
+  /** Space Invaders overlay state. Activated via `/invaders` (and, post-
+   *  launch, the Konami code). When true, a full-viewport projected game
+   *  surface mounts above the canvas. Game owns its own keyboard handling
+   *  while open — canvas keyboard auth is suppressed by checking this flag. */
+  invadersOpen: boolean;
 
   // Selectors
   bundleCount: () => number;
@@ -394,6 +399,11 @@ type State = {
   /** Bump sidebarFocusTick. Use after setSidebarTab('search') to also
    *  focus the search input. */
   focusSidebarSearch: () => void;
+  /** Mount the Space Invaders overlay. Also closes the dock so the game
+   *  surface gets a clean stage. */
+  openInvaders: () => void;
+  /** Unmount the Space Invaders overlay. Esc inside the game routes here. */
+  closeInvaders: () => void;
 
   // Cursor + pan + zoom
   moveCursor: (direction: CursorDirection, extend?: boolean) => void;
@@ -453,6 +463,7 @@ export const useCanvas = create<State>((set, get) => ({
   sidebarOpen: true,
   sidebarTab: "search",
   sidebarFocusTick: 0,
+  invadersOpen: false,
 
   bundleCount: () => get().objects.filter((o) => o.checked).length,
 
@@ -632,6 +643,9 @@ export const useCanvas = create<State>((set, get) => ({
       sidebarOpen: true,
       sidebarFocusTick: s.sidebarFocusTick + 1,
     })),
+
+  openInvaders: () => set({ invadersOpen: true, dockOpen: false }),
+  closeInvaders: () => set({ invadersOpen: false }),
 
   openDock: () => set({ dockOpen: true }),
   closeDock: () => set({ dockOpen: false }),

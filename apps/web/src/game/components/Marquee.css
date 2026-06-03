@@ -1,0 +1,51 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   MARQUEE
+   Phase 1 attract-mode text. Slow phosphor pulse on the primary line —
+   ~1.6s cycle, deliberate per the locked motion style. Secondary line
+   is steady muted; reads as fine print.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.marquee {
+  display: grid;
+  place-content: center;
+  gap: var(--s-5);
+  text-align: center;
+  /* Centered both axes inside the playfield via .playfield's grid. */
+}
+
+.marquee__primary {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(28px, 3.6vw, 44px);
+  letter-spacing: 0.42em;
+  color: var(--cyan-bright);
+  text-shadow: var(--glow-cyan-lg);
+  animation: marquee-pulse 1.6s var(--ease-in-out) infinite;
+}
+
+.marquee__secondary {
+  font-family: var(--font-mono);
+  font-weight: 300;
+  font-size: var(--fs-body-sm);
+  letter-spacing: 0.36em;
+  color: var(--soft);
+  text-shadow: var(--glow-cyan-sm);
+  opacity: 0.78;
+}
+
+@keyframes marquee-pulse {
+  0%, 100% {
+    opacity: 1;
+    text-shadow: var(--glow-cyan-lg);
+  }
+  50% {
+    opacity: 0.55;
+    text-shadow: var(--glow-cyan-sm);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee__primary {
+    animation: none;
+  }
+}
