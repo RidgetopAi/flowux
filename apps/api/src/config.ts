@@ -18,6 +18,12 @@ export interface FlowuxConfig {
   piMonoUploadDir: string;
   piMonoProvider: string;
   piMonoModel: string;
+  ampBin: string;
+  ampMode: string;
+  ampCwd: string;
+  ampDangerouslyAllowAll: boolean;
+  ampEffort?: string;
+  ampExtraArgs: string[];
 }
 
 export function loadConfig(): FlowuxConfig {
@@ -51,6 +57,17 @@ export function loadConfig(): FlowuxConfig {
     piMonoArgs.push(...extra.split(/\s+/));
   }
 
+  // Amp (ampcode harness). Mirrors the FLOWUX_PI_* convention. Amp runs as a
+  // spawn-per-turn headless agent (`amp -x --stream-json …`), so it needs no
+  // provider/model flags — the mode (smart/deep/large/rush) selects the model.
+  const ampBin = process.env.FLOWUX_AMP_BIN ?? "amp";
+  const ampMode = process.env.FLOWUX_AMP_MODE ?? "smart";
+  const ampCwd = process.env.FLOWUX_AMP_CWD ?? process.cwd();
+  // ON by default: headless tool-use hangs on approval prompts without it.
+  const ampDangerouslyAllowAll = process.env.FLOWUX_AMP_DANGEROUSLY_ALLOW_ALL !== "0";
+  const ampEffort = process.env.FLOWUX_AMP_EFFORT?.trim() || undefined;
+  const ampExtraArgs = (process.env.FLOWUX_AMP_EXTRA_ARGS?.trim()?.split(/\s+/) ?? []).filter(Boolean);
+
   return {
     port: Number(process.env.FLOWUX_API_PORT ?? 5174),
     databasePath: process.env.FLOWUX_DB_PATH ?? "./flowux.db",
@@ -66,7 +83,13 @@ export function loadConfig(): FlowuxConfig {
     piMonoCwd,
     piMonoUploadDir,
     piMonoProvider,
-    piMonoModel
+    piMonoModel,
+    ampBin,
+    ampMode,
+    ampCwd,
+    ampDangerouslyAllowAll,
+    ampEffort,
+    ampExtraArgs
   };
 }
 

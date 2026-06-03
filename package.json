@@ -12,6 +12,7 @@
     "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @flowux/api\" \"npm run dev -w @flowux/web\"",
     "dev:api:grok": "scripts/dev-api-grok.sh",
     "dev:api:qwen": "scripts/dev-api-qwen.sh",
+    "dev:api:amp": "scripts/dev-api-amp.sh",
     "start:api:grok": "scripts/start-api-detached.sh grok",
     "start:api:qwen": "scripts/start-api-detached.sh qwen",
     "start:api": "npm run start -w @flowux/api",

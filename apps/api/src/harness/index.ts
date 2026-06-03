@@ -1,4 +1,5 @@
 import { loadConfig } from "../config.js";
+import { AmpCodeHarnessAdapter } from "./ampcodeAdapter.js";
 import { createDirectModelHarness } from "./directModelAdapter.js";
 import { PiMonoHarnessAdapter } from "./piMonoAdapter.js";
 import { resolveTarget } from "./targets.js";
@@ -17,11 +18,16 @@ export function createHarnessAdapter(canvasId?: string): HarnessAdapter {
     return new PiMonoHarnessAdapter(resolveTarget(canvasId));
   }
 
+  if (config.harnessMode === "ampcode") {
+    return new AmpCodeHarnessAdapter(config);
+  }
+
   return createDirectModelHarness();
 }
 
 export type { HarnessAdapter, HarnessCapabilities, HarnessTurnInput } from "./types.js";
 export { mapPiMonoEvent } from "./piMonoAdapter.js";
+export { mapAmpEvent } from "./ampcodeAdapter.js";
 export {
   listTargets,
   getTarget,

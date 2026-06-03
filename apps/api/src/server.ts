@@ -64,12 +64,13 @@ await app.register(cors, {
 
 app.get("/api/health", async () => {
   const pi = config.harnessMode === "pi_mono" ? resolveTarget() : undefined;
+  const ampModel = config.harnessMode === "ampcode" ? `amp:${config.ampMode}` : undefined;
   return {
     ok: true,
     harnessMode: config.harnessMode,
     modelMode: config.modelMode,
     modelBaseUrl: config.modelBaseUrl,
-    modelName: pi?.model ?? config.modelName,
+    modelName: pi?.model ?? ampModel ?? config.modelName,
     modelMaxTokens: pi?.maxOutputTokens ?? config.modelMaxTokens,
     contextWindow: pi?.contextWindow ?? config.modelContextWindow,
     maxOutputTokens: pi?.maxOutputTokens ?? config.modelMaxTokens,

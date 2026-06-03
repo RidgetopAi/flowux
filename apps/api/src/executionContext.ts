@@ -21,7 +21,9 @@ export function getExecutionContext(config: FlowuxConfig, canvasId?: string): Ex
         ? target?.transport === "ssh"
           ? `Tools run on the remote Pi (${target.sshHost}); filesystem access scoped to that machine's Pi workspace.`
           : "Tools run on the local Pi process; filesystem access scoped to the configured Pi workspace."
-        : undefined
+        : config.harnessMode === "ampcode"
+          ? "Amp runs tools on this machine with --dangerously-allow-all; approvals are auto-granted and filesystem access is scoped to the configured Amp workspace."
+          : undefined
   };
 }
 
@@ -31,6 +33,7 @@ function getExecutionHostLabel(config: FlowuxConfig, target?: PiTarget) {
     return `${target.provider}/${target.model} (${where})`;
   }
   if (config.harnessMode === "direct_model") return "local api";
+  if (config.harnessMode === "ampcode") return `amp:${config.ampMode} (local)`;
   return config.harnessMode;
 }
 
@@ -39,11 +42,13 @@ function getExecutionWorkspaceLabel(config: FlowuxConfig, target?: PiTarget) {
     if (target.transport === "ssh") return `${target.sshHost}:${target.cwd || "~"}`;
     return target.cwd;
   }
+  if (config.harnessMode === "ampcode") return config.ampCwd || process.cwd();
   return process.cwd();
 }
 
 function getToolCapabilities(config: FlowuxConfig) {
   if (config.harnessMode === "pi_mono") return ["filesystem", "shell", "tools"];
+  if (config.harnessMode === "ampcode") return ["filesystem", "shell", "tools"];
   if (config.harnessMode === "direct_model") return config.modelMode === "llama_cpp" ? ["model"] : ["mock"];
   return ["tools"];
 }
