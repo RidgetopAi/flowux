@@ -21,6 +21,7 @@ export function PiTargetSelector() {
   const piServer = useFlowuxStore((s) => s.piServer);
   const checkPiServer = useFlowuxStore((s) => s.checkPiServer);
   const startPiServer = useFlowuxStore((s) => s.startPiServer);
+  const harness = useFlowuxStore((s) => s.executionContext?.harness);
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -48,8 +49,10 @@ export function PiTargetSelector() {
     if (a?.transport === "ssh") void checkPiServer(a.id);
   }, [open, activeTargetId, targets, checkPiServer]);
 
-  // Nothing to show when the API isn't running Pi (no targets registered).
-  if (targets.length === 0) return null;
+  // The API registers Pi targets regardless of harness mode, so only show the
+  // picker when prompts ACTUALLY run against Pi — otherwise it dishonestly
+  // implies a grok/desktop target in direct_model / ampcode mode.
+  if (targets.length === 0 || harness !== "pi_mono") return null;
 
   const active = targets.find((t) => t.id === activeTargetId) ?? targets[0];
   const activePing = active ? piPing[active.id] : undefined;

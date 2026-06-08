@@ -18,6 +18,7 @@ export function getExecutionContext(config: FlowuxConfig, canvasId?: string): Ex
     workspaceLabel: getExecutionWorkspaceLabel(config, target),
     filesystemScope: getExecutionWorkspaceLabel(config, target),
     toolCapabilities: getToolCapabilities(config),
+    modelLabel: caps.label,
     supportsImages: caps.supportsImages,
     imageDelivery: caps.imageDelivery,
     warning:

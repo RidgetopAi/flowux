@@ -567,7 +567,7 @@ function FloatingDock() {
             <BrailleBand length={20} density={0.42} tone="cyan" seed={11} />
           </div>
           <div className="dock__head-r">
-            <Pill tone="cyan">opus-4.7</Pill>
+            <Pill tone="cyan">{executionContext?.modelLabel ?? "—"}</Pill>
             <Button
               variant="ghost"
               size="sm"

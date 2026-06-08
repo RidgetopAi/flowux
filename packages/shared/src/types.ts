@@ -43,6 +43,9 @@ export interface ExecutionContext {
   workspaceLabel?: string;
   filesystemScope?: string;
   toolCapabilities: string[];
+  /** Short honest label for the active model, e.g. "xai/grok-4.3",
+   *  "qwen3.6-35b (mock)", "amp:smart". The single label the UI should show. */
+  modelLabel: string;
   /** Whether the active connector's model accepts image input this turn. */
   supportsImages: boolean;
   /** Mechanism used to deliver image bytes to the model (none if text-only). */
