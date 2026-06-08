@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  AlertTriangle,
   ChevronRight,
   Eraser,
   Gamepad2,
@@ -209,8 +210,19 @@ function FloatingDock() {
   const openInvaders = useCanvas((s) => s.openInvaders);
   const createChildCanvasFromSelection = useFlowuxStore((s) => s.createChildCanvasFromSelection);
   const compactCurrentCanvas = useFlowuxStore((s) => s.compactCurrentCanvas);
+  const executionContext = useFlowuxStore((s) => s.executionContext);
   // Stable handle to push a one-shot error into the topbar status pill.
   const flagError = (msg: string) => useFlowuxStore.setState({ error: msg });
+
+  /* Image-capability honesty (P4): the dock knows whether the ACTIVE model can
+   * read images — the same supportsImages the API gate enforces, surfaced via
+   * /api/health executionContext. When it can't and an image is staged, warn at
+   * stage AND block send so the user sees WHY instead of an opaque 400 that
+   * loses the turn. Permissive when capability is unknown (health not loaded) —
+   * the server gate is still the backstop. Parking an image onto the canvas is
+   * a separate gesture and stays allowed regardless. */
+  const modelTakesImages = executionContext?.supportsImages ?? true;
+  const imageInputBlocked = dockAttachments.length > 0 && !!executionContext && !modelTakesImages;
 
   /* History navigation state. null = composing a fresh draft (textarea
    * shows dockDraft). When the user walks back with Up, historyIndex
@@ -361,6 +373,15 @@ function FloatingDock() {
     // Allow send when there's either a prompt OR staged attachments
     // (image-only "look at this" is a valid turn).
     if (!prompt && dockAttachments.length === 0) return;
+    // Honesty gate: don't fire a send the active model will 400 on. Tell the
+    // user why and let them remove the image or switch target. Covers the
+    // keyboard ⌘↵ path too since it routes through onSend.
+    if (imageInputBlocked) {
+      flagError(
+        "The active model can't read images. Remove the attachment or switch to an image-capable target.",
+      );
+      return;
+    }
     // External handler (apps/api-bound) takes over when registered. The
     // sync addMRP fallback is used in playground/standalone mode where
     // there is no backend; it returns an id immediately for the image
@@ -560,6 +581,15 @@ function FloatingDock() {
         </header>
 
         <div className="dock__body">
+          {imageInputBlocked && (
+            <div className="dock__img-warning" role="alert">
+              <AlertTriangle className="dock__img-warning-icon" aria-hidden="true" />
+              <span>
+                The active model can&rsquo;t read images. Remove the attachment or switch to an
+                image-capable target to send.
+              </span>
+            </div>
+          )}
           {dockAttachments.length > 0 && (
             <div className="dock__attachments" role="list" aria-label="Staged attachments">
               {dockAttachments.map((att, i) => (
@@ -632,8 +662,9 @@ function FloatingDock() {
             variant="primary"
             size="md"
             onClick={onSend}
-            disabled={!draft.trim() && dockAttachments.length === 0}
+            disabled={(!draft.trim() && dockAttachments.length === 0) || imageInputBlocked}
             aria-label="Send"
+            title={imageInputBlocked ? "The active model can't read images — remove it to send" : undefined}
           >
             Send
           </Button>

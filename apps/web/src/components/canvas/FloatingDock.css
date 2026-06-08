@@ -90,6 +90,30 @@
    has the same visual language as a small canvas tile (border + glass +
    subtle halation) so it feels of-a-piece with what the image will become
    when send fires. */
+.dock__img-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+  border: 1px solid var(--amber-dim);
+  border-radius: var(--r-md);
+  background: rgba(244, 208, 117, 0.07);
+  box-shadow: var(--glow-amber-sm);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  line-height: 1.35;
+  color: var(--amber-bright);
+}
+
+.dock__img-warning-icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--amber);
+  filter: drop-shadow(0 0 4px rgba(244, 208, 117, 0.45));
+}
+
 .dock__attachments {
   display: flex;
   flex-wrap: wrap;
