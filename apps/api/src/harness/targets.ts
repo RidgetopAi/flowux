@@ -1,4 +1,4 @@
-import { loadConfig, type FlowuxConfig } from "../config.js";
+import { envBool, loadConfig, type FlowuxConfig } from "../config.js";
 
 /**
  * A Pi "target" is a fully-resolved description of WHICH Pi the API spawns a
@@ -69,7 +69,10 @@ function buildInitialState(config: FlowuxConfig): TargetsState {
     cwd: config.piMonoCwd,
     contextWindow: contextWindowFor(config.piMonoProvider, config.piMonoModel),
     maxOutputTokens: config.modelMaxTokens,
-    supportsImages: isGrok(config.piMonoProvider, config.piMonoModel)
+    // isGrok is the DEFAULT; FLOWUX_PI_MONO_SUPPORTS_IMAGES overrides it (e.g.
+    // a local vision model that isn't grok).
+    supportsImages:
+      envBool("FLOWUX_PI_MONO_SUPPORTS_IMAGES") ?? isGrok(config.piMonoProvider, config.piMonoModel)
   };
 
   // Remote desktop target. Defaults verified against the desktop's pi config
@@ -97,7 +100,9 @@ function buildInitialState(config: FlowuxConfig): TargetsState {
       process.env.FLOWUX_PI_REMOTE_CONTEXT_WINDOW ?? contextWindowFor(remoteProvider, remoteModel)
     ),
     maxOutputTokens: Number(process.env.FLOWUX_PI_REMOTE_MAX_TOKENS ?? config.modelMaxTokens),
-    supportsImages: isGrok(remoteProvider, remoteModel),
+    // Desktop qwen is vision-capable via --mmproj but isn't grok; flip it on
+    // with FLOWUX_PI_REMOTE_SUPPORTS_IMAGES=true (isGrok stays the default).
+    supportsImages: envBool("FLOWUX_PI_REMOTE_SUPPORTS_IMAGES") ?? isGrok(remoteProvider, remoteModel),
     // The ik_llama.cpp server binds the Tailscale IP (matches the desktop's
     // pi models.json baseUrl), not loopback — health-probe THAT address.
     serverStartCmd:

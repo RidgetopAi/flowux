@@ -1,5 +1,6 @@
 import type { ExecutionContext } from "@flowux/shared";
 import type { FlowuxConfig } from "./config.js";
+import { resolveModelCapabilities } from "./harness/capabilities.js";
 import { resolveTarget, type PiTarget } from "./harness/targets.js";
 
 /**
@@ -10,12 +11,15 @@ import { resolveTarget, type PiTarget } from "./harness/targets.js";
  */
 export function getExecutionContext(config: FlowuxConfig, canvasId?: string): ExecutionContext {
   const target = config.harnessMode === "pi_mono" ? resolveTarget(canvasId) : undefined;
+  const caps = resolveModelCapabilities(config, canvasId);
   return {
     harness: config.harnessMode,
     hostLabel: getExecutionHostLabel(config, target),
     workspaceLabel: getExecutionWorkspaceLabel(config, target),
     filesystemScope: getExecutionWorkspaceLabel(config, target),
     toolCapabilities: getToolCapabilities(config),
+    supportsImages: caps.supportsImages,
+    imageDelivery: caps.imageDelivery,
     warning:
       config.harnessMode === "pi_mono"
         ? target?.transport === "ssh"

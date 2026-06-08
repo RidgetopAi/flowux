@@ -43,6 +43,7 @@ import {
   checkModelServer,
   startModelServer
 } from "./harness/index.js";
+import { resolveModelCapabilities } from "./harness/capabilities.js";
 import { prepareAttachmentDelivery } from "./services/attachmentDelivery.js";
 import { loadUpload, readUploadBytes, saveUpload } from "./services/uploadService.js";
 
@@ -56,6 +57,14 @@ const activePromptRuns = new Map<
     startedAt: string;
   }
 >();
+
+/** Harness-agnostic 400 body for an image attachment the active model can't take. */
+function imageUnsupportedError(modelLabel: string) {
+  return {
+    error: "image_model_input_not_supported",
+    message: `The active model (${modelLabel}) does not accept image input. Switch to an image-capable model/target, or remove image attachments.`
+  };
+}
 
 await app.register(cors, {
   origin: true,
@@ -126,13 +135,9 @@ app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
     const pi = config.harnessMode === "pi_mono" ? resolveTarget(request.params.canvasId) : undefined;
-    const unsupportedImages = attachments.filter((attachment) => attachment.type === "image");
-    if (unsupportedImages.length && !(pi?.supportsImages ?? false)) {
-      return reply.code(400).send({
-        error: "image_model_input_not_supported",
-        message:
-          "The active Pi target does not accept image pixels. Switch to a Grok target for image inputs, or remove image attachments."
-      });
+    const caps = resolveModelCapabilities(config, request.params.canvasId);
+    if (attachments.some((attachment) => attachment.type === "image") && !caps.supportsImages) {
+      return reply.code(400).send(imageUnsupportedError(caps.label));
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     const delivery = await prepareAttachmentDelivery(config, attachments, { stageRemote: false, includeImageData: false });
@@ -481,12 +486,9 @@ app.post<{
       (attachment): attachment is Awaited<ReturnType<typeof loadUpload>> & {} => Boolean(attachment)
     );
     const pi = config.harnessMode === "pi_mono" ? resolveTarget(request.params.canvasId) : undefined;
-    if (attachments.some((attachment) => attachment.type === "image") && !(pi?.supportsImages ?? false)) {
-      return reply.code(400).send({
-        error: "image_model_input_not_supported",
-        message:
-          "The active Pi target does not accept image pixels. Switch to a Grok target for image inputs, or remove image attachments."
-      });
+    const caps = resolveModelCapabilities(config, request.params.canvasId);
+    if (attachments.some((attachment) => attachment.type === "image") && !caps.supportsImages) {
+      return reply.code(400).send(imageUnsupportedError(caps.label));
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
     if (!prompt) return reply.code(400).send({ error: "prompt_required" });

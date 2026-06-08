@@ -29,12 +29,24 @@ export type MrpBlockKind =
   | "event";
 export type ContextDefault = "include" | "exclude" | "summarize";
 
+/**
+ * How a model accepts image pixels for a turn:
+ *   inline_base64 — image bytes ride in the request (OpenAI image_url / RPC).
+ *   remote_file   — bytes are staged on the model's machine; a path is passed.
+ *   none          — the model is text-only; image attachments are rejected.
+ */
+export type ImageDelivery = "inline_base64" | "remote_file" | "none";
+
 export interface ExecutionContext {
   harness: HarnessMode;
   hostLabel?: string;
   workspaceLabel?: string;
   filesystemScope?: string;
   toolCapabilities: string[];
+  /** Whether the active connector's model accepts image input this turn. */
+  supportsImages: boolean;
+  /** Mechanism used to deliver image bytes to the model (none if text-only). */
+  imageDelivery: ImageDelivery;
   warning?: string;
 }
 

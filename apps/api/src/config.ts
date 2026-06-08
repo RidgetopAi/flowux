@@ -2,6 +2,17 @@ import os from "node:os";
 import path from "node:path";
 import type { HarnessMode } from "@flowux/shared";
 
+/**
+ * Tri-state env boolean: `undefined` when unset/empty so callers can apply
+ * their own default (e.g. `envBool("FLOWUX_X") ?? isGrok(...)`). Truthy values
+ * are "1" or "true" (case-insensitive); everything else is false.
+ */
+export function envBool(name: string): boolean | undefined {
+  const value = process.env[name];
+  if (value === undefined || value === "") return undefined;
+  return value === "1" || /^true$/i.test(value);
+}
+
 export interface FlowuxConfig {
   port: number;
   databasePath: string;
@@ -12,6 +23,9 @@ export interface FlowuxConfig {
   modelName: string;
   modelMaxTokens: number;
   modelContextWindow: number;
+  /** direct_model only: does the configured model accept image pixels?
+   *  Mock is always false; llama.cpp/OpenAI-compatible reads this flag. */
+  modelSupportsImages: boolean;
   piMonoBin: string;
   piMonoArgs: string[];
   piMonoCwd: string;
@@ -24,6 +38,9 @@ export interface FlowuxConfig {
   ampDangerouslyAllowAll: boolean;
   ampEffort?: string;
   ampExtraArgs: string[];
+  /** ampcode only: amp (Claude) is vision-capable, but the adapter does not
+   *  forward images yet — default false until amp image delivery is wired. */
+  ampSupportsImages: boolean;
 }
 
 export function loadConfig(): FlowuxConfig {
@@ -78,6 +95,7 @@ export function loadConfig(): FlowuxConfig {
     modelName: process.env.FLOWUX_MODEL_NAME ?? "qwen3.6-35b",
     modelMaxTokens: Number(process.env.FLOWUX_MODEL_MAX_TOKENS ?? 2048),
     modelContextWindow: Number(process.env.FLOWUX_MODEL_CONTEXT_WINDOW ?? getDefaultContextWindow(piMonoProvider, piMonoModel)),
+    modelSupportsImages: envBool("FLOWUX_MODEL_SUPPORTS_IMAGES") ?? false,
     piMonoBin,
     piMonoArgs,
     piMonoCwd,
@@ -89,7 +107,8 @@ export function loadConfig(): FlowuxConfig {
     ampCwd,
     ampDangerouslyAllowAll,
     ampEffort,
-    ampExtraArgs
+    ampExtraArgs,
+    ampSupportsImages: envBool("FLOWUX_AMP_SUPPORTS_IMAGES") ?? false
   };
 }
 
