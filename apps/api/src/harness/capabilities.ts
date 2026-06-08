@@ -27,13 +27,12 @@ export function resolveModelCapabilities(config: FlowuxConfig, canvasId?: string
     return {
       label: `${target.provider}/${target.model}`,
       supportsImages: target.supportsImages,
-      // SSH targets run the model on another machine, so bytes are staged as a
-      // remote file; a local Pi takes inline base64 over RPC.
-      imageDelivery: target.supportsImages
-        ? target.transport === "ssh"
-          ? "remote_file"
-          : "inline_base64"
-        : "none"
+      // Pi takes inline base64 over its JSON-RPC channel — and that framing
+      // rides the ssh stdin/stdout pipe transparently (see buildSpawnSpec), so
+      // a REMOTE pi gets the bytes the same way a local one does. No scp / file
+      // staging needed for images; remote_file is reserved for connectors that
+      // genuinely need a file on the model's disk.
+      imageDelivery: target.supportsImages ? "inline_base64" : "none"
     };
   }
 

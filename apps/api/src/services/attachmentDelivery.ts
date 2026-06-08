@@ -44,8 +44,11 @@ export async function prepareAttachmentDelivery(
     const needsBytes =
       options.stageRemote || (options.includeImageData === true && attachment.type === "image" && inlineImages);
     const upload = needsBytes ? await readUploadBytes(attachment.id) : undefined;
+    // Images are delivered INLINE (base64 over RPC/HTTP), so never stage them to
+    // the API host's disk — that path doesn't exist on a remote ssh pi anyway.
+    // Local file staging stays for non-image artifacts only.
     const remotePath =
-      options.stageRemote && config.harnessMode === "pi_mono" && upload
+      options.stageRemote && config.harnessMode === "pi_mono" && upload && attachment.type !== "image"
         ? await stageUploadLocally(config, attachment, upload.buffer)
         : undefined;
 
