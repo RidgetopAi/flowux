@@ -21,7 +21,10 @@ export function createDirectModelHarness(): HarnessAdapter {
     async *generate(input: HarnessTurnInput): AsyncGenerator<FlowuxTurnEvent> {
       yield { type: "turn_started" };
 
-      for await (const event of modelAdapter.generate({ messages: input.messages })) {
+      // Forward inline images so a vision-capable model server (llama.cpp
+      // --mmproj / any OpenAI /v1) receives them. The gate already guarantees
+      // images only arrive here when the model supports them.
+      for await (const event of modelAdapter.generate({ messages: input.messages, images: input.images })) {
         yield event;
       }
     }

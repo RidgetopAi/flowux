@@ -2,6 +2,7 @@ import type { UploadedAttachment } from "@flowux/shared";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FlowuxConfig } from "../config.js";
+import type { ModelCapabilities } from "../harness/capabilities.js";
 import { readUploadBytes } from "./uploadService.js";
 
 export interface HarnessImageInput {
@@ -22,32 +23,33 @@ export interface AttachmentDelivery {
   promptText: string;
 }
 
-export function supportsImageInputs(config: FlowuxConfig) {
-  if (config.harnessMode !== "pi_mono") return false;
-  if (config.piMonoProvider === "xai") return /^grok/i.test(config.piMonoModel);
-  return false;
-}
-
 export async function prepareAttachmentDelivery(
   config: FlowuxConfig,
+  caps: ModelCapabilities,
   attachments: UploadedAttachment[],
   options: { stageRemote: boolean; includeImageData?: boolean }
 ): Promise<AttachmentDelivery> {
   if (!attachments.length) return { items: [], images: [], promptText: "" };
 
-  const supportsImages = supportsImageInputs(config);
+  // Capability is the single source of truth (resolved per active connector),
+  // not a per-harness hardcode. inline_base64 → ride bytes in the request;
+  // remote_file → stage on the model's machine and pass a path (P3 makes that
+  // staging actually remote; today it stages locally for the pi workspace).
+  const supportsImages = caps.supportsImages;
+  const inlineImages = supportsImages && caps.imageDelivery === "inline_base64";
   const items: AttachmentDeliveryItem[] = [];
   const images: HarnessImageInput[] = [];
 
   for (const attachment of attachments) {
-    const needsBytes = options.stageRemote || (options.includeImageData === true && attachment.type === "image" && supportsImages);
+    const needsBytes =
+      options.stageRemote || (options.includeImageData === true && attachment.type === "image" && inlineImages);
     const upload = needsBytes ? await readUploadBytes(attachment.id) : undefined;
     const remotePath =
       options.stageRemote && config.harnessMode === "pi_mono" && upload
         ? await stageUploadLocally(config, attachment, upload.buffer)
         : undefined;
 
-    if (attachment.type === "image" && supportsImages && upload) {
+    if (attachment.type === "image" && inlineImages && upload) {
       images.push({
         type: "image",
         data: upload.buffer.toString("base64"),

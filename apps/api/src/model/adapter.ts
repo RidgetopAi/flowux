@@ -1,8 +1,62 @@
 import type { ContextMessage, ModelProvider } from "@flowux/shared";
 import { loadConfig } from "../config.js";
 
+/** Minimal image shape the model layer needs (structurally compatible with
+ *  the harness HarnessImageInput, sans its `type` tag). */
+export interface ImageInput {
+  data: string;
+  mimeType: string;
+}
+
 export interface GenerateInput {
   messages: ContextMessage[];
+  images?: ImageInput[];
+}
+
+type ChatContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+interface ChatMessage {
+  role: ContextMessage["role"];
+  content: string | ChatContentPart[];
+}
+
+/**
+ * Build the OpenAI-/llama.cpp-compatible chat messages. With no images the
+ * content stays a plain string; with images they are attached to the LAST user
+ * message as multimodal content parts (text first, then inline base64
+ * data-URIs) — the shape llama.cpp --mmproj and any OpenAI /v1 vision model
+ * expect.
+ */
+export function buildChatMessages(messages: ContextMessage[], images?: ImageInput[]): ChatMessage[] {
+  const base: ChatMessage[] = messages.map(({ role, content }) => ({ role, content }));
+  if (!images?.length) return base;
+
+  let lastUserIdx = -1;
+  for (let i = base.length - 1; i >= 0; i--) {
+    if (base[i]!.role === "user") {
+      lastUserIdx = i;
+      break;
+    }
+  }
+  if (lastUserIdx === -1) return base;
+
+  const target = base[lastUserIdx]!;
+  const text = typeof target.content === "string" ? target.content : "";
+  base[lastUserIdx] = {
+    role: target.role,
+    content: [
+      { type: "text", text },
+      ...images.map(
+        (img): ChatContentPart => ({
+          type: "image_url",
+          image_url: { url: `data:${img.mimeType};base64,${img.data}` }
+        })
+      )
+    ]
+  };
+  return base;
 }
 
 export interface TokenUsage {
@@ -66,7 +120,7 @@ class LlamaCppAdapter implements ModelAdapter {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: this.model,
-        messages: input.messages.map(({ role, content }) => ({ role, content })),
+        messages: buildChatMessages(input.messages, input.images),
         max_tokens: this.maxTokens,
         stream: true,
         stream_options: { include_usage: true }

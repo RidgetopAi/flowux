@@ -140,7 +140,7 @@ app.post<{ Params: { canvasId: string }; Body: { prompt?: string; attachmentIds?
       return reply.code(400).send(imageUnsupportedError(caps.label));
     }
     const prompt = request.body?.prompt?.trim() || (attachments.length ? "Please review the attached file(s)." : "");
-    const delivery = await prepareAttachmentDelivery(config, attachments, { stageRemote: false, includeImageData: false });
+    const delivery = await prepareAttachmentDelivery(config, caps, attachments, { stageRemote: false, includeImageData: false });
     const modelPrompt = [prompt, delivery.promptText].filter(Boolean).join("\n\n");
     return {
       canvasId: request.params.canvasId,
@@ -495,7 +495,7 @@ app.post<{
     if (activePromptRuns.has(request.params.canvasId)) {
       return reply.code(409).send({ error: "prompt_already_running" });
     }
-    const delivery = await prepareAttachmentDelivery(config, attachments, { stageRemote: true, includeImageData: true });
+    const delivery = await prepareAttachmentDelivery(config, caps, attachments, { stageRemote: true, includeImageData: true });
     const modelPrompt = [prompt, delivery.promptText].filter(Boolean).join("\n\n");
 
     reply.raw.writeHead(200, {
